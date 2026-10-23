@@ -43,4 +43,9 @@ do {
 }
 let osrm = try await OSRM.route(from: davis, to: smf, mode: .drive)
 print("OSRM: \(osrm.count) routes, first \(Int(osrm.first?.distanceMeters ?? 0)) m, \(osrm.first?.maneuvers.count ?? 0) steps: \(osrm.first?.maneuvers.prefix(3).map(\.instruction) ?? [])")
+// Cameras around Munich (speed) and Davis (plate readers).
+let munich = await Overpass.cameras(south: 48.10, west: 11.50, north: 48.18, east: 11.62, speed: true, plate: false)
+print("Overpass speed cameras near Munich: \(munich.map { "\($0.count)" } ?? "failed")")
+let plates = await Overpass.cameras(south: 38.50, west: -121.80, north: 38.60, east: -121.68, speed: false, plate: true)
+print("Overpass plate cameras near Davis: \(plates.map { "\($0.count)" } ?? "failed")")
 exit(exitCode)

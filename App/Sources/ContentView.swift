@@ -1,3 +1,5 @@
+import CoreLocation
+import MapLibre
 import SwiftUI
 import VelaCore
 
@@ -261,6 +263,12 @@ enum DemoScript {
         func wait(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(s * 1e9)) }
         await wait(6)
         if step == "browse" { return }
+        if step == "cameras" {
+            // Central Munich, where many fixed speed cameras are mapped.
+            model.map?.setCenter(CLLocationCoordinate2D(latitude: 48.137, longitude: 11.575), zoomLevel: 12.5, animated: false)
+            return
+        }
+        if step == "layers" { model.showLayers = true; return }
         model.search("restaurants", title: "Restaurants")
         await wait(8)
         guard step != "search", let first = model.visibleResults.first else { return }

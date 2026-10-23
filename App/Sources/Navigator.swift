@@ -19,6 +19,8 @@ final class Navigator: ObservableObject {
     @Published var following = true
     @Published private(set) var speedMps: Double = 0
     @Published private(set) var lastFix: CLLocation?
+    /** A camera coming up within about twelve seconds, for the warning card. */
+    @Published private(set) var cameraAhead: (kind: RoadCamera.Kind, meters: Double)?
 
     let destination: Place
     private var tracker: RouteTracker
@@ -27,6 +29,8 @@ final class Navigator: ObservableObject {
     private var lastReroute = Date.distantPast
     private var avoidHighways: Bool
     private var avoidTolls: Bool
+    private var routeCameras: [(camera: RoadCamera, along: Double)] = []
+    private var spokenCameras: Set<Int> = []
 
     init(route: Route, destination: Place, settings: AppSettings) {
         self.route = route
@@ -38,6 +42,7 @@ final class Navigator: ObservableObject {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
         UIApplication.shared.isIdleTimerDisabled = true
         let first = route.maneuvers.first { $0.type != .depart } ?? route.maneuvers.first
+        loadCameras()
         speak("Starting route to \(destination.name). " + (first.map { "\($0.instruction)." } ?? ""))
     }
 
@@ -76,6 +81,40 @@ final class Navigator: ObservableObject {
             return
         }
         announce(p)
+        checkCameras(p)
+    }
+
+    private func loadCameras() {
+        routeCameras = []
+        spokenCameras = []
+        cameraAhead = nil
+        let s = AppSettings.shared
+        guard route.mode == .drive, s.speedCameras || s.plateCameras else { return }
+        let line = route.polyline, id = route.id
+        Task {
+            guard let cams = await Overpass.cameras(along: line, speed: s.speedCameras, plate: s.plateCameras),
+                  self.route.id == id else { return }
+            self.routeCameras = CameraAlerts.project(cams, on: line)
+        }
+    }
+
+    private func checkCameras(_ p: RouteTracker.Progress) {
+        let meters = routeCameras.map(\.along)
+        if let ahead = cameraAhead, let next = meters.first(where: { $0 > p.alongMeters }) {
+            // Keep the card up until the camera is passed.
+            cameraAhead = (ahead.kind, next - p.alongMeters)
+        }
+        if cameraAhead != nil && !meters.contains(where: { $0 > p.alongMeters && $0 - p.alongMeters < CameraAlerts.maxLead }) {
+            cameraAhead = nil
+        }
+        guard let i = CameraAlerts.due(cameraMeters: meters, traveled: p.alongMeters, speedMps: speedMps, spoken: spokenCameras) else { return }
+        // Cameras a few meters apart are one warning.
+        for (j, m) in meters.enumerated() where m >= meters[i] && m - meters[i] < 40 { spokenCameras.insert(j) }
+        let kind = routeCameras[i].camera.kind
+        cameraAhead = (kind, meters[i] - p.alongMeters)
+        if AppSettings.shared.cameraWarnings {
+            speak(kind == .speed ? "Speed camera ahead." : "License plate camera ahead.")
+        }
     }
 
     private func announce(_ p: RouteTracker.Progress) {
@@ -115,6 +154,7 @@ final class Navigator: ObservableObject {
             self.route = fresh
             self.tracker = RouteTracker(route: fresh)
             self.spokenStage = [:]
+            self.loadCameras()
             if let fix = self.lastFix { self.handle(fix) }
         }
     }

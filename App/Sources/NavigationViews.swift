@@ -16,6 +16,9 @@ struct NavigationOverlay: View {
                 } else {
                     InstructionBanner(nav: nav)
                 }
+                if let cam = nav.cameraAhead, !nav.arrived {
+                    CameraCard(kind: cam.kind, meters: cam.meters)
+                }
                 if nav.rerouting {
                     Label("Rerouting…", systemImage: "arrow.triangle.2.circlepath")
                         .font(.subheadline.weight(.semibold))
@@ -190,5 +193,36 @@ struct ArrivedCard: View {
         .foregroundColor(.white)
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 18).fill(Vela.navGreen))
+    }
+}
+
+/** "Speed camera ahead · 200 m", amber like Vela's speed camera badge; purple for plate readers. */
+struct CameraCard: View {
+    let kind: RoadCamera.Kind
+    let meters: Double
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 10) {
+            CameraBadge(kind: kind, size: 30)
+            Text(kind == .speed ? "Speed camera ahead" : "License plate camera ahead")
+                .font(.subheadline.weight(.semibold))
+            Spacer(minLength: 4)
+            Text(Fmt.distance(meters)).font(.subheadline).foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 48)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.25), radius: 4, y: 2))
+    }
+}
+
+struct CameraBadge: View {
+    let kind: RoadCamera.Kind
+    var size: CGFloat = 28
+
+    var body: some View {
+        Image(uiImage: kind == .speed ? MapIcons.speedCamera() : MapIcons.plateCamera())
+            .resizable()
+            .frame(width: size, height: size)
     }
 }

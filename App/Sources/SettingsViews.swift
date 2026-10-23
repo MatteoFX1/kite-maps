@@ -21,6 +21,8 @@ struct LayersSheet: View {
             Text("Map details").font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
             HStack(spacing: 14) {
                 tile("Traffic", icon: "car.2.fill", on: settings.traffic) { settings.traffic.toggle() }
+                tile("Speed cameras", badge: .speed, on: settings.speedCameras) { settings.speedCameras.toggle() }
+                tile("Plate cameras", badge: .plate, on: settings.plateCameras) { settings.plateCameras.toggle() }
             }
             Spacer()
         }
@@ -28,11 +30,12 @@ struct LayersSheet: View {
         .presentationDetents([.height(360)])
     }
 
-    private func tile(_ title: String, icon: String, on: Bool, action: @escaping () -> Void) -> some View {
+    private func tile(_ title: String, icon: String = "", badge: RoadCamera.Kind? = nil, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 26))
+                Group {
+                    if let badge { CameraBadge(kind: badge, size: 34) } else { Image(systemName: icon).font(.system(size: 26)) }
+                }
                     .frame(width: 74, height: 64)
                     .background(RoundedRectangle(cornerRadius: 14).fill(Vela.chip(scheme)))
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(on ? Vela.accent(scheme) : .clear, lineWidth: 3))
@@ -64,9 +67,18 @@ struct SettingsView: View {
                     Toggle("Voice guidance", isOn: $settings.voice)
                     Toggle("Avoid tolls", isOn: $settings.avoidTolls)
                     Toggle("Avoid highways", isOn: $settings.avoidHighways)
+                    Toggle("Say when a camera is ahead", isOn: $settings.cameraWarnings)
                     Picker("Default travel mode", selection: $settings.defaultMode) {
                         ForEach(TravelMode.allCases) { Text($0.label).tag($0) }
                     }
+                }
+                Section {
+                    Toggle("Speed cameras", isOn: $settings.speedCameras)
+                    Toggle("License plate cameras", isOn: $settings.plateCameras)
+                } header: {
+                    Text("Cameras")
+                } footer: {
+                    Text("Fixed speed cameras and license plate readers (DeFlock) mapped in OpenStreetMap. Saying a camera is ahead is off by default, because some countries restrict it.")
                 }
                 Section {
                     Toggle("Use Vela without Google", isOn: $settings.noGoogle)

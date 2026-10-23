@@ -48,6 +48,7 @@ struct VelaMapView: UIViewRepresentable {
             c.repaint(map)
         }
         c.render(map)
+        c.loadCameras(map)
     }
 
     @MainActor
@@ -60,6 +61,11 @@ struct VelaMapView: UIViewRepresentable {
         private var lastResultsKey = ""
         private var lastRouteKey = ""
         private var lastPuckKey = ""
+        private var lastCameraKey = ""
+        /** Cameras fetched so far, and the 0.1° cells already asked for (cameras don't move). */
+        private var cameras: [Int64: RoadCamera] = [:]
+        private var cameraCells: Set<String> = []
+        private var cameraFetch: Task<Void, Never>?
 
         init(model: AppModel) { self.model = model }
 
@@ -77,7 +83,7 @@ struct VelaMapView: UIViewRepresentable {
             addVelaLayers(style)
             styleReady = true
             repaint(mapView)
-            lastResultsKey = ""; lastRouteKey = ""; lastPuckKey = ""
+            lastResultsKey = ""; lastRouteKey = ""; lastPuckKey = ""; lastCameraKey = ""
             render(mapView)
         }
 
@@ -161,6 +167,15 @@ struct VelaMapView: UIViewRepresentable {
                 l.predicate = NSPredicate(format: "level == %d", level)
                 insert(l)
             }
+
+            // Speed cameras and plate readers, from zoom 12 in.
+            let camSrc = MLNShapeSource(identifier: "vela-cameras", shape: nil, options: nil)
+            style.addSource(camSrc)
+            let cams = MLNSymbolStyleLayer(identifier: "vela-cameras", source: camSrc)
+            cams.iconImageName = NSExpression(forKeyPath: "icon")
+            cams.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            cams.minimumZoomLevel = 12
+            style.addLayer(cams)
 
             // Result pins with names, the picked place's red pin, the time bubbles and the puck.
             let results = MLNShapeSource(identifier: "vela-results", shape: nil, options: nil)
@@ -246,6 +261,49 @@ struct VelaMapView: UIViewRepresentable {
             renderResults(style)
             renderRoutes(style)
             renderPuck(style)
+            renderCameras(style)
+        }
+
+        private func renderCameras(_ style: MLNStyle) {
+            let s = model.settings
+            let key = "\(s.speedCameras)\(s.plateCameras)\(cameras.count)"
+            guard key != lastCameraKey else { return }
+            lastCameraKey = key
+            let shown = cameras.values.filter { $0.kind == .speed ? s.speedCameras : s.plateCameras }
+            let features: [MLNPointFeature] = shown.map { c in
+                let f = MLNPointFeature()
+                f.coordinate = CLLocationCoordinate2D(latitude: c.location.lat, longitude: c.location.lng)
+                f.attributes = ["icon": c.kind == .speed ? "cam-speed" : "cam-plate"]
+                return f
+            }
+            (style.source(withIdentifier: "vela-cameras") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
+        }
+
+        /** Ask Overpass for the cameras in view, a few 0.1° cells at a time, each cell once. */
+        func loadCameras(_ map: MLNMapView) {
+            let s = model.settings
+            guard s.speedCameras || s.plateCameras, map.zoomLevel >= 12, cameraFetch == nil else { return }
+            let b = map.visibleCoordinateBounds
+            let cell = 0.1
+            let y0 = Int(floor(b.sw.latitude / cell)), y1 = Int(floor(b.ne.latitude / cell))
+            let x0 = Int(floor(b.sw.longitude / cell)), x1 = Int(floor(b.ne.longitude / cell))
+            guard (y1 - y0 + 1) * (x1 - x0 + 1) <= 6 else { return }
+            var missing: [(Int, Int)] = []
+            for y in y0...y1 { for x in x0...x1 where !cameraCells.contains("\(y),\(x)") { missing.append((y, x)) } }
+            guard !missing.isEmpty else { return }
+            let ys = missing.map(\.0), xs = missing.map(\.1)
+            let south = Double(ys.min()!) * cell, north = Double(ys.max()! + 1) * cell
+            let west = Double(xs.min()!) * cell, east = Double(xs.max()! + 1) * cell
+            cameraFetch = Task { [weak self] in
+                // Both kinds every time, so turning one on later needs no new fetch.
+                let found = await Overpass.cameras(south: south, west: west, north: north, east: east, speed: true, plate: true)
+                guard let self else { return }
+                self.cameraFetch = nil
+                guard let found else { return }
+                for (y, x) in missing { self.cameraCells.insert("\(y),\(x)") }
+                for c in found { self.cameras[c.id] = c }
+                self.render(map)
+            }
         }
 
         private func renderResults(_ style: MLNStyle) {
@@ -434,6 +492,10 @@ struct VelaMapView: UIViewRepresentable {
             Task { @MainActor in
                 if let n = self.model.nav, n.following { n.following = false }
             }
+        }
+
+        nonisolated func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) {
+            MainActor.assumeIsolated { loadCameras(mapView) }
         }
 
         nonisolated func mapView(_ mapView: MLNMapView, didUpdate userLocation: MLNUserLocation?) {

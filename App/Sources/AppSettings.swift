@@ -34,6 +34,11 @@ final class AppSettings: ObservableObject {
     @Published var avoidHighways: Bool { didSet { d.set(avoidHighways, forKey: "avoidHighways") } }
     /** "Use Vela without Google": search and routes from open data only. */
     @Published var noGoogle: Bool { didSet { d.set(noGoogle, forKey: "noGoogle") } }
+    /** Fixed speed cameras on the map, and plate readers (DeFlock), from OpenStreetMap. */
+    @Published var speedCameras: Bool { didSet { d.set(speedCameras, forKey: "speedCameras") } }
+    @Published var plateCameras: Bool { didSet { d.set(plateCameras, forKey: "plateCameras") } }
+    /** Say "Speed camera ahead" while navigating. Off by default: some countries restrict it. */
+    @Published var cameraWarnings: Bool { didSet { d.set(cameraWarnings, forKey: "cameraWarnings") } }
     @Published var defaultMode: TravelMode { didSet { d.set(defaultMode.rawValue, forKey: "defaultMode") } }
     @Published var saved: [Place] { didSet { save(saved, "saved") } }
     @Published var recents: [String] { didSet { d.set(recents, forKey: "recents") } }
@@ -47,6 +52,9 @@ final class AppSettings: ObservableObject {
         avoidTolls = d.bool(forKey: "avoidTolls")
         avoidHighways = d.bool(forKey: "avoidHighways")
         noGoogle = d.bool(forKey: "noGoogle")
+        speedCameras = d.object(forKey: "speedCameras") as? Bool ?? true
+        plateCameras = d.object(forKey: "plateCameras") as? Bool ?? true
+        cameraWarnings = d.bool(forKey: "cameraWarnings")
         defaultMode = TravelMode(rawValue: d.integer(forKey: "defaultMode")) ?? .drive
         saved = (d.data(forKey: "saved")).flatMap { try? JSONDecoder().decode([Place].self, from: $0) } ?? []
         recents = d.stringArray(forKey: "recents") ?? []

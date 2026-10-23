@@ -37,6 +37,51 @@ enum MapIcons {
         style.setImage(puck(), forName: "puck")
         style.setImage(bubble(fill: UIColor(hex: 0x1F6FEB), stroke: .white), forName: "bubble-sel")
         style.setImage(bubble(fill: .white, stroke: UIColor(hex: 0xBDC1C6)), forName: "bubble-alt")
+        style.setImage(speedCamera(), forName: "cam-speed")
+        style.setImage(plateCamera(), forName: "cam-plate")
+    }
+
+    /** Vela's speed camera badge: amber rounded square, head-on camera with a big lens and flash slit. */
+    static func speedCamera() -> UIImage {
+        badge(UIColor(hex: 0xEF6C00)) { amber in
+            UIColor.white.setFill()
+            UIBezierPath(roundedRect: CGRect(x: 15, y: 12, width: 16, height: 20), cornerRadius: 3).fill()
+            amber.setFill()
+            UIBezierPath(ovalIn: CGRect(x: 23 - 4.6, y: 20 - 4.6, width: 9.2, height: 9.2)).fill()
+            UIColor.white.setFill()
+            UIBezierPath(ovalIn: CGRect(x: 21, y: 18, width: 4, height: 4)).fill()
+            amber.setFill()
+            UIBezierPath(rect: CGRect(x: 18, y: 26.5, width: 10, height: 3)).fill()
+        }
+    }
+
+    /** Vela's plate reader badge: purple rounded square with a CCTV camera on a mount. */
+    static func plateCamera() -> UIImage {
+        badge(UIColor(hex: 0x7B1FA2)) { purple in
+            UIColor.white.setFill()
+            UIBezierPath(roundedRect: CGRect(x: 12, y: 18, width: 18, height: 9), cornerRadius: 2).fill()
+            UIBezierPath(ovalIn: CGRect(x: 31 - 4.2, y: 22.5 - 4.2, width: 8.4, height: 8.4)).fill()
+            purple.setFill()
+            UIBezierPath(ovalIn: CGRect(x: 29, y: 20.5, width: 4, height: 4)).fill()
+            let arm = UIBezierPath()
+            arm.move(to: CGPoint(x: 17, y: 18)); arm.addLine(to: CGPoint(x: 17, y: 12))
+            arm.move(to: CGPoint(x: 12, y: 12)); arm.addLine(to: CGPoint(x: 24, y: 12))
+            arm.lineWidth = 2.4
+            UIColor.white.setStroke()
+            arm.stroke()
+        }
+    }
+
+    /** A 46-unit badge drawn at 23 points: white rim, colored field, then the glyph. */
+    private static func badge(_ color: UIColor, glyph: (UIColor) -> Void) -> UIImage {
+        UIGraphicsImageRenderer(size: CGSize(width: 23, height: 23)).image { ctx in
+            ctx.cgContext.scaleBy(x: 0.5, y: 0.5)
+            UIColor.white.setFill()
+            UIBezierPath(roundedRect: CGRect(x: 2, y: 2, width: 42, height: 42), cornerRadius: 11).fill()
+            color.setFill()
+            UIBezierPath(roundedRect: CGRect(x: 4.5, y: 4.5, width: 37, height: 37), cornerRadius: 9).fill()
+            glyph(color)
+        }
     }
 
     private static func dot(_ symbol: String, _ color: UIColor) -> UIImage {
