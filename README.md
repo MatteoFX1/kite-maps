@@ -7,15 +7,18 @@ maps app for Android. It's meant for sideloading, not the App Store.
 
 - **The map** in Vela's colors: navy at night, classic by day, on OpenFreeMap tiles. Live
   traffic and satellite from the layers button.
-- **Search** with Google Maps results, no account and no key, the way Vela does it: category
-  chips, pins with names and ratings, open now, sort and rating filters. If Google doesn't
+- **Search** with Google Maps results, no account and no key, the way Vela does it: suggestions
+  while you type, category chips, pins with names and ratings, open now, sort and rating filters. If Google doesn't
   answer, results come from OpenStreetMap.
 - **Places**: photos, rating, open or closed, hours, about, phone, website, save and share. Tap
   anything on the map to look it up, or long-press to drop a pin.
 - **Directions** inside the app: drive, bike and walk, live traffic times, alternate routes and
   the steps. Avoid tolls or highways.
-- **Turn-by-turn navigation** with a voice, rerouting, a following camera and the arrival time,
-  and it keeps going with the screen off.
+- **Turn-by-turn navigation** with a voice, rerouting, a following camera, the arrival time and
+  the speed limit, and it keeps going with the screen off. Like Vela, the turns come from the open
+  OSRM router run along Google's route.
+- **Speed cameras and license plate cameras** (DeFlock) from OpenStreetMap on the map, with a
+  warning card and an optional spoken warning while driving.
 - **Settings**: theme, units, voice, and "Use Vela without Google" (OpenStreetMap search and the
   FOSSGIS router only).
 
