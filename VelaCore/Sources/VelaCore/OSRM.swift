@@ -230,7 +230,7 @@ public enum StepMerge {
             var last = 0.0
             for m in mids {
                 let p = Geo.project(m.location, on: line, cumulative: cum)
-                guard p.offset < 25, p.along >= last - 5, p.along < total - 5 else { continue }
+                guard p.offset < 40, p.along >= last - 30, p.along < total - 5 else { continue }
                 last = max(last, p.along)
                 var m2 = m
                 m2.alongMeters = p.along
@@ -253,6 +253,6 @@ public enum StepMerge {
             all[all.count - 1].distanceMeters = 0
             best = all
         }
-        return bestScore >= 0.85 ? best : nil
+        return bestScore >= 0.7 ? best : nil
     }
 }

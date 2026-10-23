@@ -83,7 +83,7 @@ let via = try? await OSRM.routeVia(merged.routes.first?.polyline ?? [], mode: .d
 print("OSRM via Google's line: \(via.map { "\(Int($0.distanceMeters)) m, \($0.maneuvers.count) steps" } ?? "failed")")
 if let via, let line = merged.routes.first?.polyline {
     let cum = Geo.cumulative(line)
-    for m in via.maneuvers.prefix(8) {
+    for m in via.maneuvers {
         let p = Geo.project(m.location, on: line, cumulative: cum)
         print("  · \(m.type.rawValue) \(m.instruction): along \(Int(p.along)) m, off \(Int(p.offset)) m")
     }
