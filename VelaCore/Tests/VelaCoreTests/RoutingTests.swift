@@ -71,4 +71,21 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(out[1].alongMeters, Geo.length(line) - 300, accuracy: 0.5)
         XCTAssertEqual(out[2].alongMeters, Geo.length(line), accuracy: 0.5)
     }
+
+    func testStepMergeOntoGoogleLine() {
+        let google = [LatLng(0, 0), LatLng(0.01, 0)]
+        func m(_ t: ManeuverType, _ lat: Double, _ text: String) -> Maneuver {
+            Maneuver(type: t, instruction: text, location: LatLng(lat, 0.00004), alongMeters: 0, distanceMeters: 0, road: nil, laneHint: nil)
+        }
+        let osrm = Route(mode: .drive, polyline: google, distanceMeters: 1113, typicalSeconds: 100, trafficSeconds: nil, summary: nil,
+                         maneuvers: [m(.depart, 0, "Drive north on A St"), m(.turnRight, 0.0045, "Turn right onto B St"), m(.arrive, 0.01, "You have arrived")],
+                         source: "osm")
+        let steps = StepMerge.adopt([osrm], onto: google)
+        XCTAssertEqual(steps?.map(\.type), [.depart, .turnRight, .arrive])
+        XCTAssertEqual(steps?[1].alongMeters ?? 0, Geo.length(google) * 0.45, accuracy: 2)
+        XCTAssertEqual(steps?[0].distanceMeters ?? 0, Geo.length(google) * 0.45, accuracy: 2)
+        // A route on other roads doesn't fit.
+        let far = [LatLng(0, 0.01), LatLng(0.01, 0.01)]
+        XCTAssertNil(StepMerge.adopt([osrm], onto: far))
+    }
 }

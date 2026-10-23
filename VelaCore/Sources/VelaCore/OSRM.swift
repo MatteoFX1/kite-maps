@@ -136,20 +136,72 @@ public enum Directions {
     public static func routes(from a: LatLng, to b: LatLng, mode: TravelMode,
                               avoidHighways: Bool = false, avoidTolls: Bool = false,
                               useGoogle: Bool = true) async -> Result {
+        // Ask both at once: Google's route knows traffic, OSRM's steps read better (Vela puts
+        // the open router's turn-by-turn on Google's line the same way).
+        let osrmTask = Task { try await OSRM.route(from: a, to: b, mode: mode) }
         var err: String?
         if useGoogle { do {
-            let g = try await GoogleClient.shared.directions(from: a, to: b, mode: mode,
+            var g = try await GoogleClient.shared.directions(from: a, to: b, mode: mode,
                                                               avoidHighways: avoidHighways, avoidTolls: avoidTolls)
-            if !g.isEmpty { return Result(routes: g) }
+            if !g.isEmpty {
+                if let o = try? await osrmTask.value {
+                    for i in g.indices {
+                        if let steps = StepMerge.adopt(o, onto: g[i].polyline) { g[i].maneuvers = steps }
+                    }
+                }
+                return Result(routes: g)
+            }
         } catch {
             err = error.localizedDescription
         } }
         do {
-            let o = try await OSRM.route(from: a, to: b, mode: mode)
+            let o = try await osrmTask.value
             if !o.isEmpty { return Result(routes: o) }
         } catch {
             err = error.localizedDescription
         }
         return Result(routes: [], error: err ?? "No route found.")
+    }
+}
+
+/** Puts an open router's steps on Google's route line, when they follow the same roads. */
+public enum StepMerge {
+    /** The steps of the candidate that best fits [line], placed on it; nil if none fits well. */
+    public static func adopt(_ candidates: [Route], onto line: [LatLng]) -> [Maneuver]? {
+        guard line.count >= 2 else { return nil }
+        let cum = Geo.cumulative(line)
+        let total = cum.last ?? 0
+        var best: [Maneuver]?
+        var bestScore = 0.0
+        for o in candidates {
+            let mids = o.maneuvers.filter { $0.type != .depart && $0.type != .arrive }
+            var placed: [Maneuver] = []
+            var last = 0.0
+            for m in mids {
+                let p = Geo.project(m.location, on: line, cumulative: cum)
+                guard p.offset < 25, p.along >= last - 5, p.along < total - 5 else { continue }
+                last = max(last, p.along)
+                var m2 = m
+                m2.alongMeters = p.along
+                m2.location = Geo.point(along: line, meters: p.along, cumulative: cum)
+                placed.append(m2)
+            }
+            let score = mids.isEmpty ? (abs(Geo.length(o.polyline) - total) < 100 ? 1 : 0) : Double(placed.count) / Double(mids.count)
+            guard score > bestScore else { continue }
+            bestScore = score
+            var depart = o.maneuvers.first { $0.type == .depart }
+                ?? Maneuver(type: .depart, instruction: "Head out", location: line[0], alongMeters: 0, distanceMeters: 0, road: nil, laneHint: nil)
+            depart.alongMeters = 0
+            depart.location = line[0]
+            var arrive = o.maneuvers.last { $0.type == .arrive }
+                ?? Maneuver(type: .arrive, instruction: "You have arrived", location: line[line.count - 1], alongMeters: total, distanceMeters: 0, road: nil, laneHint: nil)
+            arrive.alongMeters = total
+            arrive.location = line[line.count - 1]
+            var all = [depart] + placed + [arrive]
+            for i in 0..<(all.count - 1) { all[i].distanceMeters = all[i + 1].alongMeters - all[i].alongMeters }
+            all[all.count - 1].distanceMeters = 0
+            best = all
+        }
+        return bestScore >= 0.85 ? best : nil
     }
 }

@@ -58,9 +58,10 @@ enum MapStyler {
             } else if let f = layer as? MLNFillStyleLayer {
                 switch id {
                 case "water": f.fillColor = c(p.water)
-                case "park": f.fillColor = c(p.park); f.fillOpacity = NSExpression(forConstantValue: 1)
+                case "park":
+                    f.fillColor = c(p.park); f.fillOutlineColor = c(p.park); f.fillOpacity = NSExpression(forConstantValue: 1)
                 case "landcover_grass", "landcover_wood", "landcover_wetland":
-                    f.fillColor = c(p.park); f.fillOpacity = NSExpression(forConstantValue: 0.9)
+                    f.fillColor = c(p.park); f.fillOutlineColor = c(p.park); f.fillOpacity = NSExpression(forConstantValue: 0.9)
                 case "landuse_pitch", "landuse_track": f.fillColor = c(p.pitch)
                 case "building":
                     f.fillColor = c(p.building); f.fillOutlineColor = c(p.buildingOutline)
@@ -74,7 +75,7 @@ enum MapStyler {
                 e.fillExtrusionColor = c(p.building)
             } else if let l = layer as? MLNLineStyleLayer {
                 if id.hasPrefix("waterway") { l.lineColor = c(p.water); continue }
-                if id == "park_outline" { l.isVisible = false; continue }
+                if id == "park_outline" || id.hasPrefix("landcover") || id.hasPrefix("park") { l.isVisible = false; continue }
                 if id.hasPrefix("aeroway") { l.lineColor = c(p.runway); continue }
                 if id.hasPrefix("boundary") { l.lineColor = c(p.border); continue }
                 if id.contains("rail") { l.lineColor = c(p.rail); continue }

@@ -15,7 +15,7 @@ public struct RoadCamera: Hashable, Sendable, Identifiable {
  * public mirrors. Fixed installations only; coverage is OSM's.
  */
 public enum Overpass {
-    static let endpoints = [
+    public static let endpoints = [
         "https://overpass-api.de/api/interpreter",
         "https://overpass.kumi.systems/api/interpreter",
         "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
@@ -47,7 +47,7 @@ public enum Overpass {
         return await cameras(filter: "(around:\(radius),\(coords))", speed: speed, plate: plate)
     }
 
-    static func query(filter: String, speed: Bool, plate: Bool) -> String {
+    public static func query(filter: String, speed: Bool, plate: Bool) -> String {
         var parts: [String] = []
         if speed { parts.append("node[\"highway\"=\"speed_camera\"]\(filter);") }
         if plate { parts.append("node[\"surveillance:type\"=\"ALPR\"]\(filter);") }
@@ -58,18 +58,19 @@ public enum Overpass {
         guard speed || plate else { return [] }
         let q = query(filter: filter, speed: speed, plate: plate)
         for ep in endpoints {
-            var req = URLRequest(url: URL(string: ep)!)
-            req.httpMethod = "POST"
-            req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-            var allowed = CharacterSet.alphanumerics
-            allowed.insert(charactersIn: "-._~")
-            req.httpBody = ("data=" + (q.addingPercentEncoding(withAllowedCharacters: allowed) ?? "")).data(using: .utf8)
-            guard let (data, resp) = try? await session.data(for: req),
-                  (resp as? HTTPURLResponse)?.statusCode == 200,
-                  let list = parse(data) else { continue }
+            guard let (data, status) = await fetch(ep, query: q), status == 200, let list = parse(data) else { continue }
             return list
         }
         return nil
+    }
+
+    /** One GET to one mirror, the way Vela asks (`?data=` in the URL). Nil on a network error. */
+    public static func fetch(_ endpoint: String, query: String) async -> (Data, Int)? {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        guard let url = URL(string: endpoint + "?data=" + (query.addingPercentEncoding(withAllowedCharacters: allowed) ?? "")),
+              let (data, resp) = try? await session.data(from: url) else { return nil }
+        return (data, (resp as? HTTPURLResponse)?.statusCode ?? 0)
     }
 
     static func parse(_ data: Data) -> [RoadCamera]? {
@@ -123,21 +124,8 @@ public enum CameraAlerts {
         let cum = Geo.cumulative(line)
         var out: [(RoadCamera, Double)] = []
         for c in cams {
-            let p = c.location
-            let k = cos(p.lat * .pi / 180) * 111_320.0
-            var best = (d: Double.greatestFiniteMagnitude, along: 0.0)
-            for i in 0..<(line.count - 1) {
-                let a = line[i], b = line[i + 1]
-                let ax = (a.lng - p.lng) * k, ay = (a.lat - p.lat) * 110_540
-                let bx = (b.lng - p.lng) * k, by = (b.lat - p.lat) * 110_540
-                let dx = bx - ax, dy = by - ay
-                let len2 = dx * dx + dy * dy
-                let t = len2 > 0 ? min(max(-(ax * dx + ay * dy) / len2, 0), 1) : 0
-                let x = ax + t * dx, y = ay + t * dy
-                let d = (x * x + y * y).squareRoot()
-                if d < best.d { best = (d, cum[i] + t * (cum[i + 1] - cum[i])) }
-            }
-            if best.d <= maxOffset { out.append((c, best.along)) }
+            let p = Geo.project(c.location, on: line, cumulative: cum)
+            if p.offset <= maxOffset { out.append((c, p.along)) }
         }
         return out.sorted { $0.1 < $1.1 }
     }

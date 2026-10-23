@@ -43,6 +43,12 @@ do {
 }
 let osrm = try await OSRM.route(from: davis, to: smf, mode: .drive)
 print("OSRM: \(osrm.count) routes, first \(Int(osrm.first?.distanceMeters ?? 0)) m, \(osrm.first?.maneuvers.count ?? 0) steps: \(osrm.first?.maneuvers.prefix(3).map(\.instruction) ?? [])")
+let merged = await Directions.routes(from: davis, to: smf, mode: .drive)
+print("Merged steps on Google's line: \(merged.routes.first?.maneuvers.count ?? 0)")
+for m in merged.routes.first?.maneuvers.prefix(6) ?? [] {
+    print("  · \(m.type.rawValue) @\(Int(m.alongMeters)) m: \(m.instruction)")
+}
+
 // Autocomplete
 do {
     let sug = try await GoogleClient.shared.suggest("pier 50", near: LatLng(38.5449, -121.7405))
@@ -56,4 +62,14 @@ let munich = await Overpass.cameras(south: 48.10, west: 11.50, north: 48.18, eas
 print("Overpass speed cameras near Munich: \(munich.map { "\($0.count)" } ?? "failed")")
 let plates = await Overpass.cameras(south: 38.50, west: -121.80, north: 38.60, east: -121.68, speed: false, plate: true)
 print("Overpass plate cameras near Davis: \(plates.map { "\($0.count)" } ?? "failed")")
+if munich == nil || plates == nil {
+    let q = Overpass.query(filter: "(48.10,11.50,48.18,11.62)", speed: true, plate: false)
+    for ep in Overpass.endpoints {
+        if let (data, status) = await Overpass.fetch(ep, query: q) {
+            print("  \(ep): HTTP \(status), \(data.count) bytes: \(String(decoding: data.prefix(160), as: UTF8.self))")
+        } else {
+            print("  \(ep): network error")
+        }
+    }
+}
 exit(exitCode)

@@ -110,6 +110,26 @@ public enum Geo {
         return out
     }
 
+    /** Where [p] falls on [line]: meters along it, and how far off it. */
+    public static func project(_ p: LatLng, on line: [LatLng], cumulative cum: [Double]? = nil) -> (along: Double, offset: Double) {
+        guard line.count >= 2 else { return (0, line.first.map { p.distance(to: $0) } ?? .greatestFiniteMagnitude) }
+        let c = cum ?? cumulative(line)
+        let k = cos(p.lat * .pi / 180) * 111_320.0
+        var best = (along: 0.0, offset: Double.greatestFiniteMagnitude)
+        for i in 0..<(line.count - 1) {
+            let a = line[i], b = line[i + 1]
+            let ax = (a.lng - p.lng) * k, ay = (a.lat - p.lat) * 110_540
+            let bx = (b.lng - p.lng) * k, by = (b.lat - p.lat) * 110_540
+            let dx = bx - ax, dy = by - ay
+            let len2 = dx * dx + dy * dy
+            let t = len2 > 0 ? min(max(-(ax * dx + ay * dy) / len2, 0), 1) : 0
+            let x = ax + t * dx, y = ay + t * dy
+            let d = (x * x + y * y).squareRoot()
+            if d < best.offset { best = (c[i] + t * (c[i + 1] - c[i]), d) }
+        }
+        return best
+    }
+
     /** Compass bearing from a to b, degrees. */
     public static func bearing(_ a: LatLng, _ b: LatLng) -> Double {
         let p1 = a.lat * .pi / 180, p2 = b.lat * .pi / 180, dl = (b.lng - a.lng) * .pi / 180
