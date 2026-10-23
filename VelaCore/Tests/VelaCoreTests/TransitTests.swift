@@ -44,11 +44,14 @@ final class TransitTests: XCTestCase {
           {"place":{"departure":"2026-10-23T17:10:00Z","scheduledDeparture":"2026-10-23T17:08:00Z"},"mode":"BUS","realTime":true,
            "headsign":"Downtown","routeShortName":"42","routeColor":"#0055AA"},
           {"place":{"departure":"2026-10-23T17:12:00Z","cancelled":true},"mode":"BUS","routeShortName":"43"},
-          {"place":{"departure":"2026-10-23T17:20:00Z"},"mode":"TRAM","displayName":"T"}
+          {"place":{"departure":"2026-10-23T17:20:00Z"},"mode":"TRAM","displayName":"T"},
+          {"place":{"departure":"2026-10-23T17:25:00Z"},"mode":"RAIL","routeShortName":"CC","headsign":"Davis","tripTo":{"name":"San Jose"}},
+          {"place":{"departure":"2026-10-23T17:30:00Z"},"mode":"RAIL","routeShortName":"CC","headsign":"Davis","tripTo":{"name":"Davis"}}
         ]}
         """
-        let d = Transitous.parseStopTimes(Data(json.utf8))
-        XCTAssertEqual(d.count, 2)
+        let d = Transitous.parseStopTimes(Data(json.utf8), stopName: "Davis")
+        XCTAssertEqual(d.count, 3, "a canceled call and a run ending here are dropped")
+        XCTAssertEqual(d[2].headsign, "San Jose")
         XCTAssertEqual(d[0].line, "42")
         XCTAssertEqual(d[0].color, 0x0055AA)
         XCTAssertEqual(d[0].delayMinutes, 2)

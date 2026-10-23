@@ -96,7 +96,6 @@ if let line = merged.routes.first?.polyline, let extra = await Overpass.alongRou
 } else {
     print("Along the route: Overpass failed")
 }
-exit(exitCode)
 
 // Transit: San Francisco Ferry Building to Ocean Beach.
 do {
@@ -117,3 +116,5 @@ if let b = await Transitous.departures(near: LatLng(38.5435, -121.7377)) {
 } else {
     print("Departures: none or failed")
 }
+
+exit(exitCode)

@@ -112,7 +112,13 @@ struct ModeTabs: View {
     }
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) { tabs }
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) { tabs }
+                .onAppear { if state.transit { proxy.scrollTo("transit", anchor: .trailing) } }
+                .onChange(of: state.transit) { on in
+                    withAnimation { proxy.scrollTo(on ? "transit" : "drive", anchor: on ? .trailing : .leading) }
+                }
+        }
     }
 
     private var tabs: some View {
@@ -136,6 +142,7 @@ struct ModeTabs: View {
                     .background(Capsule().fill(on ? Vela.tonal(scheme) : Color.clear))
                 }
                 .buttonStyle(.plain)
+                .id(m == .drive ? "drive" : "\(m.rawValue)")
             }
             Button { model.showTransit() } label: {
                 HStack(spacing: 6) {
@@ -152,6 +159,7 @@ struct ModeTabs: View {
                 .background(Capsule().fill(state.transit ? Vela.tonal(scheme) : Color.clear))
             }
             .buttonStyle(.plain)
+            .id("transit")
             Spacer(minLength: 0)
         }
     }

@@ -133,7 +133,7 @@ public enum Transitous {
             allowed.insert(charactersIn: "-._~")
             guard let u = URL(string: "\(base)/api/v1/stoptimes?stopId=\(id.addingPercentEncoding(withAllowedCharacters: allowed) ?? id)&n=30"),
                   let (d, _) = try? await session.data(from: u) else { continue }
-            all += parseStopTimes(d)
+            all += parseStopTimes(d, stopName: first.name)
         }
         guard !all.isEmpty else { return nil }
         var seen = Set<String>()
@@ -141,7 +141,7 @@ public enum Transitous {
         return (first.name, board)
     }
 
-    public static func parseStopTimes(_ data: Data) -> [Departure] {
+    public static func parseStopTimes(_ data: Data, stopName: String = "") -> [Departure] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let list = root["stopTimes"] as? [[String: Any]] else { return [] }
         return list.compactMap { st in
@@ -154,8 +154,14 @@ public enum Transitous {
             }
             let line = [st["routeShortName"], st["displayName"], st["routeLongName"]]
                 .compactMap { ($0 as? String)?.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? ""
+            // Where the run ends. Some feeds put the stop's own name in the headsign, so the trip's
+            // last stop wins; a run that ends here isn't a departure.
+            let end = (st["tripTo"] as? [String: Any])?["name"] as? String
+            if let end, !stopName.isEmpty, end == stopName { return nil }
+            var headsign = st["headsign"] as? String ?? ""
+            if let end, !end.isEmpty, headsign.isEmpty || headsign == stopName { headsign = end }
             return Departure(line: line, mode: st["mode"] as? String ?? "", color: hex(st["routeColor"]),
-                             textColor: hex(st["routeTextColor"]), headsign: st["headsign"] as? String ?? "",
+                             textColor: hex(st["routeTextColor"]), headsign: headsign,
                              time: time, delayMinutes: delay)
         }
     }
