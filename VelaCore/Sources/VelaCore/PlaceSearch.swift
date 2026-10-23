@@ -1,0 +1,24 @@
+import Foundation
+
+/** What the app calls: Google first (the full place cards), OpenStreetMap when Google fails. */
+public enum PlaceSearch {
+    public struct Result: Sendable {
+        public var places: [Place]
+        /** Set when Google failed and the open-data search answered instead. */
+        public var googleError: String?
+    }
+
+    public static func search(_ query: String, center: LatLng, spanMeters: Double?) async -> Result {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return Result(places: []) }
+        var googleError: String?
+        do {
+            let places = try await GoogleClient.shared.search(q, center: center, spanMeters: spanMeters)
+            if !places.isEmpty { return Result(places: places) }
+        } catch {
+            googleError = error.localizedDescription
+        }
+        let osm = (try? await Photon.search(q, near: center)) ?? []
+        return Result(places: osm, googleError: googleError)
+    }
+}
