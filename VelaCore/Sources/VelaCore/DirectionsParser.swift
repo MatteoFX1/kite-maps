@@ -154,28 +154,41 @@ enum DirectionsParser {
         }
     }
 
-    /** Put each step on the line at its share of the summed step distances; the last one ends it. */
+    /**
+     * Put the steps on the line from the end backwards: each one starts its step's length before the
+     * next one. Google sometimes leaves out the first "Head north" step, so counting back from the end
+     * keeps the turns where they really are; a missing start gets a "Head ..." step of its own.
+     */
     static func place(_ steps: [Maneuver], on line: [LatLng]) -> [Maneuver] {
         guard !steps.isEmpty, line.count >= 2 else { return steps }
         let cum = Geo.cumulative(line)
         let total = cum.last ?? 0
-        let stepTotal = max(steps.reduce(0) { $0 + $1.distanceMeters }, 1)
-        var acc = 0.0
-        var out = steps.enumerated().map { i, m -> Maneuver in
-            var m = m
-            let frac = min(max(acc / stepTotal, 0), 1)
-            acc += m.distanceMeters
-            m.alongMeters = frac * total
-            m.location = Geo.point(along: line, meters: m.alongMeters, cumulative: cum)
-            return m
+        var body = steps
+        if body.last?.type == .arrive { body.removeLast() }
+        let stepTotal = body.reduce(0) { $0 + $1.distanceMeters }
+        let scale = stepTotal > total && stepTotal > 0 ? total / stepTotal : 1
+        var end = total
+        var out: [Maneuver] = []
+        for var m in body.reversed() {
+            let start = max(0, end - m.distanceMeters * scale)
+            m.alongMeters = start
+            m.location = Geo.point(along: line, meters: start, cumulative: cum)
+            out.insert(m, at: 0)
+            end = start
         }
-        if out.last?.type != .arrive {
-            out.append(Maneuver(type: .arrive, instruction: "You have arrived", location: line[line.count - 1],
-                                alongMeters: total, distanceMeters: 0, road: nil, laneHint: nil))
-        } else {
-            out[out.count - 1].alongMeters = total
-            out[out.count - 1].location = line[line.count - 1]
+        if let first = out.first, first.alongMeters > 15 {
+            let ahead = Geo.point(along: line, meters: min(30, first.alongMeters), cumulative: cum)
+            out.insert(Maneuver(type: .depart, instruction: "Head " + compass(Geo.bearing(line[0], ahead)),
+                                location: line[0], alongMeters: 0, distanceMeters: first.alongMeters,
+                                road: nil, laneHint: nil), at: 0)
         }
+        out.append(Maneuver(type: .arrive, instruction: steps.last?.type == .arrive ? steps.last!.instruction : "You have arrived",
+                            location: line[line.count - 1], alongMeters: total, distanceMeters: 0, road: nil, laneHint: nil))
         return out
+    }
+
+    static func compass(_ bearing: Double) -> String {
+        let names = ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"]
+        return names[Int(((bearing + 22.5) / 45).rounded(.down)) % 8]
     }
 }

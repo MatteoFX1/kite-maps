@@ -60,4 +60,15 @@ final class RoutingTests: XCTestCase {
         XCTAssertTrue(t.update(LatLng(0.006, 0.01)).offRoute)
         XCTAssertTrue(t.update(LatLng(0.00999, 0)).arrived)
     }
+
+    func testStepsPlacedFromTheEnd() {
+        // About 1,113 m due north; Google gave only the last turn (300 m), not the "Head north" step.
+        let line = [LatLng(0, 0), LatLng(0.01, 0)]
+        let turn = DirectionsParser.parseStep("<step maneuver='TURN' meters='300'>Turn <turn side='LEFT'>left</turn></step>")
+        let out = DirectionsParser.place([turn], on: line)
+        XCTAssertEqual(out.map(\.type), [.depart, .turnLeft, .arrive])
+        XCTAssertEqual(out[0].instruction, "Head north")
+        XCTAssertEqual(out[1].alongMeters, Geo.length(line) - 300, accuracy: 0.5)
+        XCTAssertEqual(out[2].alongMeters, Geo.length(line), accuracy: 0.5)
+    }
 }

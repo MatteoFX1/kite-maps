@@ -93,6 +93,15 @@ struct VelaMapView: UIViewRepresentable {
                 }
             }
             MapStyler.apply(style, dark: dark)
+            // Names next to our pins: dark text on a white halo by day, light text on navy at night.
+            let text = dark ? UIColor(hex: 0xE8EAED) : UIColor(hex: 0x202124)
+            let halo = dark ? UIColor(hex: 0x0B1526) : UIColor.white
+            for id in ["vela-results", "vela-selected"] {
+                guard let l = style.layer(withIdentifier: id) as? MLNSymbolStyleLayer else { continue }
+                l.textColor = NSExpression(forConstantValue: text)
+                l.textHaloColor = NSExpression(forConstantValue: halo)
+                l.textHaloWidth = NSExpression(forConstantValue: 1.5)
+            }
             lastResultsKey = ""
             lastRouteKey = ""
         }
@@ -229,6 +238,8 @@ struct VelaMapView: UIViewRepresentable {
             guard styleReady, let style = map.style else { return }
             let s = model.settings
             let navigating = model.nav != nil
+            // The navigation arrow replaces the blue dot.
+            if map.showsUserLocation == navigating { map.showsUserLocation = !navigating }
             style.layer(withIdentifier: "vela-traffic")?.isVisible = s.traffic && !navigating && !s.noGoogle
             style.layer(withIdentifier: "vela-sat")?.isVisible = s.satellite
             for id in ["building", "building-3d"] { style.layer(withIdentifier: id)?.isVisible = !s.satellite }
@@ -293,7 +304,7 @@ struct VelaMapView: UIViewRepresentable {
                 main = d.route
                 alts = d.current.filter { $0.id != main?.id }
             }
-            let key = (main?.id.uuidString ?? "") + alts.map(\.id.uuidString).joined() + "\(Int(from / 5))"
+            let key = (model.nav == nil ? "" : "nav") + (main?.id.uuidString ?? "") + alts.map(\.id.uuidString).joined() + "\(Int(from / 5))"
             guard key != lastRouteKey else { return }
             lastRouteKey = key
 
