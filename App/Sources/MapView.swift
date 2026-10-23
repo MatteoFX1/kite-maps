@@ -287,7 +287,7 @@ struct VelaMapView: UIViewRepresentable {
             let cell = 0.1
             let y0 = Int(floor(b.sw.latitude / cell)), y1 = Int(floor(b.ne.latitude / cell))
             let x0 = Int(floor(b.sw.longitude / cell)), x1 = Int(floor(b.ne.longitude / cell))
-            guard (y1 - y0 + 1) * (x1 - x0 + 1) <= 6 else { return }
+            guard (y1 - y0 + 1) * (x1 - x0 + 1) <= 12 else { return }
             var missing: [(Int, Int)] = []
             for y in y0...y1 { for x in x0...x1 where !cameraCells.contains("\(y),\(x)") { missing.append((y, x)) } }
             guard !missing.isEmpty else { return }
@@ -303,6 +303,8 @@ struct VelaMapView: UIViewRepresentable {
                 for (y, x) in missing { self.cameraCells.insert("\(y),\(x)") }
                 for c in found { self.cameras[c.id] = c }
                 self.render(map)
+                // The map may have moved on while this one was loading.
+                self.loadCameras(map)
             }
         }
 
