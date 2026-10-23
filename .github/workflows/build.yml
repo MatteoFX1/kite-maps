@@ -119,3 +119,14 @@ jobs:
         with:
           name: screenshots
           path: shots
+      - name: Save screenshots to the ci-screenshots branch
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          cd shots
+          for f in *.png; do sips -s format jpeg -s formatOptions 70 -Z 1200 "$f" --out "${f%.png}.jpg" >/dev/null; done
+          rm -f *.png
+          git init -q -b ci-screenshots
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add . && git commit -qm "Screenshots for ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-screenshots
