@@ -172,7 +172,7 @@ struct VelaMapView: UIViewRepresentable {
             rideEdge.predicate = NSPredicate(format: "walk == 0")
             let ride = line("vela-transit-ride", transitSrc, UIColor(hex: 0x1F6FEB), width: 7)
             ride.predicate = NSPredicate(format: "walk == 0")
-            ride.lineColor = NSExpression(mlnJSONObject: ["to-color", ["get", "color"]])
+            ride.lineColor = NSExpression(mglJSONObject: ["to-color", ["get", "color"]])
             [walk, rideEdge, ride].forEach(insert)
             for (level, color) in [(1, 0xF2A65A), (2, 0xE8453C), (3, 0x9E1C1C)] {
                 let l = line("vela-route-traffic-\(level)", spanSrc, UIColor(hex: UInt32(color)), width: 8)

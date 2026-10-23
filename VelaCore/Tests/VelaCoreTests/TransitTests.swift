@@ -37,4 +37,23 @@ final class TransitTests: XCTestCase {
         XCTAssertEqual(t.legs[0].path.count, 2, "a leg with no shape is drawn stop to stop")
         XCTAssertEqual(t.walkSeconds, 480)
     }
+
+    func testStopTimes() {
+        let json = """
+        {"stopTimes":[
+          {"place":{"departure":"2026-10-23T17:10:00Z","scheduledDeparture":"2026-10-23T17:08:00Z"},"mode":"BUS","realTime":true,
+           "headsign":"Downtown","routeShortName":"42","routeColor":"#0055AA"},
+          {"place":{"departure":"2026-10-23T17:12:00Z","cancelled":true},"mode":"BUS","routeShortName":"43"},
+          {"place":{"departure":"2026-10-23T17:20:00Z"},"mode":"TRAM","displayName":"T"}
+        ]}
+        """
+        let d = Transitous.parseStopTimes(Data(json.utf8))
+        XCTAssertEqual(d.count, 2)
+        XCTAssertEqual(d[0].line, "42")
+        XCTAssertEqual(d[0].color, 0x0055AA)
+        XCTAssertEqual(d[0].delayMinutes, 2)
+        XCTAssertEqual(d[1].line, "T")
+        XCTAssertNil(d[1].delayMinutes)
+        XCTAssertEqual(d[1].vehicle, .tram)
+    }
 }

@@ -110,3 +110,10 @@ do {
 } catch {
     print("Transitous failed: \(error.localizedDescription)")
 }
+
+// Departure board: Davis train station.
+if let b = await Transitous.departures(near: LatLng(38.5435, -121.7377)) {
+    print("Departures at \(b.stop): \(b.departures.count), next: " + b.departures.prefix(4).map { "\($0.line) to \($0.headsign)" }.joined(separator: "; "))
+} else {
+    print("Departures: none or failed")
+}

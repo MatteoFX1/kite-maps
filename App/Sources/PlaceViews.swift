@@ -64,6 +64,13 @@ struct PlaceBody: View {
 
     private var hasAbout: Bool { !place.about.isEmpty }
 
+    /** A bus stop or a station, which gets a live departure board. */
+    private var isStop: Bool {
+        let text = ((place.category ?? "") + " " + place.name).lowercased()
+        return ["station", "bus stop", "stop ", "transit", "subway", "metro", "tram", "light rail", "terminal", "depot"]
+            .contains { text.contains($0) }
+    }
+
     private var actions: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -88,6 +95,7 @@ struct PlaceBody: View {
         VStack(alignment: .leading, spacing: 14) {
             if let s = place.editorialSummary { Text(s).font(.body) }
             if let a = place.address { InfoRow(icon: "mappin.and.ellipse", text: a) }
+            if isStop { DepartureBoard(place: place) }
             if !place.hours.isEmpty { hours }
             if let phone = place.phone {
                 Button { if let u = telURL(phone) { openURL(u) } } label: { InfoRow(icon: "phone", text: phone) }
@@ -202,5 +210,58 @@ struct SavedView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
+    }
+}
+
+/** Next departures at a stop from Transitous, refreshed every 30 seconds while it's open. */
+struct DepartureBoard: View {
+    let place: Place
+    @State private var board: (stop: String, departures: [Transitous.Departure])?
+    @State private var loaded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Departures").font(.headline)
+            if let b = board {
+                ForEach(Array(b.departures.prefix(8).enumerated()), id: \.offset) { _, d in
+                    HStack(spacing: 10) {
+                        LineChip(leg: TransitLeg(isWalk: false, mode: d.mode, line: d.line, color: d.color, textColor: d.textColor))
+                        Text(d.headsign).font(.subheadline).lineLimit(1)
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(countdown(d.time)).font(.subheadline.weight(.semibold))
+                                .foregroundColor(d.delayMinutes != nil ? Vela.open : .primary)
+                            if let late = d.delayMinutes, late != 0 {
+                                Text(late > 0 ? "\(late) min late" : "\(-late) min early").font(.caption2)
+                                    .foregroundColor(late > 0 ? Vela.closed : Vela.open)
+                            }
+                        }
+                    }
+                }
+                Text("Live times in green · from Transitous").font(.caption).foregroundColor(.secondary)
+            } else if loaded {
+                Text("No departures found here.").font(.subheadline).foregroundColor(.secondary)
+            } else {
+                HStack { ProgressView(); Text("Loading departures…").foregroundColor(.secondary) }
+            }
+        }
+        .task(id: place.id) {
+            while !Task.isCancelled {
+                let b = await Transitous.departures(near: place.location)
+                if Task.isCancelled { return }
+                if b != nil || !loaded { board = b }
+                loaded = true
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+            }
+        }
+    }
+
+    private func countdown(_ t: Date) -> String {
+        let mins = Int((t.timeIntervalSinceNow / 60).rounded())
+        if mins <= 0 { return "Now" }
+        if mins < 60 { return "\(mins) min" }
+        let f = DateFormatter()
+        f.timeStyle = .short
+        return f.string(from: t)
     }
 }

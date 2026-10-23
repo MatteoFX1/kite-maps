@@ -295,6 +295,12 @@ enum DemoScript {
             return
         }
         if step == "layers" { model.showLayers = true; return }
+        if step == "board" {
+            var station = Place(id: "demo-davis", name: "Davis Station", location: LatLng(38.5435, -121.7377), source: "demo")
+            station.category = "Train station"
+            model.select(station)
+            return
+        }
         if step == "transit" {
             // Davis to Sacramento Valley Station: buses and Amtrak.
             let station = Place(id: "demo-sac", name: "Sacramento Valley Station", location: LatLng(38.5843, -121.5006), source: "demo")

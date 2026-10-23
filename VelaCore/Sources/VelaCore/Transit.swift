@@ -97,6 +97,69 @@ public enum Transitous {
         return parse(data)
     }
 
+    /** One upcoming departure at a stop. */
+    public struct Departure: Hashable, Sendable {
+        public var line: String
+        public var mode: String
+        public var color: UInt32?
+        public var textColor: UInt32?
+        public var headsign: String
+        public var time: Date
+        /** Minutes late, when the agency sends live times. */
+        public var delayMinutes: Int?
+        public var vehicle: TransitLeg.Vehicle { TransitLeg.Vehicle(mode) }
+    }
+
+    /**
+     * The departure board for the stop nearest [point] (within about [radius] meters), the way
+     * Vela reads it: the stop's parent station, so every platform of a hub is on one board.
+     * Nil when there is no stop or no service.
+     */
+    public static func departures(near point: LatLng, radius: Double = 150) async -> (stop: String, departures: [Departure])? {
+        let dLat = radius / 111_320, dLng = radius / (111_320 * cos(point.lat * .pi / 180))
+        guard let url = URL(string: "\(base)/api/v1/map/stops?min=\(point.lat - dLat),\(point.lng - dLng)&max=\(point.lat + dLat),\(point.lng + dLng)"),
+              let (data, _) = try? await session.data(from: url),
+              let stops = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return nil }
+        let nearest = stops.compactMap { s -> (name: String, id: String, d: Double)? in
+            guard let id = (s["parentId"] as? String) ?? (s["stopId"] as? String), let p = Self.point(s) else { return nil }
+            return (s["name"] as? String ?? "", id, p.distance(to: point))
+        }.sorted { $0.d < $1.d }
+        guard let first = nearest.first else { return nil }
+        // The two curbs of a street often are two stops with one name: show both on one board.
+        let ids = Array(Set(nearest.filter { $0.name == first.name || $0.d - first.d < 25 }.map(\.id))).prefix(4)
+        var all: [Departure] = []
+        for id in ids {
+            var allowed = CharacterSet.alphanumerics
+            allowed.insert(charactersIn: "-._~")
+            guard let u = URL(string: "\(base)/api/v1/stoptimes?stopId=\(id.addingPercentEncoding(withAllowedCharacters: allowed) ?? id)&n=30"),
+                  let (d, _) = try? await session.data(from: u) else { continue }
+            all += parseStopTimes(d)
+        }
+        guard !all.isEmpty else { return nil }
+        var seen = Set<String>()
+        let board = all.sorted { $0.time < $1.time }.filter { seen.insert("\($0.line)|\($0.headsign)|\($0.time.timeIntervalSince1970)").inserted }
+        return (first.name, board)
+    }
+
+    public static func parseStopTimes(_ data: Data) -> [Departure] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let list = root["stopTimes"] as? [[String: Any]] else { return [] }
+        return list.compactMap { st in
+            let place = st["place"] as? [String: Any] ?? [:]
+            if st["tripCancelled"] as? Bool == true || place["cancelled"] as? Bool == true { return nil }
+            guard let time = date(place["departure"]) else { return nil }
+            var delay: Int?
+            if st["realTime"] as? Bool == true, let sched = date(place["scheduledDeparture"]) {
+                delay = Int((time.timeIntervalSince(sched) / 60).rounded())
+            }
+            let line = [st["routeShortName"], st["displayName"], st["routeLongName"]]
+                .compactMap { ($0 as? String)?.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? ""
+            return Departure(line: line, mode: st["mode"] as? String ?? "", color: hex(st["routeColor"]),
+                             textColor: hex(st["routeTextColor"]), headsign: st["headsign"] as? String ?? "",
+                             time: time, delayMinutes: delay)
+        }
+    }
+
     public static func parse(_ data: Data) -> [TransitTrip] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let its = root["itineraries"] as? [[String: Any]] else { return [] }
