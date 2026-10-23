@@ -17,6 +17,8 @@ maps app for Android. It's meant for sideloading, not the App Store.
 - **Turn-by-turn navigation** with a voice, rerouting, a following camera, the arrival time and
   the speed limit, and it keeps going with the screen off. Like Vela, the turns come from the open
   OSRM router run along Google's route.
+- **Public transit directions** and **live departure boards** at stops and stations, from
+  Transitous (open timetables, no account), with line colors and live delays.
 - **Speed cameras and license plate cameras** (DeFlock) from OpenStreetMap on the map, with a
   warning card and an optional spoken warning while driving.
 - **Settings**: theme, units, voice, and "Use Vela without Google" (OpenStreetMap search and the
