@@ -233,8 +233,8 @@ public enum StepMerge {
                 guard p.offset < 40, p.along >= last - 30, p.along < total - 5 else { continue }
                 last = max(last, p.along)
                 var m2 = m
-                m2.alongMeters = p.along
-                m2.location = Geo.point(along: line, meters: p.along, cumulative: cum)
+                m2.alongMeters = last
+                m2.location = Geo.point(along: line, meters: last, cumulative: cum)
                 placed.append(m2)
             }
             let score = mids.isEmpty ? (abs(Geo.length(o.polyline) - total) < 100 ? 1 : 0) : Double(placed.count) / Double(mids.count)
