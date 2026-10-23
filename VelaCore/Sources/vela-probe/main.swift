@@ -65,11 +65,20 @@ print("Overpass plate cameras near Davis: \(plates.map { "\($0.count)" } ?? "fai
 if munich == nil || plates == nil {
     let q = Overpass.query(filter: "(48.10,11.50,48.18,11.62)", speed: true, plate: false)
     for ep in Overpass.endpoints {
-        if let (data, status) = await Overpass.fetch(ep, query: q) {
-            print("  \(ep): HTTP \(status), \(data.count) bytes: \(String(decoding: data.prefix(160), as: UTF8.self))")
-        } else {
-            print("  \(ep): network error")
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        let url = URL(string: ep + "?data=" + (q.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""))!
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 40
+        let start = Date()
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            print("  \(ep): HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0) in \(Int(Date().timeIntervalSince(start))) s, \(data.count) bytes: \(String(decoding: data.prefix(160), as: UTF8.self))")
+        } catch {
+            print("  \(ep): \(error.localizedDescription) after \(Int(Date().timeIntervalSince(start))) s")
         }
     }
 }
+let via = try? await OSRM.routeVia(merged.routes.first?.polyline ?? [], mode: .drive)
+print("OSRM via Google's line: \(via.map { "\(Int($0.distanceMeters)) m, \($0.maneuvers.count) steps" } ?? "failed")")
 exit(exitCode)

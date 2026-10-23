@@ -19,6 +19,44 @@ public enum OSRM {
         return parse(data, mode: mode)
     }
 
+    /**
+     * The open router forced through points sampled off [line] (Google's route), so its
+     * turn-by-turn follows the same roads, the way Vela gets readable steps for Google routes.
+     */
+    public static func routeVia(_ line: [LatLng], mode: TravelMode) async throws -> Route? {
+        guard line.count >= 2 else { return nil }
+        let cum = Geo.cumulative(line)
+        let total = cum.last ?? 0
+        let vias = min(12, Int(total / 1_500))
+        var pts = [line[0]]
+        var bearings = [bearing(line, cum, at: 0)]
+        for i in stride(from: 1, through: vias, by: 1) {
+            let m = total * Double(i) / Double(vias + 1)
+            pts.append(Geo.point(along: line, meters: m, cumulative: cum))
+            bearings.append(bearing(line, cum, at: m))
+        }
+        pts.append(line[line.count - 1])
+        bearings.append(nil)
+        let profile = mode == .drive ? "driving" : (mode == .bike ? "bike" : "foot")
+        let coords = pts.map { String(format: "%.6f,%.6f", $0.lng, $0.lat) }.joined(separator: ";")
+        let b = bearings.map { $0.map { "\(Int($0)),45" } ?? "" }.joined(separator: ";")
+        let radii = pts.indices.map { $0 == 0 || $0 == pts.count - 1 ? "unlimited" : "30" }.joined(separator: ";")
+        let s = "https://routing.openstreetmap.de/\(mode.osrmBackend)/route/v1/\(profile)/\(coords)" +
+            "?overview=full&geometries=polyline6&steps=true&continue_straight=true&bearings=\(b)&radiuses=\(radii)"
+        guard let url = URL(string: s) else { return nil }
+        var r = URLRequest(url: url)
+        r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        r.timeoutInterval = 20
+        let (data, _) = try await URLSession.shared.data(for: r)
+        return parse(data, mode: mode).first
+    }
+
+    private static func bearing(_ line: [LatLng], _ cum: [Double], at m: Double) -> Double? {
+        let a = Geo.point(along: line, meters: max(0, m - 10), cumulative: cum)
+        let b = Geo.point(along: line, meters: min(cum.last ?? 0, m + 10), cumulative: cum)
+        return a.distance(to: b) > 1 ? Geo.bearing(a, b) : nil
+    }
+
     static func parse(_ data: Data, mode: TravelMode) -> [Route] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let routes = root["routes"] as? [[String: Any]] else { return [] }
@@ -32,10 +70,17 @@ public enum OSRM {
             var maneuvers: [Maneuver] = []
             var along = 0.0
             var roads: [String: Double] = [:]
-            for leg in (r["legs"] as? [[String: Any]]) ?? [] {
+            let legs = (r["legs"] as? [[String: Any]]) ?? []
+            for (li, leg) in legs.enumerated() {
                 for step in (leg["steps"] as? [[String: Any]]) ?? [] {
                     let m = step["maneuver"] as? [String: Any] ?? [:]
                     let type = m["type"] as? String ?? ""
+                    // A route through vias stops and restarts at each one: those aren't turns.
+                    if (type == "arrive" && li < legs.count - 1) || (type == "depart" && li > 0) {
+                        if let i = maneuvers.indices.last { maneuvers[i].distanceMeters += step["distance"] as? Double ?? 0 }
+                        along += step["distance"] as? Double ?? 0
+                        continue
+                    }
                     let modifier = m["modifier"] as? String
                     let name = (step["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                     let ref = (step["ref"] as? String).flatMap { $0.isEmpty ? nil : $0 }
@@ -144,9 +189,19 @@ public enum Directions {
             var g = try await GoogleClient.shared.directions(from: a, to: b, mode: mode,
                                                               avoidHighways: avoidHighways, avoidTolls: avoidTolls)
             if !g.isEmpty {
-                if let o = try? await osrmTask.value {
-                    for i in g.indices {
-                        if let steps = StepMerge.adopt(o, onto: g[i].polyline) { g[i].maneuvers = steps }
+                let lines = g.map(\.polyline)
+                let vias = await withTaskGroup(of: (Int, Route?).self) { group -> [Int: Route] in
+                    for (i, line) in lines.enumerated() {
+                        group.addTask { (i, try? await OSRM.routeVia(line, mode: mode)) }
+                    }
+                    var out: [Int: Route] = [:]
+                    for await (i, r) in group { if let r { out[i] = r } }
+                    return out
+                }
+                let plain = (try? await osrmTask.value) ?? []
+                for i in g.indices {
+                    if let steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
+                        g[i].maneuvers = steps
                     }
                 }
                 return Result(routes: g)
