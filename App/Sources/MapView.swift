@@ -164,7 +164,7 @@ struct VelaMapView: UIViewRepresentable {
             pins.textFontSize = NSExpression(forConstantValue: 12)
             pins.textAnchor = NSExpression(forConstantValue: "left")
             pins.textOffset = NSExpression(forConstantValue: NSValue(cgVector: CGVector(dx: 1.4, dy: 0)))
-            pins.isTextOptional = NSExpression(forConstantValue: true)
+            pins.textOptional = NSExpression(forConstantValue: true)
             pins.maximumTextWidth = NSExpression(forConstantValue: 8)
             pins.textJustification = NSExpression(forConstantValue: "left")
             pins.symbolSortKey = NSExpression(forKeyPath: "rank")
@@ -182,7 +182,7 @@ struct VelaMapView: UIViewRepresentable {
             sel.textFontSize = NSExpression(forConstantValue: 13)
             sel.textAnchor = NSExpression(forConstantValue: "top")
             sel.textOffset = NSExpression(forConstantValue: NSValue(cgVector: CGVector(dx: 0, dy: 0.4)))
-            sel.isTextOptional = NSExpression(forConstantValue: true)
+            sel.textOptional = NSExpression(forConstantValue: true)
             style.addLayer(sel)
 
             let bubbleSrc = MLNShapeSource(identifier: "vela-route-bubbles", shape: nil, options: nil)
