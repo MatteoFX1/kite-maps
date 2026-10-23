@@ -33,4 +33,30 @@ final class CameraTests: XCTestCase {
         XCTAssertEqual(p[0].camera.id, 1)
         XCTAssertEqual(p[0].along, Geo.length(line) / 2, accuracy: 2)
     }
+
+    func testMaxspeed() {
+        XCTAssertEqual(Overpass.maxspeedKmh("50"), 50)
+        XCTAssertEqual(Overpass.maxspeedKmh("30 mph") ?? 0, 48.28, accuracy: 0.01)
+        XCTAssertNil(Overpass.maxspeedKmh("DE:urban"))
+        XCTAssertNil(Overpass.maxspeedKmh("none"))
+    }
+
+    func testSpeedLimitsAlongRoute() {
+        // Route north ~1,113 m; a 50 road covers the first half, a 30 road the rest, and a
+        // crossing 80 road touches it at one point only.
+        let route = [LatLng(0, 0), LatLng(0.01, 0)]
+        let ways = [
+            Overpass.LimitWay(kmh: 50, line: [LatLng(0, 0), LatLng(0.005, 0)]),
+            Overpass.LimitWay(kmh: 30, line: [LatLng(0.005, 0), LatLng(0.01, 0)]),
+            Overpass.LimitWay(kmh: 80, line: [LatLng(0.003, -0.01), LatLng(0.003, 0), LatLng(0.003, 0.01)]),
+        ]
+        let limits = Overpass.speedLimits(ways, on: route)
+        XCTAssertEqual(limits.first?.kmh, 50)
+        XCTAssertFalse(limits.contains { $0.kmh == 80 })
+        var r = Route(mode: .drive, polyline: route, distanceMeters: 1113, typicalSeconds: 60, trafficSeconds: nil,
+                      summary: nil, maneuvers: [], source: "osm")
+        r.speedLimits = limits
+        XCTAssertEqual(r.speedLimit(at: 200), 50)
+        XCTAssertEqual(r.speedLimit(at: 900), 30)
+    }
 }
