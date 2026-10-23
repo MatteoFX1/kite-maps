@@ -1,0 +1,135 @@
+import AVFoundation
+import CoreLocation
+import Foundation
+import UIKit
+import VelaCore
+
+/**
+ * One drive, walk or ride: follows the user along the route, speaks the turns, and reroutes
+ * when they leave it.
+ */
+@MainActor
+final class Navigator: ObservableObject {
+    @Published private(set) var route: Route
+    @Published private(set) var progress: RouteTracker.Progress?
+    @Published private(set) var rerouting = false
+    @Published private(set) var arrived = false
+    @Published var muted: Bool { didSet { if muted { speech.stopSpeaking(at: .immediate) } } }
+    /** The camera follows the user until they pan the map. */
+    @Published var following = true
+    @Published private(set) var speedMps: Double = 0
+    @Published private(set) var lastFix: CLLocation?
+
+    let destination: Place
+    private var tracker: RouteTracker
+    private let speech = AVSpeechSynthesizer()
+    private var spokenStage: [Int: Int] = [:]
+    private var lastReroute = Date.distantPast
+    private var avoidHighways: Bool
+    private var avoidTolls: Bool
+
+    init(route: Route, destination: Place, settings: AppSettings) {
+        self.route = route
+        self.destination = destination
+        tracker = RouteTracker(route: route)
+        muted = !settings.voice
+        avoidHighways = settings.avoidHighways
+        avoidTolls = settings.avoidTolls
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
+        UIApplication.shared.isIdleTimerDisabled = true
+        let first = route.maneuvers.first { $0.type != .depart } ?? route.maneuvers.first
+        speak("Starting route to \(destination.name). " + (first.map { "\($0.instruction)." } ?? ""))
+    }
+
+    func stop() {
+        speech.stopSpeaking(at: .immediate)
+        UIApplication.shared.isIdleTimerDisabled = false
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    var nextManeuver: Maneuver? {
+        guard let i = progress?.nextIndex, i < route.maneuvers.count else { return route.maneuvers.first }
+        return route.maneuvers[i]
+    }
+
+    /** The one after next, for the "Then" line when two turns come close together. */
+    var thenManeuver: Maneuver? {
+        guard let i = progress?.nextIndex, i + 1 < route.maneuvers.count else { return nil }
+        let a = route.maneuvers[i], b = route.maneuvers[i + 1]
+        return b.alongMeters - a.alongMeters < 300 ? b : nil
+    }
+
+    func handle(_ loc: CLLocation) {
+        guard !arrived else { return }
+        lastFix = loc
+        speedMps = max(0, loc.speed)
+        let p = tracker.update(LatLng(loc.coordinate.latitude, loc.coordinate.longitude),
+                               accuracy: max(loc.horizontalAccuracy, 5))
+        progress = p
+        if p.arrived {
+            arrived = true
+            speak("You have arrived at \(destination.name).")
+            return
+        }
+        if p.offRoute && !rerouting && Date().timeIntervalSince(lastReroute) > 8 {
+            reroute(from: loc)
+            return
+        }
+        announce(p)
+    }
+
+    private func announce(_ p: RouteTracker.Progress) {
+        guard let i = p.nextIndex, i < route.maneuvers.count else { return }
+        let m = route.maneuvers[i]
+        let d = p.distanceToNext
+        let stage = spokenStage[i] ?? 0
+        let drive = route.mode == .drive
+        let now = drive ? max(40, speedMps * 4) : 15
+        let near = drive ? max(250, speedMps * 12) : 60
+        let far = drive ? max(1000, speedMps * 40) : 250
+        if d <= now && stage < 3 {
+            spokenStage[i] = 3
+            speak(m.instruction)
+        } else if d <= near && d > now + 30 && stage < 2 {
+            spokenStage[i] = 2
+            speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
+        } else if d <= far && d > near + 150 && stage < 1 && m.type != .arrive {
+            spokenStage[i] = 1
+            speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
+        }
+    }
+
+    private func reroute(from loc: CLLocation) {
+        rerouting = true
+        lastReroute = Date()
+        speak("Rerouting.")
+        let from = LatLng(loc.coordinate.latitude, loc.coordinate.longitude)
+        let mode = route.mode
+        let to = destination.location
+        let hw = avoidHighways, tolls = avoidTolls
+        Task {
+            let r = await Directions.routes(from: from, to: to, mode: mode, avoidHighways: hw, avoidTolls: tolls,
+                                            useGoogle: !AppSettings.shared.noGoogle)
+            self.rerouting = false
+            guard let fresh = r.routes.first else { return }
+            self.route = fresh
+            self.tracker = RouteTracker(route: fresh)
+            self.spokenStage = [:]
+            if let fix = self.lastFix { self.handle(fix) }
+        }
+    }
+
+    private func speak(_ text: String) {
+        guard !muted else { return }
+        try? AVAudioSession.sharedInstance().setActive(true)
+        let u = AVSpeechUtterance(string: text)
+        u.voice = AVSpeechSynthesisVoice(language: Locale.preferredLanguages.first?.hasPrefix("en") == true
+                                         ? Locale.preferredLanguages.first : "en-US")
+        u.rate = AVSpeechUtteranceDefaultSpeechRate * 0.95
+        speech.speak(u)
+    }
+}
+
+extension String {
+    var lowercasedFirst: String { prefix(1).lowercased() + dropFirst() }
+}

@@ -26,6 +26,18 @@ public enum Photon {
         return parse(data, near: near)
     }
 
+    /** The address at a point, for a dropped pin. */
+    public static func reverse(_ p: LatLng) async -> Place? {
+        guard let url = URL(string: "https://photon.komoot.io/reverse?lat=\(p.lat)&lon=\(p.lng)&limit=1") else { return nil }
+        var r = URLRequest(url: url)
+        r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        r.timeoutInterval = 10
+        guard let res = try? await URLSession.shared.data(for: r), var place = parse(res.0, near: nil).first else { return nil }
+        place.location = p
+        place.id = "pin:\(p.lat),\(p.lng)"
+        return place
+    }
+
     static func parse(_ data: Data, near: LatLng?) -> [Place] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let features = root["features"] as? [[String: Any]] else { return [] }
@@ -52,5 +64,5 @@ public enum Photon {
 }
 
 extension String {
-    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
+    public var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }

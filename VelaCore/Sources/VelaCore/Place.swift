@@ -19,14 +19,14 @@ public struct LatLng: Hashable, Codable, Sendable {
     }
 }
 
-public struct AboutSection: Hashable, Sendable {
+public struct AboutSection: Hashable, Codable, Sendable {
     public var title: String
     public var items: [String]
 }
 
 /** One place, as the place sheet shows it. Every field but name and location is optional:
  *  Google sends a different subset per business, and Photon sends almost none. */
-public struct Place: Identifiable, Hashable, Sendable {
+public struct Place: Identifiable, Hashable, Codable, Sendable {
     public var id: String
     public var name: String
     public var location: LatLng

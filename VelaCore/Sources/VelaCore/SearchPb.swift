@@ -30,7 +30,7 @@ enum SearchPb {
         10e2!50m3!2e2!3m1!3b1!61b1!67m5!7b1!10b1!14b1!15m1!1b0!69i782!77b1
         """
 
-    static func build(query: String, center: LatLng, spanMeters: Double? = nil) -> String {
+    static func build(query: String, center: LatLng, spanMeters: Double? = nil, offset: Int = 0) -> String {
         var pb = template
             .replacingOccurrences(of: "{QUERY}", with: query.replacingOccurrences(of: "!", with: " ").trimmingCharacters(in: .whitespaces))
             .replacingOccurrences(of: "{LNG}", with: String(center.lng))
@@ -38,6 +38,10 @@ enum SearchPb {
         if let span = spanMeters, let r = pb.range(of: #"!1d[0-9.]+"#, options: .regularExpression) {
             let clamped = min(max(span, minSpanMeters), 500_000)
             pb.replaceSubrange(r, with: "!1d\(clamped)")
+        }
+        // Pages after the first ride right after the page size, as the web map sends them.
+        if offset > 0, let r = pb.range(of: "!7i20") {
+            pb.replaceSubrange(r, with: "!7i20!8i\(offset)")
         }
         return pb
     }

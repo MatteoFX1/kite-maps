@@ -2,188 +2,274 @@ import SwiftUI
 import VelaCore
 
 struct ContentView: View {
-    @StateObject private var model = MapModel()
+    @StateObject private var model = AppModel()
+    @ObservedObject private var settings = AppSettings.shared
+    @Environment(\.colorScheme) private var systemScheme
+
+    private var dark: Bool { settings.colorScheme.map { $0 == .dark } ?? (systemScheme == .dark) }
+
+    var body: some View {
+        ZStack {
+            VelaMapView(model: model, settings: settings, dark: dark)
+                .ignoresSafeArea()
+            if let nav = model.nav {
+                NavigationOverlay(model: model, nav: nav)
+            } else if model.directions != nil {
+                DirectionsOverlay(model: model)
+            } else {
+                BrowseOverlay(model: model)
+            }
+        }
+        .preferredColorScheme(settings.colorScheme)
+        .task { await DemoScript.run(model) }
+        .sheet(isPresented: $model.showLayers) {
+            LayersSheet(settings: settings)
+        }
+        .sheet(isPresented: $model.showSettings) {
+            SettingsView(settings: settings, onChange: { model.reloadRoutes() })
+        }
+        .sheet(isPresented: $model.showSaved) {
+            SavedView(settings: settings) { p in
+                model.showSaved = false
+                model.select(p)
+            }
+        }
+    }
+}
+
+/** The normal map screen: search bar, category chips, map buttons and the results or place sheet. */
+struct BrowseOverlay: View {
+    @ObservedObject var model: AppModel
     @FocusState private var searchFocused: Bool
+    @Environment(\.colorScheme) private var scheme
+
+    private var hasSheet: Bool { model.selected != nil || !model.results.isEmpty }
 
     var body: some View {
         GeometryReader { geo in
+            let full = geo.size.height + geo.safeAreaInsets.bottom
+            let sheetH = hasSheet ? BottomSheet<EmptyView, EmptyView>.height(model.detent, container: full, peek: 150) : 0
             ZStack(alignment: .top) {
-                MapView(model: model)
-                    .ignoresSafeArea()
-
-                VStack(spacing: 8) {
-                    searchBar
-                    if let notice = model.notice {
-                        Text(notice)
-                            .font(.footnote)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                            .onTapGesture { model.notice = nil }
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
+                // Map buttons on the right: layers up top, location just above the sheet.
+                VStack {
                     HStack {
                         Spacer()
-                        Button { model.centerOnUser() } label: {
-                            Image(systemName: "location.fill")
-                                .font(.title3)
-                                .frame(width: 48, height: 48)
-                                .background(.regularMaterial, in: Circle())
+                        MapFab(icon: "square.3.layers.3d", size: 44) { model.showLayers = true }
+                    }
+                    .padding(.top, model.results.isEmpty && model.selected == nil ? 118 : 70)
+                    Spacer()
+                    if sheetH < full * 0.6 {
+                        HStack {
+                            Spacer()
+                            MapFab(icon: "location.fill", tint: Vela.routeBlue) { model.centerOnUser() }
+                        }
+                        .padding(.bottom, max(sheetH - geo.safeAreaInsets.bottom, 0) + 14)
+                    }
+                }
+                .padding(.horizontal, 14)
+
+                if hasSheet {
+                    VStack {
+                        Spacer()
+                        sheet(full: full)
+                    }
+                    .ignoresSafeArea(edges: .bottom)
+                    .transition(.move(edge: .bottom))
+                }
+
+                VStack(spacing: 10) {
+                    SearchBar(model: model, focused: $searchFocused)
+                    if searchFocused {
+                        SuggestionsPanel(model: model) { searchFocused = false }
+                    } else if model.results.isEmpty && model.selected == nil {
+                        CategoryChips { c in
+                            searchFocused = false
+                            model.search(c.query, title: c.label)
                         }
                     }
-                    .padding(.trailing, 12)
-                    .padding(.bottom, 8)
-                    bottomPanel
-                        .frame(height: hasPanel ? geo.size.height * (model.panelExpanded ? 0.85 : 0.42) : 0)
+                    if let n = model.notice, !searchFocused {
+                        NoticeBanner(text: n) { model.notice = nil }
+                    }
                 }
+                .padding(.top, 6)
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: hasSheet)
         }
-    }
-
-    private var hasPanel: Bool { model.selected != nil || !model.results.isEmpty }
-
-    private var searchBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("Search here", text: $model.query)
-                .focused($searchFocused)
-                .submitLabel(.search)
-                .autocorrectionDisabled()
-                .onSubmit { model.search() }
-            if model.searching {
-                ProgressView()
-            } else if !model.query.isEmpty || !model.results.isEmpty {
-                Button {
-                    model.clear()
-                    searchFocused = false
-                } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 50)
-        .background(.regularMaterial, in: Capsule())
-        .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
     }
 
     @ViewBuilder
-    private var bottomPanel: some View {
+    private func sheet(full: CGFloat) -> some View {
         if let place = model.selected {
-            panel {
-                PlaceDetailView(place: place, expanded: $model.panelExpanded, onClose: { model.closePlace() })
+            BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: 150) {
+                PlaceHeader(model: model, place: place)
+            } content: {
+                PlaceBody(model: model, place: place)
             }
-        } else if !model.results.isEmpty {
-            panel {
-                ResultsList(places: model.results, expanded: $model.panelExpanded, onPick: { p in
-                    searchFocused = false
-                    model.select(p)
-                })
+            .id(place.id)
+        } else {
+            BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: 150) {
+                ResultsHeader(model: model)
+            } content: {
+                ResultsList(model: model)
             }
         }
-    }
-
-    private func panel<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(spacing: 0) {
-            Capsule()
-                .fill(Color.secondary.opacity(0.5))
-                .frame(width: 40, height: 5)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-                .onTapGesture { withAnimation { model.panelExpanded.toggle() } }
-                .gesture(DragGesture(minimumDistance: 10).onEnded { g in
-                    withAnimation { model.panelExpanded = g.translation.height < 0 }
-                })
-            content()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: .black.opacity(0.2), radius: 10, y: -2)
-        .ignoresSafeArea(edges: .bottom)
     }
 }
 
-struct ResultsList: View {
-    let places: [Place]
-    @Binding var expanded: Bool
-    let onPick: (Place) -> Void
+struct SearchBar: View {
+    @ObservedObject var model: AppModel
+    var focused: FocusState<Bool>.Binding
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if focused.wrappedValue {
+                Button { focused.wrappedValue = false } label: {
+                    Image(systemName: "arrow.left").font(.system(size: 18, weight: .medium))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Image(systemName: "magnifyingglass").font(.system(size: 18, weight: .medium))
+            }
+            TextField("Search", text: $model.query)
+                .focused(focused)
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .onSubmit { model.search() }
+            if model.searching {
+                ProgressView()
+            } else if !model.query.isEmpty || !model.results.isEmpty || model.selected != nil {
+                Button {
+                    model.clearSearch()
+                    focused.wrappedValue = false
+                } label: {
+                    Image(systemName: "xmark").font(.system(size: 17, weight: .medium))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button { model.showSaved = true } label: {
+                    Image(systemName: "bookmark").font(.system(size: 18))
+                }
+                .buttonStyle(.plain)
+            }
+            Button { model.showSettings = true } label: {
+                Image(systemName: "gearshape").font(.system(size: 18))
+            }
+            .buttonStyle(.plain)
+        }
+        .foregroundColor(.primary)
+        .padding(.horizontal, 18)
+        .frame(height: 52)
+        .background(Capsule().fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.22), radius: 6, y: 2))
+        .padding(.horizontal, 12)
+    }
+}
+
+struct CategoryChips: View {
+    let onPick: (Category) -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Category.all) { c in
+                    Button { onPick(c) } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: c.icon).font(.system(size: 13))
+                            Text(c.label).font(.subheadline.weight(.medium))
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(height: 36)
+                        .background(Capsule().fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.18), radius: 3, y: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+        }
+    }
+}
+
+struct SuggestionsPanel: View {
+    @ObservedObject var model: AppModel
+    @ObservedObject var settings = AppSettings.shared
+    let done: () -> Void
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(places) { p in
-                    Button { onPick(p) } label: {
-                        ResultRow(place: p)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Category.all) { c in
+                    row(icon: c.icon, text: c.label) { done(); model.search(c.query, title: c.label) }
+                }
+                if !settings.recents.isEmpty {
+                    Text("Recent").font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
+                        .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 4)
+                    ForEach(settings.recents, id: \.self) { q in
+                        row(icon: "clock.arrow.circlepath", text: q) { done(); model.search(q) }
                     }
-                    .buttonStyle(.plain)
-                    Divider().padding(.leading, 16)
                 }
             }
-            .padding(.bottom, 30)
+            .padding(.vertical, 8)
         }
+        .background(RoundedRectangle(cornerRadius: 20).fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.2), radius: 8))
+        .padding(.horizontal, 12)
+        .frame(maxHeight: 460)
+    }
+
+    private func row(icon: String, text: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                Image(systemName: icon).frame(width: 22).foregroundColor(.secondary)
+                Text(text).foregroundColor(.primary)
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .frame(height: 46)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
-struct ResultRow: View {
-    let place: Place
+struct NoticeBanner: View {
+    let text: String
+    let dismiss: () -> Void
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(place.name).font(.headline)
-            RatingLine(place: place)
-            if let status = place.statusText {
-                Text(status).font(.subheadline).foregroundStyle(statusColor(place))
-            }
-            if let address = place.address {
-                Text(address).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-            }
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "info.circle").foregroundColor(.secondary)
+            Text(text).font(.footnote).frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: dismiss) { Image(systemName: "xmark").font(.footnote) }.buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.18), radius: 4))
+        .padding(.horizontal, 12)
     }
 }
 
-/** "4.5 ★ (120) · Pizza restaurant · $10–20 · 1.2 km" */
-struct RatingLine: View {
-    let place: Place
-
-    var body: some View {
-        let parts: [String] = [
-            place.rating.map { r in "\(String(format: "%.1f", r)) ★" + (place.reviewCount.map { " (\($0))" } ?? "") },
-            place.category,
-            place.priceText,
-            place.distanceMeters.map(formatDistance),
-        ].compactMap { $0 }
-        if !parts.isEmpty {
-            Text(parts.joined(separator: " · "))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
+/** Drives the app into one screen for the build's screenshots: `-demo search|place|directions|nav`. */
+enum DemoScript {
+    @MainActor
+    static func run(_ model: AppModel) async {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-demo"), i + 1 < args.count else { return }
+        let step = args[i + 1]
+        func wait(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(s * 1e9)) }
+        await wait(6)
+        if step == "browse" { return }
+        model.search("restaurants", title: "Restaurants")
+        await wait(8)
+        guard step != "search", let first = model.visibleResults.first else { return }
+        model.select(first)
+        await wait(5)
+        guard step != "place" else { return }
+        model.openDirections(to: first)
+        await wait(8)
+        guard step == "nav" else { return }
+        model.startNavigation()
     }
-}
-
-func statusColor(_ p: Place) -> Color {
-    if p.permanentlyClosed { return .red }
-    switch p.openNow {
-    case true?: return .green
-    case false?: return .red
-    default: return .secondary
-    }
-}
-
-func formatDistance(_ m: Double) -> String {
-    let f = MeasurementFormatter()
-    f.unitOptions = .naturalScale
-    f.numberFormatter.maximumFractionDigits = m < 1000 ? 0 : 1
-    return f.string(from: Measurement(value: m, unit: UnitLength.meters))
 }

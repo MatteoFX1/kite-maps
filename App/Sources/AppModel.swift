@@ -1,0 +1,392 @@
+import Combine
+import CoreLocation
+import Foundation
+import MapLibre
+import SwiftUI
+import UIKit
+import VelaCore
+
+enum SheetDetent: Equatable {
+    case peek, half, full
+}
+
+enum SortMode: String, CaseIterable, Identifiable {
+    case relevance = "Relevance", distance = "Distance", rating = "Rating"
+    var id: String { rawValue }
+}
+
+struct Category: Identifiable, Hashable {
+    let label: String
+    let icon: String
+    let query: String
+    var id: String { label }
+
+    static let all = [
+        Category(label: "Restaurants", icon: "fork.knife", query: "restaurants"),
+        Category(label: "Coffee", icon: "cup.and.saucer.fill", query: "coffee"),
+        Category(label: "Gas", icon: "fuelpump.fill", query: "gas stations"),
+        Category(label: "Groceries", icon: "cart.fill", query: "grocery stores"),
+        Category(label: "Hotels", icon: "bed.double.fill", query: "hotels"),
+        Category(label: "Parking", icon: "parkingsign", query: "parking"),
+        Category(label: "Pharmacies", icon: "cross.case.fill", query: "pharmacy"),
+        Category(label: "ATMs", icon: "banknote.fill", query: "atm"),
+    ]
+}
+
+/** Directions to one place: routes for every mode, the one picked, and where from. */
+struct DirectionsState {
+    var destination: Place
+    /** True when the trip goes from the place back to you. */
+    var reversed = false
+    var mode: TravelMode
+    var routes: [TravelMode: [Route]] = [:]
+    var loading: Set<TravelMode> = []
+    var errors: [TravelMode: String] = [:]
+    var selected = 0
+
+    var current: [Route] { routes[mode] ?? [] }
+    var route: Route? { current.indices.contains(selected) ? current[selected] : current.first }
+}
+
+/** The whole app's state; the map and every sheet read it. */
+@MainActor
+final class AppModel: ObservableObject {
+    let settings = AppSettings.shared
+    let location: LocationService
+
+    @Published var query = ""
+    @Published var results: [Place] = []
+    @Published var resultsTitle = ""
+    @Published var selected: Place?
+    @Published var searching = false
+    @Published var notice: String?
+    @Published var detent: SheetDetent = .half
+    @Published var openNowOnly = false
+    @Published var rating4Only = false
+    @Published var sort: SortMode = .relevance
+    @Published var directions: DirectionsState?
+    @Published var nav: Navigator?
+    @Published var showLayers = false
+    @Published var showSettings = false
+    @Published var showSaved = false
+    @Published var showSteps = false
+    /** "Start" on a place: begin the drive as soon as its route arrives. */
+    @Published var autoStart = false
+    /** Bumped when the map should redraw overlays that don't come from a published value. */
+    @Published var mapTick = 0
+
+    weak var map: MLNMapView?
+    private var searchTask: Task<Void, Never>?
+    private var navSub: AnyCancellable?
+
+    init() {
+        location = LocationService()
+        location.onUpdate = { [weak self] loc in self?.locationChanged(loc) }
+    }
+
+    var userLatLng: LatLng? {
+        location.last.map { LatLng($0.coordinate.latitude, $0.coordinate.longitude) }
+            ?? map?.userLocation?.location.map { LatLng($0.coordinate.latitude, $0.coordinate.longitude) }
+    }
+
+    // MARK: Search
+
+    var visibleResults: [Place] {
+        var r = results
+        if openNowOnly { r = r.filter { $0.openNow == true } }
+        if rating4Only { r = r.filter { ($0.rating ?? 0) >= 4 } }
+        switch sort {
+        case .relevance: break
+        case .distance: r.sort { ($0.distanceMeters ?? .infinity) < ($1.distanceMeters ?? .infinity) }
+        case .rating: r.sort { ($0.rating ?? 0) > ($1.rating ?? 0) }
+        }
+        return r
+    }
+
+    private var viewport: (center: LatLng, span: Double?) {
+        guard let map, map.bounds.width > 0 else { return (userLatLng ?? LatLng(40.7484, -73.9857), nil) }
+        let c = map.centerCoordinate
+        let b = map.visibleCoordinateBounds
+        let span = LatLng(b.sw.latitude, b.sw.longitude).distance(to: LatLng(b.ne.latitude, b.ne.longitude)) / 1.4
+        return (LatLng(c.latitude, c.longitude), span.isFinite && span > 0 ? span : nil)
+    }
+
+    func search(_ text: String? = nil, title: String? = nil) {
+        let q = (text ?? query).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return }
+        query = title ?? q
+        settings.addRecent(title ?? q)
+        searchTask?.cancel()
+        selected = nil
+        directions = nil
+        searching = true
+        notice = nil
+        openNowOnly = false
+        rating4Only = false
+        sort = .relevance
+        let vp = viewport
+        let useGoogle = !settings.noGoogle
+        let user = userLatLng
+        searchTask = Task {
+            var r = await PlaceSearch.search(q, center: vp.center, spanMeters: vp.span, useGoogle: useGoogle)
+            guard !Task.isCancelled else { return }
+            // Distances read from you, not from the middle of the map.
+            if let user {
+                r.places = r.places.map { var p = $0; p.distanceMeters = user.distance(to: p.location); return p }
+            }
+            searching = false
+            resultsTitle = title ?? q
+            results = r.places
+            if r.places.isEmpty {
+                notice = "No results for \"\(q)\" here."
+            } else if r.googleError != nil && useGoogle {
+                notice = "Google didn't answer, so these results are from OpenStreetMap."
+            }
+            if r.places.count == 1 {
+                select(r.places[0])
+            } else {
+                detent = .half
+                frame(r.places.map(\.location))
+            }
+        }
+    }
+
+    func clearSearch() {
+        searchTask?.cancel()
+        query = ""
+        results = []
+        resultsTitle = ""
+        selected = nil
+        searching = false
+        notice = nil
+    }
+
+    func select(_ place: Place) {
+        var p = place
+        if p.distanceMeters == nil, let u = userLatLng { p.distanceMeters = u.distance(to: p.location) }
+        selected = p
+        detent = .half
+        guard let map else { return }
+        let target = CLLocationCoordinate2D(latitude: p.location.lat, longitude: p.location.lng)
+        let pad = UIEdgeInsets(top: 120, left: 0, bottom: map.bounds.height * 0.45, right: 0)
+        let cam = MLNMapCamera(lookingAtCenter: target, acrossDistance: 900, pitch: 0, heading: 0)
+        if map.zoomLevel > 16 { cam.altitude = map.camera.altitude }
+        map.setCamera(cam, withDuration: 0.6, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut),
+                      edgePadding: pad, completionHandler: nil)
+    }
+
+    func closePlace() {
+        selected = nil
+        if !results.isEmpty { detent = .half }
+    }
+
+    /** A tap on a place the basemap draws: look it up on Google by name at that spot. */
+    func resolveTapped(name: String, at point: LatLng) {
+        var placeholder = Place(id: "tap:\(point.lat),\(point.lng)", name: name, location: point, source: "osm")
+        placeholder.distanceMeters = userLatLng?.distance(to: point)
+        select(placeholder)
+        guard !settings.noGoogle else { return }
+        Task {
+            let found = (try? await GoogleClient.shared.search(name, center: point, spanMeters: 1_000, pages: 1)) ?? []
+            guard selected?.id == placeholder.id else { return }
+            if let best = found.filter({ $0.location.distance(to: point) < 150 })
+                .min(by: { $0.location.distance(to: point) < $1.location.distance(to: point) }) {
+                var b = best
+                b.distanceMeters = userLatLng?.distance(to: b.location)
+                selected = b
+            }
+        }
+    }
+
+    /** Long press: a dropped pin with the address there. */
+    func dropPin(at point: LatLng) {
+        var pin = Place(id: "pin:\(point.lat),\(point.lng)", name: "Dropped pin", location: point, source: "osm")
+        pin.category = String(format: "%.5f, %.5f", point.lat, point.lng)
+        select(pin)
+        Task {
+            guard let found = await Photon.reverse(point), selected?.id == pin.id else { return }
+            var p = pin
+            p.address = [found.name, found.address].compactMap { $0 }.joined(separator: ", ")
+            selected = p
+        }
+    }
+
+    // MARK: Directions
+
+    func openDirections(to place: Place) {
+        autoStart = false
+        directions = DirectionsState(destination: place, mode: settings.defaultMode)
+        detent = .half
+        loadAllModes()
+    }
+
+    func closeDirections() {
+        autoStart = false
+        directions = nil
+        showSteps = false
+        if let p = selected { select(p) }
+    }
+
+    func reverseDirections() {
+        directions?.reversed.toggle()
+        directions?.routes = [:]
+        directions?.selected = 0
+        loadAllModes()
+    }
+
+    func setMode(_ m: TravelMode) {
+        directions?.mode = m
+        directions?.selected = 0
+        settings.defaultMode = m
+        frameRoute()
+    }
+
+    func selectRoute(_ i: Int) {
+        directions?.selected = i
+        mapTick += 1
+    }
+
+    func reloadRoutes() {
+        guard directions != nil else { return }
+        directions?.routes = [:]
+        loadAllModes()
+    }
+
+    private func loadAllModes() {
+        guard let d = directions else { return }
+        guard let me = userLatLng else {
+            notice = "Turn on location to get directions from where you are."
+            return
+        }
+        let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
+        let destId = d.destination.id
+        let hw = settings.avoidHighways, tolls = settings.avoidTolls, google = !settings.noGoogle
+        for m in TravelMode.allCases {
+            directions?.loading.insert(m)
+            Task {
+                let r = await Directions.routes(from: from, to: to, mode: m, avoidHighways: hw, avoidTolls: tolls, useGoogle: google)
+                guard directions?.destination.id == destId else { return }
+                directions?.loading.remove(m)
+                directions?.routes[m] = r.routes
+                if r.routes.isEmpty { directions?.errors[m] = r.error ?? "No route" }
+                if m == directions?.mode {
+                    frameRoute()
+                    if autoStart, !r.routes.isEmpty {
+                        autoStart = false
+                        startNavigation()
+                    }
+                }
+            }
+        }
+    }
+
+    func frameRoute() {
+        guard let r = directions?.route else { return }
+        frame(r.polyline, bottomFraction: 0.42)
+    }
+
+    // MARK: Navigation
+
+    func startNavigation() {
+        guard let d = directions, let route = d.route, !d.reversed else { return }
+        let n = Navigator(route: route, destination: d.destination, settings: settings)
+        nav = n
+        navSub = n.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        location.setNavigating(true, mode: route.mode.rawValue)
+        map?.showsUserLocation = false
+        if let loc = location.last { n.handle(loc); followCamera(n, loc, animated: false) }
+    }
+
+    func endNavigation() {
+        nav?.stop()
+        nav = nil
+        navSub = nil
+        location.setNavigating(false)
+        map?.showsUserLocation = true
+        directions = nil
+        showSteps = false
+        resetCamera()
+    }
+
+    func recenterNav() {
+        guard let n = nav else { return }
+        n.following = true
+        if let loc = location.last { followCamera(n, loc, animated: true) }
+    }
+
+    /** Show the whole remaining trip; the camera stops following until re-centered. */
+    func overviewNav() {
+        guard let n = nav else { return }
+        n.following = false
+        let line = n.progress.map { Geo.slice(n.route.polyline, from: $0.alongMeters, to: Geo.length(n.route.polyline)) } ?? n.route.polyline
+        frame(line, bottomFraction: 0.25, top: 200)
+    }
+
+    private func locationChanged(_ loc: CLLocation) {
+        guard let n = nav else { return }
+        n.handle(loc)
+        if n.following { followCamera(n, loc, animated: true) }
+        mapTick += 1
+    }
+
+    private func followCamera(_ n: Navigator, _ loc: CLLocation, animated: Bool) {
+        guard let map else { return }
+        let p = n.progress
+        let onRoute = p.map { !$0.offRoute && $0.offsetMeters < 40 } ?? false
+        let center = onRoute ? CLLocationCoordinate2D(latitude: p!.snapped.lat, longitude: p!.snapped.lng) : loc.coordinate
+        let heading = loc.course >= 0 && loc.speed > 2 ? loc.course : (p?.routeBearing ?? map.direction)
+        let speed = max(0, loc.speed)
+        let across = n.route.mode == .drive ? min(1400, max(450, 300 + speed * 30)) : 300
+        let cam = MLNMapCamera(lookingAtCenter: center, acrossDistance: across, pitch: 50, heading: heading)
+        let pad = UIEdgeInsets(top: map.bounds.height * 0.45, left: 0, bottom: 120, right: 0)
+        map.setCamera(cam, withDuration: animated ? 1.0 : 0, animationTimingFunction: CAMediaTimingFunction(name: .linear),
+                      edgePadding: pad, completionHandler: nil)
+    }
+
+    // MARK: Map
+
+    func centerOnUser() {
+        guard let map, let loc = location.last ?? map.userLocation?.location else {
+            location.start()
+            return
+        }
+        let cam = MLNMapCamera(lookingAtCenter: loc.coordinate, acrossDistance: 1200, pitch: 0, heading: 0)
+        map.setCamera(cam, withDuration: 0.5, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut))
+    }
+
+    func resetNorth() {
+        guard let map else { return }
+        map.setDirection(0, animated: true)
+        let cam = map.camera
+        cam.pitch = 0
+        cam.heading = 0
+        map.setCamera(cam, animated: true)
+    }
+
+    private func resetCamera() {
+        guard let map else { return }
+        let cam = map.camera
+        cam.pitch = 0
+        cam.heading = 0
+        map.setCamera(cam, withDuration: 0.5, animationTimingFunction: nil, edgePadding: .zero, completionHandler: nil)
+    }
+
+    func frame(_ points: [LatLng], bottomFraction: CGFloat = 0.45, top: CGFloat = 130) {
+        guard let map, !points.isEmpty else { return }
+        if points.count == 1 {
+            let c = CLLocationCoordinate2D(latitude: points[0].lat, longitude: points[0].lng)
+            map.setCamera(MLNMapCamera(lookingAtCenter: c, acrossDistance: 1200, pitch: 0, heading: 0), animated: true)
+            return
+        }
+        let lats = points.map(\.lat), lngs = points.map(\.lng)
+        let bounds = MLNCoordinateBounds(
+            sw: CLLocationCoordinate2D(latitude: lats.min()!, longitude: lngs.min()!),
+            ne: CLLocationCoordinate2D(latitude: lats.max()!, longitude: lngs.max()!))
+        let pad = UIEdgeInsets(top: top, left: 40, bottom: map.bounds.height * bottomFraction + 20, right: 40)
+        let cam = map.cameraThatFitsCoordinateBounds(bounds, edgePadding: pad)
+        cam.pitch = 0
+        cam.heading = 0
+        if cam.altitude < 500 { cam.altitude = 500 }
+        map.setCamera(cam, withDuration: 0.6, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut))
+    }
+}
