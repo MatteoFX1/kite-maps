@@ -43,6 +43,14 @@ do {
 }
 let osrm = try await OSRM.route(from: davis, to: smf, mode: .drive)
 print("OSRM: \(osrm.count) routes, first \(Int(osrm.first?.distanceMeters ?? 0)) m, \(osrm.first?.maneuvers.count ?? 0) steps: \(osrm.first?.maneuvers.prefix(3).map(\.instruction) ?? [])")
+// Autocomplete
+do {
+    let sug = try await GoogleClient.shared.suggest("pier 50", near: LatLng(38.5449, -121.7405))
+    print("Google suggest: \(sug.places.count) places, \(sug.queries.count) queries; first: \(sug.places.first?.name ?? "-") | \(sug.places.first?.address ?? "-")")
+} catch {
+    print("Google suggest failed: \(error)")
+}
+
 // Cameras around Munich (speed) and Davis (plate readers).
 let munich = await Overpass.cameras(south: 48.10, west: 11.50, north: 48.18, east: 11.62, speed: true, plate: false)
 print("Overpass speed cameras near Munich: \(munich.map { "\($0.count)" } ?? "failed")")

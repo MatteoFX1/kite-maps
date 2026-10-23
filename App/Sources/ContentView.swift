@@ -139,6 +139,9 @@ struct SearchBar: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .onSubmit { model.search() }
+                .onChange(of: model.query) { q in
+                    if focused.wrappedValue { model.typed(q) }
+                }
             if model.searching {
                 ProgressView()
             } else if !model.query.isEmpty || !model.results.isEmpty || model.selected != nil {
@@ -203,14 +206,37 @@ struct SuggestionsPanel: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Category.all) { c in
-                    row(icon: c.icon, text: c.label) { done(); model.search(c.query, title: c.label) }
-                }
-                if !settings.recents.isEmpty {
-                    Text("Recent").font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
-                        .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 4)
-                    ForEach(settings.recents, id: \.self) { q in
-                        row(icon: "clock.arrow.circlepath", text: q) { done(); model.search(q) }
+                if !model.query.isEmpty && !(model.suggestions.places.isEmpty && model.suggestions.queries.isEmpty) {
+                    ForEach(model.suggestions.places.prefix(6)) { p in
+                        Button { done(); model.openSuggestion(p) } label: {
+                            HStack(spacing: 16) {
+                                Image(systemName: "mappin.circle.fill").font(.system(size: 20)).frame(width: 22).foregroundColor(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(p.name).foregroundColor(.primary).lineLimit(1)
+                                    if let a = p.address { Text(a).font(.caption).foregroundColor(.secondary).lineLimit(1) }
+                                }
+                                Spacer()
+                                if let d = p.distanceMeters { Text(Fmt.distance(d)).font(.caption).foregroundColor(.secondary) }
+                            }
+                            .padding(.horizontal, 18)
+                            .frame(minHeight: 54)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    ForEach(model.suggestions.queries.prefix(5), id: \.self) { q in
+                        row(icon: "magnifyingglass", text: q) { done(); model.search(q) }
+                    }
+                } else {
+                    ForEach(Category.all) { c in
+                        row(icon: c.icon, text: c.label) { done(); model.search(c.query, title: c.label) }
+                    }
+                    if !settings.recents.isEmpty {
+                        Text("Recent").font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
+                            .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 4)
+                        ForEach(settings.recents, id: \.self) { q in
+                            row(icon: "clock.arrow.circlepath", text: q) { done(); model.search(q) }
+                        }
                     }
                 }
             }

@@ -13,6 +13,9 @@ public actor GoogleClient {
     static let secChUa = #""Not:A-Brand";v="8", "Chromium";v="156", "Google Chrome";v="156""#
     static let searchEndpoint = "https://www.google.com/search?tbm=map&authuser=0&hl=en&gl=us"
     static let directionsEndpoint = "https://www.google.com/maps/preview/directions?authuser=0&hl=en&gl=us"
+    static let suggestEndpoint = "https://www.google.com/s?tbm=map&gs_ri=maps&suggest=p&authuser=0&hl=en&gl=us"
+    static let suggestPb = "!2i5!4m12!1m3!1d{SPAN}!2d{LNG}!3d{LAT}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1"
+        + "!7i20!10b1!12m6!1m2!18b1!30b1!2m2!1i203!2i100!19m4!1m3!1i1!2i1!3i1!20m1!1e1"
     static let sessionWarmUrl = "https://www.google.com/maps?hl=en&gl=us"
 
     private let session: URLSession
@@ -57,6 +60,21 @@ public actor GoogleClient {
         let body = try await get(url, referer: "https://www.google.com/", xhr: true)
         guard let root = GoogleJSON.parse(body) else { throw VelaError.unexpectedResponse(String(body.prefix(200))) }
         return SearchParser.parse(root: root, near: center)
+    }
+
+    private var ech = 0
+
+    /** Google's autocomplete while typing: places with a position, and suggested searches. */
+    public func suggest(_ query: String, near: LatLng, spanMeters: Double = 20_000) async throws -> SuggestParser.Result {
+        try await warm()
+        ech += 1
+        let span = min(max(spanMeters, 2_000), 500_000)
+        let pb = Self.suggestPb.replacingOccurrences(of: "{SPAN}", with: String(span))
+            .replacingOccurrences(of: "{LNG}", with: String(near.lng))
+            .replacingOccurrences(of: "{LAT}", with: String(near.lat))
+        let url = URL(string: Self.suggestEndpoint + "&pb=" + enc(pb) + "&q=" + enc(query) + "&tch=1&ech=\(ech)")!
+        let body = try await get(url, referer: "https://www.google.com/", xhr: true)
+        return SuggestParser.parse(body, near: near)
     }
 
     /** Driving, cycling or walking routes with live traffic times, alternates first-to-last. */

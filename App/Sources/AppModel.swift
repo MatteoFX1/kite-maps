@@ -55,6 +55,9 @@ final class AppModel: ObservableObject {
     let location: LocationService
 
     @Published var query = ""
+    /** Autocomplete while typing: Google's, or OpenStreetMap's without Google. */
+    @Published var suggestions = SuggestParser.Result()
+    private var suggestTask: Task<Void, Never>?
     @Published var results: [Place] = []
     @Published var resultsTitle = ""
     @Published var selected: Place?
@@ -151,6 +154,41 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func typed(_ text: String) {
+        suggestTask?.cancel()
+        let q = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else { suggestions = SuggestParser.Result(); return }
+        let vp = viewport
+        let useGoogle = !settings.noGoogle
+        let user = userLatLng
+        suggestTask = Task {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            var r = SuggestParser.Result()
+            if useGoogle {
+                r = (try? await GoogleClient.shared.suggest(q, near: vp.center, spanMeters: vp.span ?? 20_000)) ?? r
+            }
+            if r.places.isEmpty && r.queries.isEmpty {
+                r.places = (try? await Photon.search(q, near: vp.center, limit: 8)) ?? []
+            }
+            guard !Task.isCancelled else { return }
+            if let user {
+                r.places = r.places.map { var p = $0; p.distanceMeters = user.distance(to: p.location); return p }
+            }
+            suggestions = r
+        }
+    }
+
+    /** A place picked from the suggestions: show it now, then fill in its details from Google. */
+    func openSuggestion(_ place: Place) {
+        suggestTask?.cancel()
+        settings.addRecent(place.name)
+        query = place.name
+        results = []
+        directions = nil
+        resolve(place)
+    }
+
     func clearSearch() {
         searchTask?.cancel()
         query = ""
@@ -182,13 +220,21 @@ final class AppModel: ObservableObject {
 
     /** A tap on a place the basemap draws: look it up on Google by name at that spot. */
     func resolveTapped(name: String, at point: LatLng) {
-        var placeholder = Place(id: "tap:\(point.lat),\(point.lng)", name: name, location: point, source: "osm")
+        resolve(Place(id: "tap:\(point.lat),\(point.lng)", name: name, location: point, source: "osm"))
+    }
+
+    /** Show [placeholder] right away, then swap in Google's full place found at the same spot. */
+    private func resolve(_ placeholder: Place) {
+        var placeholder = placeholder
+        let name = placeholder.name, point = placeholder.location
         placeholder.distanceMeters = userLatLng?.distance(to: point)
         select(placeholder)
         guard !settings.noGoogle else { return }
+        let q = [name, placeholder.address].compactMap { $0 }.joined(separator: " ")
+        let pid = placeholder.id
         Task {
-            let found = (try? await GoogleClient.shared.search(name, center: point, spanMeters: 1_000, pages: 1)) ?? []
-            guard selected?.id == placeholder.id else { return }
+            let found = (try? await GoogleClient.shared.search(q, center: point, spanMeters: 1_000, pages: 1)) ?? []
+            guard selected?.id == pid else { return }
             if let best = found.filter({ $0.location.distance(to: point) < 150 })
                 .min(by: { $0.location.distance(to: point) < $1.location.distance(to: point) }) {
                 var b = best
