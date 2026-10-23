@@ -52,6 +52,11 @@ final class Navigator: ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
+    /** The posted limit where the user is now, in km/h. */
+    var speedLimitKmh: Double? {
+        route.speedLimit(at: progress?.alongMeters ?? 0)
+    }
+
     var nextManeuver: Maneuver? {
         guard let i = progress?.nextIndex, i < route.maneuvers.count else { return route.maneuvers.first }
         return route.maneuvers[i]

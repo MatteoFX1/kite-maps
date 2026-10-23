@@ -43,6 +43,12 @@ public struct Maneuver: Hashable, Sendable {
     public var laneHint: String?
 }
 
+/** The posted limit from [startMeters] on, in km/h; nil where it isn't mapped. */
+public struct SpeedLimit: Hashable, Sendable {
+    public var startMeters: Double
+    public var kmh: Double?
+}
+
 /** A congested stretch of the route: level 1 slow, 2 heavy, 3 stopped. */
 public struct TrafficSpan: Hashable, Sendable {
     public var level: Int
@@ -62,10 +68,17 @@ public struct Route: Identifiable, Hashable, Sendable {
     public var summary: String?
     public var maneuvers: [Maneuver]
     public var trafficSpans: [TrafficSpan] = []
+    /** Speed limits along the route, from OpenStreetMap via the open router. */
+    public var speedLimits: [SpeedLimit] = []
     /** "google" or "osm". */
     public var source: String
 
     public var durationSeconds: Double { trafficSeconds ?? typicalSeconds }
+
+    /** The limit at [meters] along the route. */
+    public func speedLimit(at meters: Double) -> Double? {
+        speedLimits.last { $0.startMeters <= meters }?.kmh
+    }
 
     /** How much slower than usual, 0 when free-flowing: 0 green, 1 amber, 2 red. */
     public var delayLevel: Int {

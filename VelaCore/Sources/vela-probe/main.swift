@@ -88,5 +88,6 @@ if let via, let line = merged.routes.first?.polyline {
         print("  · \(m.type.rawValue) \(m.instruction): along \(Int(p.along)) m, off \(Int(p.offset)) m")
     }
     print("  adopted: \(StepMerge.adopt([via], onto: line)?.count ?? 0) steps")
+    print("  speed limits: \(via.speedLimits.prefix(8).map { "\(Int($0.startMeters)) m: \($0.kmh.map { String(Int($0.rounded())) } ?? "?")" })")
 }
 exit(exitCode)

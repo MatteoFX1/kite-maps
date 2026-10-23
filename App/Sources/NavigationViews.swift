@@ -34,7 +34,10 @@ struct NavigationOverlay: View {
                 Spacer()
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 10) {
-                        SpeedBadge(mps: nav.speedMps)
+                        HStack(spacing: 8) {
+                            SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
+                            if let limit = nav.speedLimitKmh { SpeedLimitSign(kmh: limit) }
+                        }
                         if !nav.following {
                             Button { model.recenterNav() } label: {
                                 Label("Re-center", systemImage: "location.north.line.fill")
@@ -114,17 +117,49 @@ struct InstructionBanner: View {
 
 struct SpeedBadge: View {
     let mps: Double
+    var limitKmh: Double?
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let metric = Fmt.metric
         let v = Int((mps * (metric ? 3.6 : 2.23694)).rounded())
+        // Red once more than a little over the limit.
+        let over = limitKmh.map { mps * 3.6 > $0 + 5 } ?? false
         VStack(spacing: -2) {
-            Text("\(v)").font(.system(size: 24, weight: .bold))
+            Text("\(v)").font(.system(size: 24, weight: .bold)).foregroundColor(over ? Vela.closed : .primary)
             Text(metric ? "km/h" : "mph").font(.system(size: 10, weight: .medium)).foregroundColor(.secondary)
         }
         .frame(width: 64, height: 64)
         .background(Circle().fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.25), radius: 4, y: 2))
+    }
+}
+
+/** The posted limit: a US-style white sign in miles, a round red-ringed one in kilometers. */
+struct SpeedLimitSign: View {
+    let kmh: Double
+
+    var body: some View {
+        if Fmt.metric {
+            Text("\(Int(kmh.rounded()))")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.black)
+                .frame(width: 56, height: 56)
+                .background(Circle().fill(.white))
+                .overlay(Circle().inset(by: 3).stroke(Color(hex: 0xD93025), lineWidth: 6))
+                .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+        } else {
+            // OSM limits in the US are mapped in mph; round back to the posted number.
+            let mph = Int((kmh / 1.609344 / 5).rounded()) * 5
+            VStack(spacing: 0) {
+                Text("SPEED\nLIMIT").font(.system(size: 8, weight: .bold)).multilineTextAlignment(.center)
+                Text("\(mph)").font(.system(size: 22, weight: .bold))
+            }
+            .foregroundColor(.black)
+            .frame(width: 48, height: 60)
+            .background(RoundedRectangle(cornerRadius: 6).fill(.white))
+            .overlay(RoundedRectangle(cornerRadius: 6).inset(by: 2).stroke(.black, lineWidth: 2))
+            .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+        }
     }
 }
 

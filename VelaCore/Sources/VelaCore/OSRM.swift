@@ -11,7 +11,7 @@ public enum OSRM {
         let profile = mode == .drive ? "driving" : (mode == .bike ? "bike" : "foot")
         let coords = "\(a.lng),\(a.lat);\(b.lng),\(b.lat)"
         let s = "https://routing.openstreetmap.de/\(mode.osrmBackend)/route/v1/\(profile)/\(coords)" +
-            "?overview=full&geometries=polyline6&steps=true&alternatives=\(mode == .drive)"
+            "?overview=full&geometries=polyline6&steps=true&annotations=maxspeed&alternatives=\(mode == .drive)"
         var r = URLRequest(url: URL(string: s)!)
         r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         r.timeoutInterval = 20
@@ -42,7 +42,7 @@ public enum OSRM {
         let b = bearings.map { $0.map { "\(Int($0)),45" } ?? "" }.joined(separator: ";")
         let radii = pts.indices.map { $0 == 0 || $0 == pts.count - 1 ? "unlimited" : "30" }.joined(separator: ";")
         let s = "https://routing.openstreetmap.de/\(mode.osrmBackend)/route/v1/\(profile)/\(coords)" +
-            "?overview=full&geometries=polyline6&steps=true&continue_straight=true&bearings=\(b)&radiuses=\(radii)"
+            "?overview=full&geometries=polyline6&steps=true&annotations=maxspeed&continue_straight=true&bearings=\(b)&radiuses=\(radii)"
         guard let url = URL(string: s) else { return nil }
         var r = URLRequest(url: url)
         r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
@@ -99,9 +99,35 @@ public enum OSRM {
                 maneuvers[last].alongMeters = cum.last ?? along
             }
             let via = roads.max { $0.value < $1.value }?.key
-            return Route(mode: mode, polyline: line, distanceMeters: distance, typicalSeconds: duration,
-                         trafficSeconds: nil, summary: via, maneuvers: maneuvers, source: "osm")
+            var route = Route(mode: mode, polyline: line, distanceMeters: distance, typicalSeconds: duration,
+                              trafficSeconds: nil, summary: via, maneuvers: maneuvers, source: "osm")
+            route.speedLimits = speedLimits(legs, line: line, cumulative: cum)
+            return route
         }
+    }
+
+    /**
+     * Per-segment `maxspeed` annotations ({speed, unit} or {unknown}/{none}) turned into
+     * limit changes along the line. The legs' segments run end to end along the overview line.
+     */
+    static func speedLimits(_ legs: [[String: Any]], line: [LatLng], cumulative cum: [Double]) -> [SpeedLimit] {
+        var out: [SpeedLimit] = []
+        var seg = 0
+        for leg in legs {
+            let speeds = ((leg["annotation"] as? [String: Any])?["maxspeed"] as? [[String: Any]]) ?? []
+            for sp in speeds {
+                defer { seg += 1 }
+                guard seg < cum.count else { break }
+                var kmh: Double?
+                if let v = sp["speed"] as? Double {
+                    kmh = (sp["unit"] as? String) == "mph" ? v * 1.609344 : v
+                }
+                if out.last.map({ $0.kmh != kmh }) ?? true {
+                    out.append(SpeedLimit(startMeters: cum[seg], kmh: kmh))
+                }
+            }
+        }
+        return out.contains { $0.kmh != nil } ? out : []
     }
 
     static func maneuverType(_ type: String, _ modifier: String?) -> ManeuverType {
@@ -198,6 +224,11 @@ public enum Directions {
                 for i in g.indices {
                     if let steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
                         g[i].maneuvers = steps
+                    }
+                    // The via route follows the same roads, so its limits line up by share of length.
+                    if let v = vias[i], v.distanceMeters > 0 {
+                        let k = Geo.length(g[i].polyline) / Geo.length(v.polyline)
+                        g[i].speedLimits = v.speedLimits.map { SpeedLimit(startMeters: $0.startMeters * k, kmh: $0.kmh) }
                     }
                 }
                 return Result(routes: g)

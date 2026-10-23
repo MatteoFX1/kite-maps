@@ -88,4 +88,22 @@ final class RoutingTests: XCTestCase {
         let far = [LatLng(0, 0.01), LatLng(0.01, 0.01)]
         XCTAssertNil(StepMerge.adopt([osrm], onto: far))
     }
+
+    func testSpeedLimits() {
+        let line = [LatLng(0, 0), LatLng(0.001, 0), LatLng(0.002, 0), LatLng(0.003, 0)]
+        let cum = Geo.cumulative(line)
+        let legs: [[String: Any]] = [["annotation": ["maxspeed": [
+            ["speed": 50.0, "unit": "km/h"], ["speed": 50.0, "unit": "km/h"], ["unknown": true],
+        ]]]]
+        let limits = OSRM.speedLimits(legs, line: line, cumulative: cum)
+        XCTAssertEqual(limits.count, 2)
+        XCTAssertEqual(limits[0].kmh, 50)
+        XCTAssertNil(limits[1].kmh)
+        XCTAssertEqual(limits[1].startMeters, cum[2], accuracy: 0.1)
+        var r = Route(mode: .drive, polyline: line, distanceMeters: cum[3], typicalSeconds: 10, trafficSeconds: nil,
+                      summary: nil, maneuvers: [], source: "osm")
+        r.speedLimits = limits
+        XCTAssertEqual(r.speedLimit(at: 10), 50)
+        XCTAssertNil(r.speedLimit(at: cum[2] + 1))
+    }
 }
