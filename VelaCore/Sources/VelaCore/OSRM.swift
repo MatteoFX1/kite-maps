@@ -11,7 +11,7 @@ public enum OSRM {
         let profile = mode == .drive ? "driving" : (mode == .bike ? "bike" : "foot")
         let coords = "\(a.lng),\(a.lat);\(b.lng),\(b.lat)"
         let s = "https://routing.openstreetmap.de/\(mode.osrmBackend)/route/v1/\(profile)/\(coords)" +
-            "?overview=full&geometries=polyline6&steps=true&annotations=maxspeed&alternatives=\(mode == .drive)"
+            "?overview=full&geometries=polyline6&steps=true&alternatives=\(mode == .drive)"
         var r = URLRequest(url: URL(string: s)!)
         r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         r.timeoutInterval = 20
@@ -41,14 +41,18 @@ public enum OSRM {
         let coords = pts.map { String(format: "%.6f,%.6f", $0.lng, $0.lat) }.joined(separator: ";")
         let b = bearings.map { $0.map { "\(Int($0)),45" } ?? "" }.joined(separator: ";")
         let radii = pts.indices.map { $0 == 0 || $0 == pts.count - 1 ? "unlimited" : "30" }.joined(separator: ";")
-        let s = "https://routing.openstreetmap.de/\(mode.osrmBackend)/route/v1/\(profile)/\(coords)" +
-            "?overview=full&geometries=polyline6&steps=true&annotations=maxspeed&continue_straight=true&bearings=\(b)&radiuses=\(radii)"
-        guard let url = URL(string: s) else { return nil }
-        var r = URLRequest(url: url)
-        r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        r.timeoutInterval = 20
-        let (data, _) = try await URLSession.shared.data(for: r)
-        return parse(data, mode: mode).first
+        let base = "https://routing.openstreetmap.de/\(mode.osrmBackend)/route/v1/\(profile)/\(coords)" +
+            "?overview=full&geometries=polyline6&steps=true&continue_straight=true&bearings=\(b)&radiuses=\(radii)"
+        // Speed limits ride along when the server offers them; ask again without if it doesn't.
+        for s in [base + "&annotations=maxspeed", base] {
+            guard let url = URL(string: s) else { return nil }
+            var r = URLRequest(url: url)
+            r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+            r.timeoutInterval = 20
+            let (data, _) = try await URLSession.shared.data(for: r)
+            if let route = parse(data, mode: mode).first { return route }
+        }
+        return nil
     }
 
     private static func bearing(_ line: [LatLng], _ cum: [Double], at m: Double) -> Double? {

@@ -90,4 +90,12 @@ if let via, let line = merged.routes.first?.polyline {
     print("  adopted: \(StepMerge.adopt([via], onto: line)?.count ?? 0) steps")
     print("  speed limits: \(via.speedLimits.prefix(8).map { "\(Int($0.startMeters)) m: \($0.kmh.map { String(Int($0.rounded())) } ?? "?")" })")
 }
+// Does the FOSSGIS server take the maxspeed annotation?
+if let u = URL(string: "https://routing.openstreetmap.de/routed-car/route/v1/driving/-121.7405,38.5449;-121.5908,38.6951?overview=false&annotations=maxspeed") {
+    var r = URLRequest(url: u)
+    r.setValue("VelaMaps-iOS probe", forHTTPHeaderField: "User-Agent")
+    if let (data, resp) = try? await URLSession.shared.data(for: r) {
+        print("OSRM maxspeed: HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0): \(String(decoding: data.prefix(300), as: UTF8.self))")
+    }
+}
 exit(exitCode)
