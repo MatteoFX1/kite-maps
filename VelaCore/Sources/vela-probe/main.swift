@@ -97,3 +97,16 @@ if let line = merged.routes.first?.polyline, let extra = await Overpass.alongRou
     print("Along the route: Overpass failed")
 }
 exit(exitCode)
+
+// Transit: San Francisco Ferry Building to Ocean Beach.
+do {
+    let trips = try await Transitous.plan(from: LatLng(37.7955, -122.3937), to: LatLng(37.7599, -122.5100))
+    print("Transitous trips: \(trips.count)")
+    for t in trips.prefix(3) {
+        print("  · \(Int(t.durationSeconds / 60)) min, \(t.transfers) transfers: " + t.legs.map {
+            $0.isWalk ? "walk \(Int($0.durationSeconds / 60))m" : "\($0.mode) \($0.line) → \($0.headsign ?? "?") (\($0.stops) stops, \($0.path.count) pts)"
+        }.joined(separator: ", "))
+    }
+} catch {
+    print("Transitous failed: \(error.localizedDescription)")
+}

@@ -43,9 +43,15 @@ struct DirectionsState {
     var loading: Set<TravelMode> = []
     var errors: [TravelMode: String] = [:]
     var selected = 0
+    /** The Transit tab is showing (its trips come from Transitous, not the road routers). */
+    var transit = false
+    var trips: [TransitTrip]?
+    var tripsError: String?
+    var trip = 0
 
-    var current: [Route] { routes[mode] ?? [] }
+    var current: [Route] { transit ? [] : routes[mode] ?? [] }
     var route: Route? { current.indices.contains(selected) ? current[selected] : current.first }
+    var pickedTrip: TransitTrip? { transit ? trips.flatMap { $0.indices.contains(trip) ? $0[trip] : $0.first } : nil }
 }
 
 /** The whole app's state; the map and every sheet read it. */
@@ -277,13 +283,26 @@ final class AppModel: ObservableObject {
         directions?.reversed.toggle()
         directions?.routes = [:]
         directions?.selected = 0
+        directions?.trips = nil
+        directions?.trip = 0
         loadAllModes()
     }
 
     func setMode(_ m: TravelMode) {
+        directions?.transit = false
         directions?.mode = m
         directions?.selected = 0
         settings.defaultMode = m
+        frameRoute()
+    }
+
+    func showTransit() {
+        directions?.transit = true
+        frameRoute()
+    }
+
+    func selectTrip(_ i: Int) {
+        directions?.trip = i
         frameRoute()
     }
 
@@ -324,10 +343,30 @@ final class AppModel: ObservableObject {
                 }
             }
         }
+        directions?.trips = nil
+        directions?.tripsError = nil
+        Task {
+            do {
+                let trips = try await Transitous.plan(from: from, to: to)
+                guard directions?.destination.id == destId else { return }
+                directions?.trips = trips
+                if trips.isEmpty { directions?.tripsError = "No transit trips found here." }
+            } catch {
+                guard directions?.destination.id == destId else { return }
+                directions?.trips = []
+                directions?.tripsError = "Couldn't reach the transit planner."
+            }
+            if directions?.transit == true { frameRoute() }
+        }
     }
 
     func frameRoute() {
-        guard let r = directions?.route else { return }
+        if let t = directions?.pickedTrip {
+            if t.path.count >= 2 { frame(t.path, bottomFraction: 0.42) }
+            mapTick += 1
+            return
+        }
+        guard let r = directions?.route else { mapTick += 1; return }
         frame(r.polyline, bottomFraction: 0.42)
     }
 

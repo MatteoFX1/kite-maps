@@ -295,6 +295,15 @@ enum DemoScript {
             return
         }
         if step == "layers" { model.showLayers = true; return }
+        if step == "transit" {
+            // Davis to Sacramento Valley Station: buses and Amtrak.
+            let station = Place(id: "demo-sac", name: "Sacramento Valley Station", location: LatLng(38.5843, -121.5006), source: "demo")
+            model.select(station)
+            await wait(2)
+            model.openDirections(to: station)
+            model.showTransit()
+            return
+        }
         model.search("restaurants", title: "Restaurants")
         await wait(8)
         guard step != "search", let first = model.visibleResults.first else { return }

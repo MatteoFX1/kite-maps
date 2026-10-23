@@ -74,7 +74,7 @@ struct TripHeader: View {
         if let d = model.directions {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text(d.mode.label).font(.title2.weight(.semibold))
+                    Text(d.transit ? "Transit" : d.mode.label).font(.title2.weight(.semibold))
                     Spacer()
                     Menu {
                         Toggle("Avoid tolls", isOn: $settings.avoidTolls)
@@ -112,9 +112,13 @@ struct ModeTabs: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
+        ScrollView(.horizontal, showsIndicators: false) { tabs }
+    }
+
+    private var tabs: some View {
+        HStack(spacing: 4) {
             ForEach(TravelMode.allCases) { m in
-                let on = m == state.mode
+                let on = !state.transit && m == state.mode
                 Button { model.setMode(m) } label: {
                     HStack(spacing: 6) {
                         Image(systemName: icon(m)).font(.system(size: 13))
@@ -126,13 +130,28 @@ struct ModeTabs: View {
                             Text("–").font(.subheadline)
                         }
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 11)
                     .frame(height: 34)
                     .foregroundColor(on ? Vela.onTonal(scheme) : .primary)
                     .background(Capsule().fill(on ? Vela.tonal(scheme) : Color.clear))
                 }
                 .buttonStyle(.plain)
             }
+            Button { model.showTransit() } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "tram.fill").font(.system(size: 13))
+                    if let t = state.trips {
+                        Text(t.map(\.durationSeconds).min().map(Fmt.duration) ?? "–").font(.subheadline.weight(.medium))
+                    } else {
+                        ProgressView().scaleEffect(0.7)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 34)
+                .foregroundColor(state.transit ? Vela.onTonal(scheme) : .primary)
+                .background(Capsule().fill(state.transit ? Vela.tonal(scheme) : Color.clear))
+            }
+            .buttonStyle(.plain)
             Spacer(minLength: 0)
         }
     }
@@ -146,7 +165,9 @@ struct TripBody: View {
         if let d = model.directions {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    if let r = d.route {
+                    if d.transit {
+                        TransitBody(model: model, state: d)
+                    } else if let r = d.route {
                         summary(r, d)
                         buttons(d)
                         if d.current.count > 1 { alternates(d, picked: r) }
@@ -262,5 +283,155 @@ struct StepsList: View {
                 Divider().padding(.leading, 40)
             }
         }
+    }
+}
+
+/** The Transit tab: each trip as a row of line chips with its times, the picked one's legs below. */
+struct TransitBody: View {
+    @ObservedObject var model: AppModel
+    let state: DirectionsState
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        if let trips = state.trips, !trips.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(trips.enumerated()), id: \.element.id) { i, t in
+                    Button { model.selectTrip(i) } label: { TripRow(trip: t, picked: t.id == state.pickedTrip?.id) }
+                        .buttonStyle(.plain)
+                    Divider()
+                }
+            }
+            if let t = state.pickedTrip {
+                Text("Steps").font(.headline).padding(.top, 6)
+                TransitSteps(trip: t)
+            }
+            Text("Timetables from Transitous").font(.caption).foregroundColor(.secondary).padding(.top, 4)
+        } else if state.trips == nil {
+            HStack { ProgressView(); Text("Finding transit…").foregroundColor(.secondary) }
+                .padding(.vertical, 20)
+        } else {
+            Text(state.tripsError ?? "No transit trips found.").foregroundColor(.secondary).padding(.vertical, 20)
+        }
+    }
+}
+
+private let clock: DateFormatter = {
+    let f = DateFormatter()
+    f.timeStyle = .short
+    return f
+}()
+
+struct TripRow: View {
+    let trip: TransitTrip
+    let picked: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                if let a = trip.depart, let b = trip.arrive {
+                    Text("\(clock.string(from: a)) – \(clock.string(from: b))").font(.subheadline.weight(.semibold))
+                }
+                Spacer()
+                Text(Fmt.duration(trip.durationSeconds)).font(.headline)
+            }
+            HStack(spacing: 4) {
+                ForEach(Array(trip.legs.enumerated()), id: \.offset) { i, leg in
+                    if i > 0 { Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundColor(.secondary) }
+                    if leg.isWalk {
+                        HStack(spacing: 1) {
+                            Image(systemName: "figure.walk").font(.system(size: 13))
+                            if leg.durationSeconds >= 60 { Text("\(Int((leg.durationSeconds / 60).rounded()))").font(.caption2) }
+                        }
+                        .foregroundColor(.secondary)
+                    } else {
+                        LineChip(leg: leg)
+                    }
+                }
+            }
+            .lineLimit(1)
+            HStack(spacing: 6) {
+                if let first = trip.rides.first, let dep = first.depart {
+                    Text("\(clock.string(from: dep)) from \(first.fromName)").lineLimit(1)
+                }
+                if let late = trip.rides.first?.delayMinutes {
+                    Text(late > 0 ? "\(late) min late" : late < 0 ? "\(-late) min early" : "On time")
+                        .foregroundColor(late > 1 ? Vela.closed : Vela.open)
+                }
+            }
+            .font(.caption).foregroundColor(.secondary)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 8)
+        .background(RoundedRectangle(cornerRadius: 12).fill(picked ? Color.secondary.opacity(0.14) : Color.clear))
+        .contentShape(Rectangle())
+    }
+}
+
+/** A line's name on its own color, the way stations sign it. */
+struct LineChip: View {
+    let leg: TransitLeg
+
+    var body: some View {
+        let bg = leg.color.map { Color(hex: $0) } ?? Vela.routeBlue
+        let fg = leg.textColor.map { Color(hex: $0) } ?? .white
+        HStack(spacing: 3) {
+            Image(systemName: vehicleSymbol(leg.vehicle)).font(.system(size: 10, weight: .bold))
+            Text(leg.line.isEmpty ? leg.mode.capitalized : leg.line).font(.caption.weight(.bold))
+        }
+        .padding(.horizontal, 6)
+        .frame(height: 22)
+        .foregroundColor(fg)
+        .background(RoundedRectangle(cornerRadius: 5).fill(bg))
+    }
+}
+
+func vehicleSymbol(_ v: TransitLeg.Vehicle) -> String {
+    switch v {
+    case .walk: return "figure.walk"
+    case .bus: return "bus.fill"
+    case .metro: return "tram.fill.tunnel"
+    case .tram: return "tram.fill"
+    case .train: return "train.side.front.car"
+    case .ferry: return "ferry.fill"
+    case .other: return "tram.fill"
+    }
+}
+
+struct TransitSteps: View {
+    let trip: TransitTrip
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(trip.legs.enumerated()), id: \.offset) { _, leg in
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: vehicleSymbol(leg.vehicle))
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(leg.isWalk ? .secondary : (leg.color.map { Color(hex: $0) } ?? Vela.routeBlue))
+                        .frame(width: 26)
+                    VStack(alignment: .leading, spacing: 3) {
+                        if leg.isWalk {
+                            Text(leg.toName.isEmpty || leg.toName == "END" ? "Walk to the destination" : "Walk to \(leg.toName)").font(.subheadline)
+                            Text("\(Fmt.duration(leg.durationSeconds)) · \(Fmt.distance(leg.distanceMeters))").font(.caption).foregroundColor(.secondary)
+                        } else {
+                            HStack(spacing: 6) {
+                                LineChip(leg: leg)
+                                if let h = leg.headsign { Text("to \(h)").font(.subheadline).lineLimit(1) }
+                            }
+                            Text(times(leg.depart, leg.fromName)).font(.subheadline)
+                            Text("Ride \(leg.stops) stop\(leg.stops == 1 ? "" : "s") · \(Fmt.duration(leg.durationSeconds))")
+                                .font(.caption).foregroundColor(.secondary)
+                            Text(times(leg.arrive, "Get off at \(leg.toName)")).font(.caption).foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 9)
+                Divider().padding(.leading, 40)
+            }
+        }
+    }
+
+    private func times(_ d: Date?, _ text: String) -> String {
+        d.map { "\(clock.string(from: $0))  \(text)" } ?? text
     }
 }

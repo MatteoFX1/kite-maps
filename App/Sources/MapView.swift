@@ -162,6 +162,18 @@ struct VelaMapView: UIViewRepresentable {
             let edge = line("vela-route-edge", routeSrc, UIColor(hex: 0x0B4FB8), width: 12)
             let fill = line("vela-route-line", routeSrc, UIColor(hex: 0x1F6FEB), width: 8)
             [altEdge, altFill, edge, fill].forEach(insert)
+            // A transit trip: each ride in its line's color, walks dotted.
+            let transitSrc = MLNShapeSource(identifier: "vela-transit", shape: nil, options: nil)
+            style.addSource(transitSrc)
+            let walk = line("vela-transit-walk", transitSrc, UIColor(hex: 0x5F6368), width: 5)
+            walk.predicate = NSPredicate(format: "walk == 1")
+            walk.lineDashPattern = NSExpression(forConstantValue: [0.1, 1.8])
+            let rideEdge = line("vela-transit-edge", transitSrc, UIColor(white: 0.1, alpha: 0.55), width: 10)
+            rideEdge.predicate = NSPredicate(format: "walk == 0")
+            let ride = line("vela-transit-ride", transitSrc, UIColor(hex: 0x1F6FEB), width: 7)
+            ride.predicate = NSPredicate(format: "walk == 0")
+            ride.lineColor = NSExpression(mlnJSONObject: ["to-color", ["get", "color"]])
+            [walk, rideEdge, ride].forEach(insert)
             for (level, color) in [(1, 0xF2A65A), (2, 0xE8453C), (3, 0x9E1C1C)] {
                 let l = line("vela-route-traffic-\(level)", spanSrc, UIColor(hex: UInt32(color)), width: 8)
                 l.predicate = NSPredicate(format: "level == %d", level)
@@ -364,7 +376,8 @@ struct VelaMapView: UIViewRepresentable {
                 main = d.route
                 alts = d.current.filter { $0.id != main?.id }
             }
-            let key = (model.nav == nil ? "" : "nav") + (main?.id.uuidString ?? "") + alts.map(\.id.uuidString).joined() + "\(Int(from / 5))"
+            let trip = model.nav == nil ? model.directions?.pickedTrip : nil
+            let key = (model.nav == nil ? "" : "nav") + (trip?.id.uuidString ?? "") + (main?.id.uuidString ?? "") + alts.map(\.id.uuidString).joined() + "\(Int(from / 5))"
             guard key != lastRouteKey else { return }
             lastRouteKey = key
 
@@ -374,6 +387,12 @@ struct VelaMapView: UIViewRepresentable {
             let bubbleSrc = style.source(withIdentifier: "vela-route-bubbles") as? MLNShapeSource
 
             altSrc?.shape = MLNShapeCollectionFeature(shapes: alts.map { polyline($0.polyline) })
+            let transitSrc = style.source(withIdentifier: "vela-transit") as? MLNShapeSource
+            transitSrc?.shape = trip.map { t in
+                MLNShapeCollectionFeature(shapes: t.legs.filter { $0.path.count >= 2 }.map { leg in
+                    polyline(leg.path, ["walk": leg.isWalk ? 1 : 0, "color": String(format: "#%06X", leg.color ?? 0x1F6FEB)])
+                })
+            }
             guard let r = main else {
                 routeSrc?.shape = nil; spanSrc?.shape = nil; bubbleSrc?.shape = nil
                 return
