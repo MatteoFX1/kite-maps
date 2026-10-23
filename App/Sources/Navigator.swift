@@ -89,17 +89,20 @@ final class Navigator: ObservableObject {
         checkCameras(p)
     }
 
+    /** Cameras and speed limits along the route, from OpenStreetMap, in one query per route. */
     private func loadCameras() {
         routeCameras = []
         spokenCameras = []
         cameraAhead = nil
         let s = AppSettings.shared
-        guard route.mode == .drive, s.speedCameras || s.plateCameras else { return }
+        guard route.mode == .drive else { return }
         let line = route.polyline, id = route.id
+        let speed = s.speedCameras, plate = s.plateCameras
         Task {
-            guard let cams = await Overpass.cameras(along: line, speed: s.speedCameras, plate: s.plateCameras),
+            guard let found = await Overpass.alongRoute(line, speed: speed, plate: plate),
                   self.route.id == id else { return }
-            self.routeCameras = CameraAlerts.project(cams, on: line)
+            self.routeCameras = CameraAlerts.project(found.cameras, on: line)
+            self.route.speedLimits = Overpass.speedLimits(found.ways, on: line)
         }
     }
 

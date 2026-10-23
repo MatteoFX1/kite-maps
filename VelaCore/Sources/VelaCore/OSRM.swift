@@ -43,16 +43,12 @@ public enum OSRM {
         let radii = pts.indices.map { $0 == 0 || $0 == pts.count - 1 ? "unlimited" : "30" }.joined(separator: ";")
         let base = "https://routing.openstreetmap.de/\(mode.osrmBackend)/route/v1/\(profile)/\(coords)" +
             "?overview=full&geometries=polyline6&steps=true&continue_straight=true&bearings=\(b)&radiuses=\(radii)"
-        // Speed limits ride along when the server offers them; ask again without if it doesn't.
-        for s in [base + "&annotations=maxspeed", base] {
-            guard let url = URL(string: s) else { return nil }
-            var r = URLRequest(url: url)
-            r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-            r.timeoutInterval = 20
-            let (data, _) = try await URLSession.shared.data(for: r)
-            if let route = parse(data, mode: mode).first { return route }
-        }
-        return nil
+        guard let url = URL(string: base) else { return nil }
+        var r = URLRequest(url: url)
+        r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        r.timeoutInterval = 20
+        let (data, _) = try await URLSession.shared.data(for: r)
+        return parse(data, mode: mode).first
     }
 
     private static func bearing(_ line: [LatLng], _ cum: [Double], at m: Double) -> Double? {
@@ -228,11 +224,6 @@ public enum Directions {
                 for i in g.indices {
                     if let steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
                         g[i].maneuvers = steps
-                    }
-                    // The via route follows the same roads, so its limits line up by share of length.
-                    if let v = vias[i], v.distanceMeters > 0 {
-                        let k = Geo.length(g[i].polyline) / Geo.length(v.polyline)
-                        g[i].speedLimits = v.speedLimits.map { SpeedLimit(startMeters: $0.startMeters * k, kmh: $0.kmh) }
                     }
                 }
                 return Result(routes: g)
