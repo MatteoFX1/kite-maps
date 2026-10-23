@@ -252,7 +252,7 @@ struct VelaMapView: UIViewRepresentable {
             let showList = model.directions == nil && model.nav == nil
             let list = showList ? model.visibleResults : []
             let target = model.nav?.destination ?? model.directions?.destination ?? model.selected
-            let key = list.map(\.id).joined(separator: ",") + "|" + (target?.id ?? "") + "|\(model.directions?.reversed ?? false)"
+            let key = list.map(\.id).joined(separator: ",") + "|" + (target?.id ?? "") + "|\(model.directions?.reversed ?? false)|\(model.nav == nil)"
             guard key != lastResultsKey else { return }
             lastResultsKey = key
             let features: [MLNPointFeature] = list.enumerated().compactMap { i, p in
