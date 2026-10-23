@@ -24,7 +24,7 @@ public enum Overpass {
 
     private static let session: URLSession = {
         let c = URLSessionConfiguration.ephemeral
-        c.timeoutIntervalForRequest = 15
+        c.timeoutIntervalForRequest = 45
         c.httpAdditionalHeaders = ["User-Agent": "Vela-iOS (https://github.com/matteofx1/vela-ios)"]
         return URLSession(configuration: c)
     }()

@@ -189,14 +189,10 @@ public enum Directions {
             var g = try await GoogleClient.shared.directions(from: a, to: b, mode: mode,
                                                               avoidHighways: avoidHighways, avoidTolls: avoidTolls)
             if !g.isEmpty {
-                let lines = g.map(\.polyline)
-                let vias = await withTaskGroup(of: (Int, Route?).self) { group -> [Int: Route] in
-                    for (i, line) in lines.enumerated() {
-                        group.addTask { (i, try? await OSRM.routeVia(line, mode: mode)) }
-                    }
-                    var out: [Int: Route] = [:]
-                    for await (i, r) in group { if let r { out[i] = r } }
-                    return out
+                // One at a time: the FOSSGIS server turns away bursts.
+                var vias: [Int: Route] = [:]
+                for i in g.indices {
+                    if let r = try? await OSRM.routeVia(g[i].polyline, mode: mode) { vias[i] = r }
                 }
                 let plain = (try? await osrmTask.value) ?? []
                 for i in g.indices {
