@@ -1,6 +1,9 @@
 import SwiftUI
 import UIKit
 
+/** The spring the sheet settles with. */
+private let sheetSnap = Animation.spring(response: 0.32, dampingFraction: 0.85)
+
 /**
  * Vela's draggable bottom sheet: peek, half and full heights. Drag it from anywhere: below full
  * height the whole sheet moves; at full height its list scrolls, and pulling down from the top of
@@ -12,8 +15,10 @@ struct BottomSheet<Header: View, Content: View>: View {
     var peekHeight: CGFloat = 150
     @ViewBuilder var header: () -> Header
     @ViewBuilder var content: () -> Content
-    @GestureState private var drag: CGFloat = 0
-    @GestureState private var bodyDrag: CGFloat = 0
+    // When a drag ends, the finger's offset springs away together with the snap to the new
+    // height, instead of jumping back first (that jump made the sheet twitch on release).
+    @GestureState(resetTransaction: Transaction(animation: sheetSnap)) private var drag: CGFloat = 0
+    @GestureState(resetTransaction: Transaction(animation: sheetSnap)) private var bodyDrag: CGFloat = 0
     @State private var contentAtTop = true
     @Environment(\.colorScheme) private var scheme
 
@@ -42,13 +47,15 @@ struct BottomSheet<Header: View, Content: View>: View {
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
+            // Drags are measured on the screen, not on the sheet: the sheet moves under the
+            // finger, so measuring on the sheet fed that movement back in and made it shake.
             .gesture(
-                DragGesture(minimumDistance: 6)
+                DragGesture(minimumDistance: 6, coordinateSpace: .global)
                     .updating($drag) { v, s, _ in s = v.translation.height }
                     .onEnded { settle($0) }
             )
             .onTapGesture {
-                if detent == .peek { withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) { detent = .half } }
+                if detent == .peek { withAnimation(sheetSnap) { detent = .half } }
             }
             content()
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -57,7 +64,7 @@ struct BottomSheet<Header: View, Content: View>: View {
                 .coordinateSpace(name: SheetTopMarker.space)
                 .onPreferenceChange(SheetTopKey.self) { contentAtTop = $0 >= -2 }
                 .simultaneousGesture(
-                    DragGesture(minimumDistance: 12)
+                    DragGesture(minimumDistance: 12, coordinateSpace: .global)
                         .updating($bodyDrag) { v, s, _ in
                             if follows(v) { s = v.translation.height }
                         }
@@ -103,7 +110,7 @@ extension BottomSheet {
                 < abs(Self.height(b, container: containerHeight, peek: peekHeight) - end)
         } ?? .half
         if best != detent { UISelectionFeedbackGenerator().selectionChanged() }
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) { detent = best }
+        withAnimation(sheetSnap) { detent = best }
     }
 }
 
