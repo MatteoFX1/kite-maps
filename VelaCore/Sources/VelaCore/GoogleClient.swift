@@ -12,6 +12,10 @@ public actor GoogleClient {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
     static let secChUa = #""Not:A-Brand";v="8", "Chromium";v="156", "Google Chrome";v="156""#
     static let searchEndpoint = "https://www.google.com/search?tbm=map&authuser=0&hl=en&gl=us"
+    static let directionsEndpoint = "https://www.google.com/maps/preview/directions?authuser=0&hl=en&gl=us"
+    static let suggestEndpoint = "https://www.google.com/s?tbm=map&gs_ri=maps&suggest=p&authuser=0&hl=en&gl=us"
+    static let suggestPb = "!2i5!4m12!1m3!1d{SPAN}!2d{LNG}!3d{LAT}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1"
+        + "!7i20!10b1!12m6!1m2!18b1!30b1!2m2!1i203!2i100!19m4!1m3!1i1!2i1!3i1!20m1!1e1"
     static let sessionWarmUrl = "https://www.google.com/maps?hl=en&gl=us"
 
     private let session: URLSession
@@ -31,14 +35,58 @@ public actor GoogleClient {
         session = URLSession(configuration: cfg)
     }
 
-    /** Search Google around [center]. [spanMeters] is how wide the visible map is. */
-    public func search(_ query: String, center: LatLng, spanMeters: Double?) async throws -> [Place] {
+    /** Search Google around [center]. [spanMeters] is how wide the visible map is. A full first
+     *  page (a category like "restaurants") fetches pages two and three too, as Vela does. */
+    public func search(_ query: String, center: LatLng, spanMeters: Double?, pages: Int = 3) async throws -> [Place] {
         try await warm()
-        let pb = SearchPb.build(query: query, center: center, spanMeters: spanMeters)
+        let first = try await page(query, center: center, spanMeters: spanMeters, offset: 0)
+        guard pages > 1, first.count >= 18 else { return first }
+        var more: [Place] = []
+        await withTaskGroup(of: [Place].self) { group in
+            for i in 1..<pages {
+                group.addTask { (try? await self.page(query, center: center, spanMeters: spanMeters, offset: 20 * i)) ?? [] }
+            }
+            for await p in group { more += p }
+        }
+        var seen = Set(first.map(\.id))
+        let extra = more.filter { seen.insert($0.id).inserted }
+            .sorted { ($0.distanceMeters ?? 0) < ($1.distanceMeters ?? 0) }
+        return first + extra
+    }
+
+    private func page(_ query: String, center: LatLng, spanMeters: Double?, offset: Int) async throws -> [Place] {
+        let pb = SearchPb.build(query: query, center: center, spanMeters: spanMeters, offset: offset)
         let url = URL(string: Self.searchEndpoint + "&q=" + enc(query) + "&pb=" + enc(pb))!
         let body = try await get(url, referer: "https://www.google.com/", xhr: true)
         guard let root = GoogleJSON.parse(body) else { throw VelaError.unexpectedResponse(String(body.prefix(200))) }
         return SearchParser.parse(root: root, near: center)
+    }
+
+    private var ech = 0
+
+    /** Google's autocomplete while typing: places with a position, and suggested searches. */
+    public func suggest(_ query: String, near: LatLng, spanMeters: Double = 20_000) async throws -> SuggestParser.Result {
+        try await warm()
+        ech += 1
+        let span = min(max(spanMeters, 2_000), 500_000)
+        let pb = Self.suggestPb.replacingOccurrences(of: "{SPAN}", with: String(span))
+            .replacingOccurrences(of: "{LNG}", with: String(near.lng))
+            .replacingOccurrences(of: "{LAT}", with: String(near.lat))
+        let url = URL(string: Self.suggestEndpoint + "&pb=" + enc(pb) + "&q=" + enc(query) + "&tch=1&ech=\(ech)")!
+        let body = try await get(url, referer: "https://www.google.com/", xhr: true)
+        return SuggestParser.parse(body, near: near)
+    }
+
+    /** Driving, cycling or walking routes with live traffic times, alternates first-to-last. */
+    public func directions(from origin: LatLng, to destination: LatLng, mode: TravelMode,
+                           avoidHighways: Bool = false, avoidTolls: Bool = false) async throws -> [Route] {
+        try await warm()
+        let pb = DirectionsPb.build(origin: origin, destination: destination, mode: mode,
+                                    avoidHighways: avoidHighways, avoidTolls: avoidTolls)
+        let url = URL(string: Self.directionsEndpoint + "&pb=" + enc(pb))!
+        let body = try await get(url, referer: "https://www.google.com/", xhr: true)
+        guard let root = GoogleJSON.parse(body) else { throw VelaError.unexpectedResponse(String(body.prefix(200))) }
+        return DirectionsParser.parse(root: root, mode: mode)
     }
 
     private func warm() async throws {
