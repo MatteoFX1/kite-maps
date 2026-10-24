@@ -510,6 +510,13 @@ struct RoadShield: View {
                 .frame(minWidth: 30).frame(height: 30).padding(.horizontal, 2)
                 .background(InterstateShape().fill(.white))
                 .overlay(InterstateShape().inset(by: 2).stroke(.black, lineWidth: 1.5))
+        } else if let uk = Self.british(ref) {
+            // British plates: blue for motorways, green with yellow numbers for primary A roads.
+            Text(ref)
+                .font(.system(size: 14, weight: .heavy)).foregroundColor(uk == .motorway ? .white : Color(hex: 0xFFD200))
+                .padding(.horizontal, 7).frame(height: 26)
+                .background(RoundedRectangle(cornerRadius: 4).fill(uk == .motorway ? Color(hex: 0x0079C1) : Color(hex: 0x00703C)))
+                .overlay(RoundedRectangle(cornerRadius: 4).inset(by: 1.5).stroke(.white, lineWidth: 1))
         } else {
             Text(ref.hasPrefix("SR ") ? String(ref.dropFirst(3)) : ref)
                 .font(.system(size: 14, weight: .heavy)).foregroundColor(.black)
@@ -517,6 +524,18 @@ struct RoadShield: View {
                 .background(RoundedRectangle(cornerRadius: 5).fill(.white))
                 .overlay(RoundedRectangle(cornerRadius: 5).inset(by: 1.5).stroke(.black, lineWidth: 1.5))
         }
+    }
+}
+
+extension RoadShield {
+    enum British { case motorway, primary }
+
+    /** "M4" or "A1(M)" are motorways, "A470" a primary road; only where units are British. */
+    static func british(_ ref: String) -> British? {
+        guard Fmt.yards else { return nil }
+        if ref.range(of: #"^(M\d+|A\d+\(M\))$"#, options: .regularExpression) != nil { return .motorway }
+        if ref.range(of: #"^A\d+$"#, options: .regularExpression) != nil { return .primary }
+        return nil
     }
 }
 

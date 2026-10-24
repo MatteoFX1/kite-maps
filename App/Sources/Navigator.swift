@@ -38,6 +38,7 @@ final class Navigator: ObservableObject {
     private var spokenCameras: Set<Int> = []
     private var zones: [AverageSpeedZone] = []
     private var zoneEntry: (index: Int, time: Date, along: Double)?
+    private var demoAlerts = false
     private var speeding = SpeedingAlerts()
 
     init(route: Route, destination: Place, stops: [Place] = [], settings: AppSettings) {
@@ -142,6 +143,7 @@ final class Navigator: ObservableObject {
     }
 
     private func checkCameras(_ p: RouteTracker.Progress) {
+        guard !demoAlerts else { return }
         let meters = routeCameras.map(\.along)
         if let ahead = cameraAhead {
             // Keep the card up, counting down, until the camera is passed.
@@ -172,6 +174,7 @@ final class Navigator: ObservableObject {
 
     /** Average speed checks: say when one starts and ends, and keep the user's average on screen. */
     private func checkZones(_ p: RouteTracker.Progress) {
+        guard !demoAlerts else { return }
         let at = p.alongMeters
         let inside = zones.firstIndex { at >= $0.startMeters && at <= $0.endMeters }
         if let entry = zoneEntry, entry.index != inside {
@@ -197,6 +200,7 @@ final class Navigator: ObservableObject {
 
     /** For the build's screenshots: a camera coming up and an average speed check. */
     func showDemoAlerts() {
+        demoAlerts = true
         cameraAhead = CameraAlert(kind: .speed, meters: 180, startMeters: 400, limitKmh: 48.3)
         averageCheck = AverageCheck(limitKmh: 80.5, averageKmh: 77, metersLeft: 2400)
     }

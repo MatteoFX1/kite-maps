@@ -105,7 +105,7 @@ struct TripHeader: View {
                     Spacer()
                     Menu {
                         Toggle("Avoid tolls", isOn: $settings.avoidTolls)
-                        Toggle("Avoid highways", isOn: $settings.avoidHighways)
+                        Toggle(Fmt.yards ? "Avoid motorways" : "Avoid highways", isOn: $settings.avoidHighways)
                     } label: {
                         Image(systemName: "slider.horizontal.3")
                             .font(.system(size: 14, weight: .semibold))

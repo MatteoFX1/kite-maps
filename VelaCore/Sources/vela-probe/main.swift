@@ -153,4 +153,8 @@ if let uk = try? await OSRM.route(from: LatLng(56.4120, -3.4700), to: LatLng(56.
     print("UK A9: routing failed")
 }
 
+// A British postcode in the open-data search.
+let pc = await Postcodes.lookup("cf10 1ns")
+print("Postcode: \(pc.map { "\($0.name) at \($0.location.lat),\($0.location.lng), \($0.address ?? "")" } ?? "failed")")
+
 exit(exitCode)

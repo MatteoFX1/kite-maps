@@ -399,6 +399,19 @@ enum DemoScript {
             model.select(station)
             return
         }
+        if step == "uk" {
+            // Driving north out of Perth on the A9, in miles and yards, with camera alerts up.
+            model.settings.units = .yards
+            let to = Place(id: "demo-pitlochry", name: "Pitlochry", location: LatLng(56.7030, -3.7340), source: "demo")
+            model.select(to)
+            await wait(2)
+            model.openDirections(to: to)
+            await wait(10)
+            model.startNavigation()
+            await wait(5)
+            model.nav?.showDemoAlerts()
+            return
+        }
         if step == "transit" {
             // Davis to Sacramento Valley Station: buses and Amtrak.
             let station = Place(id: "demo-sac", name: "Sacramento Valley Station", location: LatLng(38.5843, -121.5006), source: "demo")

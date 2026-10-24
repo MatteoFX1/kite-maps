@@ -86,3 +86,17 @@ final class CameraTests: XCTestCase {
         XCTAssertEqual(z.first?.kmh ?? 0, 80.47, accuracy: 0.1)
     }
 }
+
+final class PostcodeTests: XCTestCase {
+    func testPostcodes() {
+        XCTAssertEqual(Postcodes.normalize("sw1a1aa"), "SW1A 1AA")
+        XCTAssertEqual(Postcodes.normalize(" CF10 1NS "), "CF10 1NS")
+        XCTAssertEqual(Postcodes.normalize("EH1 1YZ"), "EH1 1YZ")
+        XCTAssertNil(Postcodes.normalize("pizza"))
+        XCTAssertNil(Postcodes.normalize("12345"))
+        let json = #"{"status":200,"result":{"postcode":"CF10 1NS","latitude":51.48,"longitude":-3.18,"admin_district":"Cardiff","admin_ward":"Cathays","country":"Wales"}}"#
+        let p = Postcodes.parse(Data(json.utf8), code: "CF10 1NS")
+        XCTAssertEqual(p?.name, "CF10 1NS")
+        XCTAssertEqual(p?.address, "Cathays, Cardiff, Wales")
+    }
+}

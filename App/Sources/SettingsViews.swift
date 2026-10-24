@@ -68,7 +68,7 @@ struct SettingsView: View {
                 Section("Navigation") {
                     Toggle("Voice guidance", isOn: $settings.voice)
                     Toggle("Avoid tolls", isOn: $settings.avoidTolls)
-                    Toggle("Avoid highways", isOn: $settings.avoidHighways)
+                    Toggle(Fmt.yards ? "Avoid motorways" : "Avoid highways", isOn: $settings.avoidHighways)
                     Toggle("Say when a camera is ahead", isOn: $settings.cameraWarnings)
                     Toggle("Say when I'm over the speed limit", isOn: $settings.speedingAlert)
                     Picker("Default travel mode", selection: $settings.defaultMode) {
@@ -88,7 +88,7 @@ struct SettingsView: View {
                 }
                 Section {
                     Toggle("Speed cameras", isOn: $settings.speedCameras)
-                    Toggle("License plate cameras", isOn: $settings.plateCameras)
+                    Toggle(Fmt.yards ? "Number plate cameras" : "License plate cameras", isOn: $settings.plateCameras)
                 } header: {
                     Text("Cameras")
                 } footer: {

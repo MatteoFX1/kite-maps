@@ -116,6 +116,10 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo place
           sleep 28
           xcrun simctl io "$DEV" screenshot shots/place-light.png
+          xcrun simctl location "$DEV" set 56.4120,-3.4700
+          xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo uk
+          sleep 50
+          xcrun simctl io "$DEV" screenshot shots/uk.png
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
         with:
