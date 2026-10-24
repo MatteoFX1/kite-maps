@@ -424,9 +424,10 @@ enum DemoScript {
         model.search("restaurants", title: "Restaurants")
         await wait(8)
         guard step != "search", let first = model.visibleResults.first else { return }
+        if step == "copy" { CopyOnHold.demoText = first.address }
         model.select(first)
         await wait(5)
-        guard step != "place" else { return }
+        guard !["place", "streetview", "lookaround", "copy"].contains(step) else { return }
         model.openDirections(to: first)
         if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)

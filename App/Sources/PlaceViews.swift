@@ -13,6 +13,7 @@ struct PlaceHeader: View {
                 Text(place.name)
                     .font(.title2.weight(.semibold))
                     .lineLimit(2)
+                    .copyable(place.name, below: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 CircleIconButton(icon: settings.isSaved(place) ? "bookmark.fill" : "bookmark") { settings.toggleSaved(place) }
                 if let url = place.shareURL {
@@ -47,7 +48,7 @@ struct PlaceBody: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 actions
-                if !place.photoUrls.isEmpty { PhotoStrip(urls: place.photoUrls, height: 140, opensViewer: true) }
+                PhotoStrip(urls: place.photoUrls, height: 140, opensViewer: true, streetView: place)
                 if hasAbout {
                     Picker("", selection: $tab) {
                         Text("Overview").tag(0)
@@ -127,21 +128,22 @@ struct PlaceBody: View {
 
     private var overview: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let s = place.editorialSummary { Text(s).font(.body) }
-            if let a = place.address { InfoRow(icon: "mappin.and.ellipse", text: a) }
+            if let s = place.editorialSummary { Text(s).font(.body).copyable(s) }
+            if let a = place.address { InfoRow(icon: "mappin.and.ellipse", text: a).copyable(a) }
             if isStop { DepartureBoard(place: place) }
-            if !place.hours.isEmpty { hours }
+            if !place.hours.isEmpty { hours.copyable(place.hours.joined(separator: "\n")) }
             if let phone = place.phone {
-                Button { if let u = telURL(phone) { openURL(u) } } label: { InfoRow(icon: "phone", text: phone) }
-                    .buttonStyle(.plain)
+                InfoRow(icon: "phone", text: phone)
+                    .onTapGesture { if let u = telURL(phone) { openURL(u) } }
+                    .copyable(phone)
             }
             if let site = place.website {
-                Button { if let u = webURL(site) { openURL(u) } } label: {
-                    InfoRow(icon: "globe", text: site.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""))
-                }
-                .buttonStyle(.plain)
+                InfoRow(icon: "globe", text: site.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""))
+                    .onTapGesture { if let u = webURL(site) { openURL(u) } }
+                    .copyable(site)
             }
-            InfoRow(icon: "scope", text: String(format: "%.5f, %.5f", place.location.lat, place.location.lng))
+            let coords = String(format: "%.6f, %.6f", place.location.lat, place.location.lng)
+            InfoRow(icon: "scope", text: coords).copyable(coords)
             if let r = place.featuredReview {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Review").font(.headline)
@@ -156,20 +158,19 @@ struct PlaceBody: View {
 
     private var hours: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Button { withAnimation { hoursOpen.toggle() } } label: {
-                HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: "clock").frame(width: 22).foregroundColor(.secondary)
-                    VStack(alignment: .leading) {
-                        StatusText(place: place).font(.subheadline)
-                        if !hoursOpen, let today = place.hours.first {
-                            Text(today).font(.subheadline).foregroundColor(.secondary)
-                        }
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "clock").frame(width: 22).foregroundColor(.secondary)
+                VStack(alignment: .leading) {
+                    StatusText(place: place).font(.subheadline)
+                    if !hoursOpen, let today = place.hours.first {
+                        Text(today).font(.subheadline).foregroundColor(.secondary)
                     }
-                    Spacer()
-                    Image(systemName: hoursOpen ? "chevron.up" : "chevron.down").foregroundColor(.secondary)
                 }
+                Spacer()
+                Image(systemName: hoursOpen ? "chevron.up" : "chevron.down").foregroundColor(.secondary)
             }
-            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation { hoursOpen.toggle() } }
             if hoursOpen {
                 ForEach(place.hours, id: \.self) { h in
                     let parts = h.split(separator: ":", maxSplits: 1).map(String.init)

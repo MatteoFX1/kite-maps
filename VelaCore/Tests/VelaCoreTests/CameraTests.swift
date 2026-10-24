@@ -127,3 +127,14 @@ final class PostcodeTests: XCTestCase {
         XCTAssertEqual(p?.address, "Cathays, Cardiff, Wales")
     }
 }
+
+final class StreetViewTests: XCTestCase {
+    func testParse() {
+        let reply = #")]}'\#n[[0],[[1],[2,"AbCdEfGhIjKlMnOpQrStUv"]],[[null,null,38.544912,-121.740501],[50]]]"#
+        let p = StreetView.parse(reply)
+        XCTAssertEqual(p?.id, "AbCdEfGhIjKlMnOpQrStUv")
+        XCTAssertEqual(p?.location.lat ?? 0, 38.544912, accuracy: 1e-6)
+        XCTAssertEqual(p?.location.lng ?? 0, -121.740501, accuracy: 1e-6)
+        XCTAssertNil(StreetView.parse(#"[[5,"search returned no images"]]"#))
+    }
+}

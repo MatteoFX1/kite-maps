@@ -180,4 +180,25 @@ do {
 let pc = await Postcodes.lookup("cf10 1ns")
 print("Postcode: \(pc.map { "\($0.name) at \($0.location.lat),\($0.location.lng), \($0.address ?? "")" } ?? "failed")")
 
+// Google Street View: a panorama near Davis's F Street and Pier 50 Sushi, its thumbnail and viewer.
+do {
+    let near = LatLng(38.54436, -121.74073)
+    let raw = (try? await URLSession.shared.data(from: StreetView.searchURL(near, radius: 60))).map { String(decoding: $0.0, as: UTF8.self) } ?? "failed"
+    print("Street View reply: " + String(raw.prefix(500)))
+    if let pano = await StreetView.find(near: near) {
+        let heading = Geo.bearing(pano.location, near)
+        print("Street View: \(pano.id) at \(pano.location), \(Int(pano.location.distance(to: near))) m away, heading \(Int(heading))")
+        for url in [StreetView.thumbnailURL(pano, heading: heading), StreetView.viewerURL(pano, heading: heading)] {
+            if let (data, resp) = try? await URLSession.shared.data(from: url) {
+                let h = resp as? HTTPURLResponse
+                print("  \(h?.statusCode ?? 0) \(h?.value(forHTTPHeaderField: "Content-Type") ?? "") \(data.count) bytes: \(url.absoluteString.prefix(90))")
+            }
+        }
+    } else {
+        print("Street View: none found")
+    }
+    let london = await StreetView.find(near: LatLng(51.50080, -0.12460))
+    print("Street View London: \(london.map { "\($0.id)" } ?? "none")")
+}
+
 exit(exitCode)
