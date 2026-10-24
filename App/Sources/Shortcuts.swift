@@ -11,7 +11,7 @@ final class LaunchAction: ObservableObject {
 
 struct DirectionsHomeIntent: AppIntent {
     static var title: LocalizedStringResource = "Directions home"
-    static var description = IntentDescription("Opens Vela with directions to your home.")
+    static var description = IntentDescription("Opens Kite with directions to your home.")
     static var openAppWhenRun = true
 
     @MainActor
@@ -23,7 +23,7 @@ struct DirectionsHomeIntent: AppIntent {
 
 struct DirectionsWorkIntent: AppIntent {
     static var title: LocalizedStringResource = "Directions to work"
-    static var description = IntentDescription("Opens Vela with directions to work.")
+    static var description = IntentDescription("Opens Kite with directions to work.")
     static var openAppWhenRun = true
 
     @MainActor
@@ -35,7 +35,7 @@ struct DirectionsWorkIntent: AppIntent {
 
 struct FindMyCarIntent: AppIntent {
     static var title: LocalizedStringResource = "Find my car"
-    static var description = IntentDescription("Opens Vela with the way back to where you parked.")
+    static var description = IntentDescription("Opens Kite with the way back to where you parked.")
     static var openAppWhenRun = true
 
     @MainActor
@@ -45,7 +45,7 @@ struct FindMyCarIntent: AppIntent {
     }
 }
 
-/** "Hey Siri, take me home with Vela", also in Spotlight and the Shortcuts app. */
+/** "Hey Siri, take me home with Kite", also in Spotlight and the Shortcuts app. */
 struct VelaShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: DirectionsHomeIntent(), phrases: [

@@ -29,7 +29,7 @@ jobs:
         run: swift run vela-probe "pizza" 40.7484 -73.9857
 
   ipa:
-    name: Build Vela.ipa
+    name: Build Kite.ipa
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -41,8 +41,8 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild \
-            -project Vela.xcodeproj \
-            -scheme Vela \
+            -project Kite.xcodeproj \
+            -scheme Kite \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
@@ -55,7 +55,7 @@ jobs:
         # An app with no signature at all is read as broken by some sideloaders. An ad-hoc
         # signature fixes that; the sideloader still re-signs with your Apple ID.
         run: |
-          APP=build/Build/Products/Release-iphoneos/Vela.app
+          APP=build/Build/Products/Release-iphoneos/Kite.app
           for f in "$APP"/Frameworks/*.framework; do
             codesign --force --sign - --timestamp=none "$f"
           done
@@ -64,24 +64,24 @@ jobs:
       - name: Package .ipa
         run: |
           mkdir -p Payload
-          ditto build/Build/Products/Release-iphoneos/Vela.app Payload/Vela.app
-          zip -qr -X Vela.ipa Payload
-          unzip -l Vela.ipa | tail -n 3
-          unzip -tq Vela.ipa
+          ditto build/Build/Products/Release-iphoneos/Kite.app Payload/Kite.app
+          zip -qr -X Kite.ipa Payload
+          unzip -l Kite.ipa | tail -n 3
+          unzip -tq Kite.ipa
       - name: Upload .ipa
         uses: actions/upload-artifact@v4
         with:
-          name: Vela-ipa
-          path: Vela.ipa
+          name: Kite-ipa
+          path: Kite.ipa
       - name: Publish release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: Vela for iPhone (build ${{ github.run_number }})
+          name: Kite Maps (build ${{ github.run_number }})
           body: |
-            Unsigned app for sideloading. Download **Vela.ipa** below and install it with AltStore or Sideloadly.
-          files: Vela.ipa
+            Unsigned app for sideloading. Download **Kite.ipa** below and install it with AltStore or Sideloadly. Kite Maps is an unofficial iPhone port of [Vela Maps](https://github.com/PimpinPumpkin/Vela).
+          files: Kite.ipa
 
   screens:
     name: Screenshots (simulator)
@@ -95,7 +95,7 @@ jobs:
       - name: Build for the simulator
         run: |
           set -o pipefail
-          xcodebuild -project Vela.xcodeproj -scheme Vela -configuration Debug \
+          xcodebuild -project Kite.xcodeproj -scheme Kite -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
             || { grep -E "error:" build.log | sort -u | head -40; tail -n 20 build.log; exit 1; }
@@ -108,7 +108,7 @@ jobs:
           xcrun simctl bootstatus "$DEV" -b
           xcrun simctl ui "$DEV" appearance dark
           xcrun simctl location "$DEV" set 38.5449,-121.7405
-          xcrun simctl install "$DEV" simbuild/Build/Products/Debug-iphonesimulator/Vela.app
+          xcrun simctl install "$DEV" simbuild/Build/Products/Debug-iphonesimulator/Kite.app
           xcrun simctl privacy "$DEV" grant location app.vela.ios || true
           mkdir -p shots
           for step in browse search place directions nav cameras layers transit board mine stops rail welcome camalert streetview svtest svtest90 lookaround copy wazelink googlelink; do
