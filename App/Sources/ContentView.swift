@@ -446,7 +446,7 @@ enum DemoScript {
             model.showTransit()
             return
         }
-        if step?.hasPrefix("streetview") == true {
+        if step == "streetview" {
             // A fixed place with Google imagery 34 m away, so every run looks the same way.
             var pier = Place(id: "demo-pier50", name: "Pier 50 Sushi", location: LatLng(38.54436, -121.74073), source: "demo")
             pier.category = "Sushi restaurant"
