@@ -180,4 +180,31 @@ do {
 let pc = await Postcodes.lookup("cf10 1ns")
 print("Postcode: \(pc.map { "\($0.name) at \($0.location.lat),\($0.location.lng), \($0.address ?? "")" } ?? "failed")")
 
+// Google Street View: a panorama near Davis's F Street and Pier 50 Sushi, its thumbnail and viewer.
+do {
+    let near = LatLng(38.54436, -121.74073)
+    let raw = (try? await URLSession.shared.data(for: StreetView.searchRequest(near, radius: 60))).map { String(decoding: $0.0, as: UTF8.self) } ?? "failed"
+    print("Street View reply: " + String(raw.prefix(1200)))
+    var pano = await StreetView.find(near: near)
+    if pano == nil { pano = await StreetView.find(near: LatLng(51.50080, -0.12460)) }
+    if let pano {
+        let heading = Geo.bearing(pano.location, pano.location.distance(to: near) < 1000 ? near : LatLng(51.5007, -0.1246))
+        print("Street View: \(pano.id) \(pano.width)x\(pano.height) facing \(Int(pano.heading)) at \(pano.location), \(Int(pano.location.distance(to: near))) m away, heading \(Int(heading))")
+        for url in [StreetView.thumbnailURL(pano, heading: heading), StreetView.tileURL(pano, x: 7, y: 3, zoom: 3)] {
+            if let (data, resp) = try? await URLSession.shared.data(from: url) {
+                let h = resp as? HTTPURLResponse
+                print("  \(h?.statusCode ?? 0) \(h?.value(forHTTPHeaderField: "Content-Type") ?? "") \(data.count) bytes: \(url.absoluteString.prefix(90))")
+            }
+        }
+    } else {
+        print("Street View: none found")
+    }
+    let embed = URL(string: "https://www.google.com/maps/embed?pb=!4v1!6m8!1m7!1s!2m2!1d38.54436!2d-121.74073!3f0!4f0!5f0.78")!
+    if let (d, resp) = try? await URLSession.shared.data(from: embed) {
+        print("  embed by position only: \((resp as? HTTPURLResponse)?.statusCode ?? 0), \(d.count) bytes")
+    }
+    let london = await StreetView.find(near: LatLng(51.50080, -0.12460))
+    print("Street View London: \(london.map { "\($0.id)" } ?? "none")")
+}
+
 exit(exitCode)

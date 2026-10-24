@@ -21,7 +21,23 @@ struct Category: Identifiable, Hashable {
     let query: String
     var id: String { label }
 
-    static let all = [
+    /** British words where units are British: petrol, supermarkets, chemists, cash machines. */
+    static var all: [Category] { Fmt.yards ? british : american }
+
+    static let british = [
+        Category(label: "Restaurants", icon: "fork.knife", query: "restaurants"),
+        Category(label: "Coffee", icon: "cup.and.saucer.fill", query: "coffee"),
+        Category(label: "Petrol", icon: "fuelpump.fill", query: "petrol station"),
+        Category(label: "Supermarkets", icon: "cart.fill", query: "supermarket"),
+        Category(label: "Pubs", icon: "mug.fill", query: "pub"),
+        Category(label: "Hotels", icon: "bed.double.fill", query: "hotels"),
+        Category(label: "Parking", icon: "parkingsign", query: "car park"),
+        Category(label: "EV charging", icon: "bolt.car.fill", query: "ev charging station"),
+        Category(label: "Chemists", icon: "cross.case.fill", query: "pharmacy"),
+        Category(label: "Cash machines", icon: "banknote.fill", query: "atm"),
+    ]
+
+    static let american = [
         Category(label: "Restaurants", icon: "fork.knife", query: "restaurants"),
         Category(label: "Coffee", icon: "cup.and.saucer.fill", query: "coffee"),
         Category(label: "Gas", icon: "fuelpump.fill", query: "gas stations"),

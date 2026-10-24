@@ -73,6 +73,7 @@ struct ResultsList: View {
 
     var body: some View {
         ScrollView {
+            SheetTopMarker()
             LazyVStack(alignment: .leading, spacing: 0) {
                 Divider()
                 ForEach(model.visibleResults) { p in
@@ -138,11 +139,14 @@ struct PhotoStrip: View {
     var height: CGFloat = 130
     /** Tapping a photo opens it full screen (on the place page; the result list opens the place). */
     var opensViewer = false
+    /** Starts the strip with this place's Street View (or Look Around). */
+    var streetView: Place?
     @State private var viewing: Int?
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
+                if let p = streetView { StreetViewTile(place: p, height: height) }
                 ForEach(Array(urls.enumerated()), id: \.offset) { i, u in
                     AsyncImage(url: URL(string: u)) { phase in
                         if let img = phase.image {

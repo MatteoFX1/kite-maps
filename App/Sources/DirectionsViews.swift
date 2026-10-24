@@ -79,7 +79,7 @@ struct EndpointsCard: View {
         .foregroundColor(.primary)
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 18).fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.22), radius: 6, y: 2))
+        .glass(RoundedRectangle(cornerRadius: 18))
         .padding(.horizontal, 12)
     }
 
@@ -202,6 +202,7 @@ struct TripBody: View {
     var body: some View {
         if let d = model.directions {
             ScrollView {
+                SheetTopMarker()
                 VStack(alignment: .leading, spacing: 12) {
                     if d.transit {
                         TransitBody(model: model, state: d)
@@ -525,7 +526,7 @@ struct StopPicker: View {
                 }
                 if found.isEmpty && !searching {
                     Section("Along the way") {
-                        ForEach(["Gas stations", "Coffee", "Restaurants", "EV charging"], id: \.self) { c in
+                        ForEach([Fmt.yards ? "Petrol stations" : "Gas stations", "Coffee", "Restaurants", "EV charging"], id: \.self) { c in
                             Button { query = c; run() } label: { Label(c, systemImage: "magnifyingglass") }
                         }
                     }

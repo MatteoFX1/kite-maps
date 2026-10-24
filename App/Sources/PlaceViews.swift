@@ -13,6 +13,7 @@ struct PlaceHeader: View {
                 Text(place.name)
                     .font(.title2.weight(.semibold))
                     .lineLimit(2)
+                    .copyable(place.name, below: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 CircleIconButton(icon: settings.isSaved(place) ? "bookmark.fill" : "bookmark") { settings.toggleSaved(place) }
                 if let url = place.shareURL {
@@ -40,14 +41,17 @@ struct PlaceBody: View {
     let place: Place
     @State private var tab = 0
     @State private var hoursOpen = false
+    /** Driving time from here, shown on the Directions button like Google Maps. */
+    @State private var driveSeconds: Double?
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         ScrollView {
+            SheetTopMarker()
             VStack(alignment: .leading, spacing: 14) {
                 actions
-                if !place.photoUrls.isEmpty { PhotoStrip(urls: place.photoUrls, height: 140, opensViewer: true) }
+                PhotoStrip(urls: place.photoUrls, height: 140, opensViewer: true, streetView: place)
                 if hasAbout {
                     Picker("", selection: $tab) {
                         Text("Overview").tag(0)
@@ -62,6 +66,15 @@ struct PlaceBody: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 80)
         }
+        .task(id: place.id) { await loadDriveTime() }
+    }
+
+    private func loadDriveTime() async {
+        driveSeconds = nil
+        guard let from = model.userLatLng, from.distance(to: place.location) > 300,
+              from.distance(to: place.location) < 300_000 else { return }
+        let r = try? await OSRM.route(from: from, to: place.location, mode: .drive)
+        if let s = r?.first?.durationSeconds { withAnimation { driveSeconds = s } }
     }
 
     private var hasAbout: Bool { !place.about.isEmpty }
@@ -76,7 +89,8 @@ struct PlaceBody: View {
     private var actions: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                PillButton(title: "Directions", icon: "arrow.triangle.turn.up.right.diamond.fill", filled: true) {
+                PillButton(title: driveSeconds.map { "Directions · \(Fmt.duration($0))" } ?? "Directions",
+                           icon: "arrow.triangle.turn.up.right.diamond.fill", filled: true) {
                     model.openDirections(to: place)
                 }
                 PillButton(title: "Start", icon: "location.north.fill") {
@@ -111,6 +125,11 @@ struct PlaceBody: View {
                             Label("Copy address", systemImage: "doc.on.clipboard")
                         }
                     }
+                    Section("Open in") {
+                        ForEach(OtherApp.allCases, id: \.self) { app in
+                            Button { openURL(app.url(for: place)) } label: { Label(app.rawValue, systemImage: app.icon) }
+                        }
+                    }
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "ellipsis").font(.system(size: 14, weight: .semibold))
@@ -127,21 +146,22 @@ struct PlaceBody: View {
 
     private var overview: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let s = place.editorialSummary { Text(s).font(.body) }
-            if let a = place.address { InfoRow(icon: "mappin.and.ellipse", text: a) }
+            if let s = place.editorialSummary { Text(s).font(.body).copyable(s) }
+            if let a = place.address { InfoRow(icon: "mappin.and.ellipse", text: a).copyable(a) }
             if isStop { DepartureBoard(place: place) }
-            if !place.hours.isEmpty { hours }
+            if !place.hours.isEmpty { hours.copyable(place.hours.joined(separator: "\n")) }
             if let phone = place.phone {
-                Button { if let u = telURL(phone) { openURL(u) } } label: { InfoRow(icon: "phone", text: phone) }
-                    .buttonStyle(.plain)
+                InfoRow(icon: "phone", text: phone)
+                    .onTapGesture { if let u = telURL(phone) { openURL(u) } }
+                    .copyable(phone)
             }
             if let site = place.website {
-                Button { if let u = webURL(site) { openURL(u) } } label: {
-                    InfoRow(icon: "globe", text: site.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""))
-                }
-                .buttonStyle(.plain)
+                InfoRow(icon: "globe", text: site.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""))
+                    .onTapGesture { if let u = webURL(site) { openURL(u) } }
+                    .copyable(site)
             }
-            InfoRow(icon: "scope", text: String(format: "%.5f, %.5f", place.location.lat, place.location.lng))
+            let coords = String(format: "%.6f, %.6f", place.location.lat, place.location.lng)
+            InfoRow(icon: "scope", text: coords).copyable(coords)
             if let r = place.featuredReview {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Review").font(.headline)
@@ -156,20 +176,19 @@ struct PlaceBody: View {
 
     private var hours: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Button { withAnimation { hoursOpen.toggle() } } label: {
-                HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: "clock").frame(width: 22).foregroundColor(.secondary)
-                    VStack(alignment: .leading) {
-                        StatusText(place: place).font(.subheadline)
-                        if !hoursOpen, let today = place.hours.first {
-                            Text(today).font(.subheadline).foregroundColor(.secondary)
-                        }
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "clock").frame(width: 22).foregroundColor(.secondary)
+                VStack(alignment: .leading) {
+                    StatusText(place: place).font(.subheadline)
+                    if !hoursOpen, let today = place.hours.first {
+                        Text(today).font(.subheadline).foregroundColor(.secondary)
                     }
-                    Spacer()
-                    Image(systemName: hoursOpen ? "chevron.up" : "chevron.down").foregroundColor(.secondary)
                 }
+                Spacer()
+                Image(systemName: hoursOpen ? "chevron.up" : "chevron.down").foregroundColor(.secondary)
             }
-            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation { hoursOpen.toggle() } }
             if hoursOpen {
                 ForEach(place.hours, id: \.self) { h in
                     let parts = h.split(separator: ":", maxSplits: 1).map(String.init)
@@ -297,5 +316,30 @@ struct DepartureBoard: View {
         let f = DateFormatter()
         f.timeStyle = .short
         return f.string(from: t)
+    }
+}
+
+/** Other map apps a place can be handed to, by their web links (no app list permission needed). */
+enum OtherApp: String, CaseIterable {
+    case google = "Google Maps"
+    case waze = "Waze"
+    case apple = "Apple Maps"
+
+    var icon: String {
+        switch self {
+        case .google: return "map"
+        case .waze: return "car"
+        case .apple: return "applelogo"
+        }
+    }
+
+    func url(for p: Place) -> URL {
+        let ll = "\(p.location.lat),\(p.location.lng)"
+        let name = p.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        switch self {
+        case .google: return p.shareURL ?? URL(string: "https://www.google.com/maps/search/?api=1&query=\(ll)")!
+        case .waze: return URL(string: "https://waze.com/ul?ll=\(ll)&navigate=yes")!
+        case .apple: return URL(string: "https://maps.apple.com/?ll=\(ll)&q=\(name)")!
+        }
     }
 }

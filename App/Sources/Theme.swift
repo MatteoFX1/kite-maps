@@ -204,6 +204,29 @@ func maneuverSymbol(_ t: ManeuverType) -> String {
     }
 }
 
+/**
+ * Frosted glass for everything that floats over the map (buttons, the search bar, cards): the
+ * map shows through, blurred, with a thin bright edge and a soft shadow, like iOS 26.
+ */
+struct Glass<S: Shape>: ViewModifier {
+    let shape: S
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                shape.fill(.ultraThinMaterial)
+                    .overlay(shape.fill(Vela.sheet(scheme).opacity(scheme == .dark ? 0.45 : 0.55)))
+                    .overlay(shape.stroke(Color.white.opacity(scheme == .dark ? 0.14 : 0.6), lineWidth: 0.75))
+                    .shadow(color: .black.opacity(scheme == .dark ? 0.35 : 0.14), radius: 10, y: 4)
+            )
+    }
+}
+
+extension View {
+    func glass<S: Shape>(_ shape: S) -> some View { modifier(Glass(shape: shape)) }
+}
+
 /** Round buttons floating on the map (layers, location, compass). */
 struct MapFab: View {
     let icon: String
@@ -218,8 +241,7 @@ struct MapFab: View {
                 .font(.system(size: size * 0.4, weight: .semibold))
                 .foregroundColor(tint)
                 .frame(width: size, height: size)
-                .background(Circle().fill(Vela.sheet(scheme)))
-                .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+                .glass(Circle())
         }
         .buttonStyle(.plain)
     }

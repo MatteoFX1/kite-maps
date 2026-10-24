@@ -36,6 +36,11 @@ struct ContentView: View {
         .sheet(isPresented: $model.showSettings) {
             SettingsView(settings: settings, onChange: { model.reloadRoutes() })
         }
+        .fullScreenCover(isPresented: .constant(DemoScript.step?.hasPrefix("svtest") == true)) {
+            // Screenshot run only: the viewer on a test pattern, turned right by the step's number.
+            GoogleStreetViewScreen(name: "Test pattern", pano: StreetView.Panorama(id: PanoramaViewer.testID, location: LatLng(0, 0)),
+                                   heading: Double(DemoScript.step?.dropFirst(6) ?? "") ?? 0)
+        }
         .fullScreenCover(isPresented: Binding(get: { !settings.welcomed && (!DemoScript.active || DemoScript.step == "welcome") }, set: { _ in })) {
             WelcomeView(settings: settings)
         }
@@ -82,8 +87,7 @@ struct BrowseOverlay: View {
                                     CompassNeedle()
                                         .rotationEffect(.degrees(-model.mapHeading))
                                         .frame(width: 44, height: 44)
-                                        .background(Circle().fill(Vela.sheet(scheme)))
-                                        .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+                                        .glass(Circle())
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("Face north")
@@ -97,6 +101,17 @@ struct BrowseOverlay: View {
                         HStack {
                             Spacer()
                             MapFab(icon: "location.fill", tint: Vela.routeBlue) { model.centerOnUser() }
+                                .contextMenu {
+                                    if let u = model.userLatLng {
+                                        ShareLink(item: URL(string: "https://maps.google.com/?q=\(u.lat),\(u.lng)")!) {
+                                            Label("Share my location", systemImage: "square.and.arrow.up")
+                                        }
+                                        Button { UIPasteboard.general.string = String(format: "%.6f, %.6f", u.lat, u.lng) } label: {
+                                            Label("Copy my coordinates", systemImage: "doc.on.doc")
+                                        }
+                                    }
+                                    Button { model.saveParking() } label: { Label("I parked here", systemImage: "parkingsign") }
+                                }
                         }
                         .padding(.bottom, max(sheetH - geo.safeAreaInsets.bottom, 0) + 14)
                     }
@@ -212,7 +227,7 @@ struct SearchBar: View {
         .foregroundColor(.primary)
         .padding(.horizontal, 18)
         .frame(height: 52)
-        .background(Capsule().fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.22), radius: 6, y: 2))
+        .glass(Capsule())
         .padding(.horizontal, 12)
     }
 }
@@ -232,7 +247,7 @@ struct CategoryChips: View {
                         }
                         .padding(.horizontal, 14)
                         .frame(height: 36)
-                        .background(Capsule().fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.18), radius: 3, y: 1))
+                        .glass(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -304,16 +319,26 @@ struct SuggestionsPanel: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .contextMenu {
+                                Button(role: .destructive) { settings.recentPlaces.removeAll { $0.id == p.id } } label: {
+                                    Label("Remove from recents", systemImage: "trash")
+                                }
+                            }
                         }
                         ForEach(settings.recents.filter { q in !settings.recentPlaces.prefix(5).contains { $0.name == q } }.prefix(6), id: \.self) { q in
                             row(icon: "magnifyingglass", text: q) { done(); model.search(q) }
+                                .contextMenu {
+                                    Button(role: .destructive) { settings.recents.removeAll { $0 == q } } label: {
+                                        Label("Remove from recents", systemImage: "trash")
+                                    }
+                                }
                         }
                     }
                 }
             }
             .padding(.vertical, 8)
         }
-        .background(RoundedRectangle(cornerRadius: 20).fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.2), radius: 8))
+        .glass(RoundedRectangle(cornerRadius: 20))
         .padding(.horizontal, 12)
         .frame(maxHeight: 460)
     }
@@ -345,7 +370,7 @@ struct NoticeBanner: View {
             Button(action: dismiss) { Image(systemName: "xmark").font(.footnote) }.buttonStyle(.plain)
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.18), radius: 4))
+        .glass(RoundedRectangle(cornerRadius: 14))
         .padding(.horizontal, 12)
     }
 }
@@ -421,12 +446,20 @@ enum DemoScript {
             model.showTransit()
             return
         }
+        if step == "streetview" {
+            // A fixed place with Google imagery 34 m away, so every run looks the same way.
+            var pier = Place(id: "demo-pier50", name: "Pier 50 Sushi", location: LatLng(38.54436, -121.74073), source: "demo")
+            pier.category = "Sushi restaurant"
+            model.select(pier)
+            return
+        }
         model.search("restaurants", title: "Restaurants")
         await wait(8)
         guard step != "search", let first = model.visibleResults.first else { return }
+        if step == "copy" { CopyOnHold.demoText = first.address }
         model.select(first)
         await wait(5)
-        guard step != "place" else { return }
+        guard !["place", "lookaround", "copy"].contains(step) else { return }
         model.openDirections(to: first)
         if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)
