@@ -107,6 +107,10 @@ struct InstructionBanner: View {
                     if let p = nav.progress {
                         Text(Fmt.distance(p.distanceToNext)).font(.system(size: 30, weight: .bold))
                     }
+                    let refs = RoadRefs.find(m?.instruction ?? "")
+                    if !refs.isEmpty {
+                        HStack(spacing: 6) { ForEach(refs, id: \.self) { RoadShield(ref: $0) } }
+                    }
                     Text(m?.instruction ?? "Follow the route")
                         .font(.system(size: 19, weight: .medium))
                         .lineLimit(3)
@@ -389,5 +393,79 @@ struct AlongRouteSheet: View {
             found = out.sorted { $0.1 < $1.1 }.prefix(20).map { (place: $0.0, ahead: $0.1) }
             searching = false
         }
+    }
+}
+
+/** Road numbers in an instruction ("I-80", "US 50", "CA 113", "A9"), for shields in the banner. */
+enum RoadRefs {
+    static func find(_ text: String) -> [String] {
+        let pattern = #"\b(I|US|CA|SR|State Route|Route|Hwy|Highway|A|B|M|E|N|D|B|SS)[- ]?(\d{1,4}[A-Z]?)\b"#
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let ns = text as NSString
+        var out: [String] = []
+        for m in re.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            let net = ns.substring(with: m.range(at: 1)), num = ns.substring(with: m.range(at: 2))
+            let ref: String
+            switch net {
+            case "I": ref = "I-\(num)"
+            case "US": ref = "US \(num)"
+            case "CA", "SR", "State Route", "Route", "Hwy", "Highway": ref = "SR \(num)"
+            default: ref = net + num
+            }
+            if !out.contains(ref) { out.append(ref) }
+        }
+        return Array(out.prefix(3))
+    }
+}
+
+/** A road number drawn like its sign: Interstate blue-and-red, US white, others a plain plate. */
+struct RoadShield: View {
+    let ref: String
+
+    var body: some View {
+        if ref.hasPrefix("I-") {
+            let n = String(ref.dropFirst(2))
+            ZStack(alignment: .top) {
+                Color(hex: 0x003F87)
+                Color(hex: 0xC8102E).frame(height: 9)
+                Text(n).font(.system(size: 14, weight: .heavy)).foregroundColor(.white).padding(.top, 10)
+            }
+            .frame(width: n.count > 2 ? 40 : 32, height: 32)
+            .mask(InterstateShape())
+            .overlay(InterstateShape().stroke(.white, lineWidth: 1.5))
+        } else if ref.hasPrefix("US ") {
+            Text(String(ref.dropFirst(3)))
+                .font(.system(size: 14, weight: .heavy)).foregroundColor(.black)
+                .frame(minWidth: 30).frame(height: 30).padding(.horizontal, 2)
+                .background(InterstateShape().fill(.white))
+                .overlay(InterstateShape().inset(by: 2).stroke(.black, lineWidth: 1.5))
+        } else {
+            Text(ref.hasPrefix("SR ") ? String(ref.dropFirst(3)) : ref)
+                .font(.system(size: 14, weight: .heavy)).foregroundColor(.black)
+                .padding(.horizontal, 7).frame(height: 26)
+                .background(RoundedRectangle(cornerRadius: 5).fill(.white))
+                .overlay(RoundedRectangle(cornerRadius: 5).inset(by: 1.5).stroke(.black, lineWidth: 1.5))
+        }
+    }
+}
+
+/** A shield outline: flat top with dips, sides curving into a point. */
+struct InterstateShape: InsettableShape {
+    var inset: CGFloat = 0
+
+    func inset(by amount: CGFloat) -> InterstateShape { var s = self; s.inset += amount; return s }
+
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: inset, dy: inset)
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.minY + r.height * 0.08))
+        p.addQuadCurve(to: CGPoint(x: r.midX, y: r.minY + r.height * 0.06), control: CGPoint(x: r.minX + r.width * 0.25, y: r.minY - r.height * 0.04))
+        p.addQuadCurve(to: CGPoint(x: r.maxX, y: r.minY + r.height * 0.08), control: CGPoint(x: r.maxX - r.width * 0.25, y: r.minY - r.height * 0.04))
+        p.addCurve(to: CGPoint(x: r.midX, y: r.maxY), control1: CGPoint(x: r.maxX + r.width * 0.05, y: r.minY + r.height * 0.6),
+                   control2: CGPoint(x: r.midX + r.width * 0.3, y: r.maxY - r.height * 0.05))
+        p.addCurve(to: CGPoint(x: r.minX, y: r.minY + r.height * 0.08), control1: CGPoint(x: r.midX - r.width * 0.3, y: r.maxY - r.height * 0.05),
+                   control2: CGPoint(x: r.minX - r.width * 0.05, y: r.minY + r.height * 0.6))
+        p.closeSubpath()
+        return p
     }
 }

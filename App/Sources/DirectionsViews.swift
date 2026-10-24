@@ -141,7 +141,10 @@ struct ModeTabs: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) { tabs }
-                .onAppear { if state.transit { proxy.scrollTo("transit", anchor: .trailing) } }
+                .onAppear {
+                    guard state.transit else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { proxy.scrollTo("transit", anchor: .trailing) }
+                }
                 .onChange(of: state.transit) { on in
                     withAnimation { proxy.scrollTo(on ? "transit" : "drive", anchor: on ? .trailing : .leading) }
                 }
