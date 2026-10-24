@@ -404,6 +404,8 @@ struct VelaMapView: UIViewRepresentable {
                     }
                     (map?.style?.source(withIdentifier: "vela-rail") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: shapes)
                 }
+                // The map may have moved on while this was loading.
+                if lines != nil, let map { self.loadRail(map) }
             }
         }
 
