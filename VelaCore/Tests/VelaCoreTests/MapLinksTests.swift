@@ -44,7 +44,7 @@ final class MapLinksTests: XCTestCase {
         assertSpot(target("https://waze.com/ul?ll=51.50072%2C-0.12462&navigate=yes"), 51.5007, -0.1246)
         assertSpot(target("https://www.waze.com/live-map/directions?to=ll.53.4808%2C-2.2426"), 53.4808, -2.2426)
         // waze.com/ul/h + geohash: gcpuvpk4 is by Westminster Bridge.
-        assertSpot(target("https://waze.com/ul/hgcpuvpk4"), 51.50, -0.12)
+        assertSpot(target("https://waze.com/ul/hgcpuvpk4"), 51.5002, -0.1262)
     }
 
     func testAppleAndGeoAndPlain() {
