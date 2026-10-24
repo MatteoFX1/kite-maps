@@ -39,6 +39,7 @@ enum MapIcons {
         style.setImage(bubble(fill: .white, stroke: UIColor(hex: 0xBDC1C6)), forName: "bubble-alt")
         style.setImage(speedCamera(), forName: "cam-speed")
         style.setImage(plateCamera(), forName: "cam-plate")
+        style.setImage(turnHead(), forName: "turn-head")
         // My places: home, work, the parked car and saved places.
         style.setImage(dot("house.fill", UIColor(hex: 0x1A73E8)), forName: "mine-home")
         style.setImage(dot("briefcase.fill", UIColor(hex: 0x8D6E63)), forName: "mine-work")
@@ -47,6 +48,24 @@ enum MapIcons {
     }
 
     /** Vela's speed camera badge: amber rounded square, head-on camera with a big lens and flash slit. */
+    /** The head of the turn arrow drawn on the road: white with a dark blue edge, pointing up. */
+    static func turnHead() -> UIImage {
+        let size = CGSize(width: 30, height: 26)
+        return UIGraphicsImageRenderer(size: size).image { _ in
+            let p = UIBezierPath()
+            p.move(to: CGPoint(x: 15, y: 2))
+            p.addLine(to: CGPoint(x: 28, y: 22))
+            p.addLine(to: CGPoint(x: 2, y: 22))
+            p.close()
+            p.lineJoin = .round
+            UIColor.white.setFill()
+            UIColor(hex: 0x0B3D91).setStroke()
+            p.lineWidth = 2.5
+            p.fill()
+            p.stroke()
+        }
+    }
+
     static func speedCamera() -> UIImage {
         badge(UIColor(hex: 0xEF6C00)) { amber in
             UIColor.white.setFill()

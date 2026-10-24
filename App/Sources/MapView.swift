@@ -255,6 +255,25 @@ struct VelaMapView: UIViewRepresentable {
                 style.addLayer(b)
             }
 
+            // The next turn drawn on the road while navigating, like Vela's turn arrows.
+            let arrowSrc = MLNShapeSource(identifier: "vela-turn-arrow", shape: nil, options: nil)
+            style.addSource(arrowSrc)
+            let arrowEdge = line("vela-turn-arrow-edge", arrowSrc, UIColor(hex: 0x0B3D91), width: 11)
+            arrowEdge.predicate = NSPredicate(format: "part == 'shaft'")
+            arrowEdge.lineCap = NSExpression(forConstantValue: "butt")
+            let arrowLine = line("vela-turn-arrow", arrowSrc, .white, width: 7)
+            arrowLine.predicate = NSPredicate(format: "part == 'shaft'")
+            arrowLine.lineCap = NSExpression(forConstantValue: "butt")
+            let head = MLNSymbolStyleLayer(identifier: "vela-turn-arrow-head", source: arrowSrc)
+            head.predicate = NSPredicate(format: "part == 'head'")
+            head.iconImageName = NSExpression(forConstantValue: "turn-head")
+            head.iconRotation = NSExpression(forKeyPath: "bearing")
+            head.iconRotationAlignment = NSExpression(forConstantValue: "map")
+            head.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            head.iconIgnoresPlacement = NSExpression(forConstantValue: true)
+            for l in [arrowEdge, arrowLine] as [MLNStyleLayer] { style.addLayer(l) }
+            style.addLayer(head)
+
             let puckSrc = MLNShapeSource(identifier: "vela-puck", shape: nil, options: nil)
             style.addSource(puckSrc)
             let puck = MLNSymbolStyleLayer(identifier: "vela-puck", source: puckSrc)
@@ -450,6 +469,25 @@ struct VelaMapView: UIViewRepresentable {
                 return piece.count >= 2 ? polyline(piece, ["level": min(s.level, 3)]) : nil
             }
             spanSrc?.shape = MLNShapeCollectionFeature(shapes: spans)
+
+            // Turn arrow: 35 m of road before the next turn and 22 m after it, from 14 m away.
+            let arrowSrc = style.source(withIdentifier: "vela-turn-arrow") as? MLNShapeSource
+            if let n = model.nav, let m = n.nextManeuver, m.type != .arrive, m.type != .depart, m.type != .straight,
+               let p = n.progress, m.alongMeters - p.alongMeters < 600 {
+                let a = max(m.alongMeters - 35, from), b = min(m.alongMeters + 22, total)
+                let shaft = Geo.slice(r.polyline, from: a, to: b, cumulative: cum)
+                if shaft.count >= 2 {
+                    let tip = shaft[shaft.count - 1], prev = Geo.point(along: r.polyline, meters: max(a, b - 4), cumulative: cum)
+                    let head = MLNPointFeature()
+                    head.coordinate = CLLocationCoordinate2D(latitude: tip.lat, longitude: tip.lng)
+                    head.attributes = ["part": "head", "bearing": Geo.bearing(prev, tip)]
+                    arrowSrc?.shape = MLNShapeCollectionFeature(shapes: [polyline(shaft, ["part": "shaft"]), head])
+                } else {
+                    arrowSrc?.shape = nil
+                }
+            } else {
+                arrowSrc?.shape = nil
+            }
 
             // Time bubbles: on each route, at a point the others don't share.
             guard model.nav == nil, let d = model.directions else { bubbleSrc?.shape = nil; return }

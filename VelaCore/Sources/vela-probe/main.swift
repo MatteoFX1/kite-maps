@@ -117,4 +117,18 @@ if let b = await Transitous.departures(near: LatLng(38.5435, -121.7377)) {
     print("Departures: none or failed")
 }
 
+
+// A trip with a stop: Davis to Sacramento through Woodland.
+do {
+    let davis = LatLng(38.5449, -121.7405), sac = LatLng(38.5816, -121.4944), woodland = LatLng(38.6785, -121.7733)
+    let g = try await GoogleClient.shared.directions(from: davis, to: sac, mode: .drive, via: [woodland])
+    print("Google with a stop: \(g.count) routes" + (g.first.map { r in
+        ", \(Int(r.distanceMeters)) m, \(Int(r.durationSeconds / 60)) min, \(r.polyline.count) pts, ends \(Int(r.polyline.last!.distance(to: sac))) m from Sacramento, passes \(Int(r.polyline.map { $0.distance(to: woodland) }.min()!)) m from Woodland, \(r.maneuvers.count) steps"
+    } ?? ""))
+} catch {
+    print("Google with a stop failed: \(error)")
+}
+let viaOSRM = try? await OSRM.route(from: LatLng(38.5449, -121.7405), to: LatLng(38.5816, -121.4944), mode: .drive, via: [LatLng(38.6785, -121.7733)])
+print("OSRM with a stop: \(viaOSRM?.first.map { "\(Int($0.distanceMeters)) m, \($0.maneuvers.count) steps" } ?? "failed")")
+
 exit(exitCode)

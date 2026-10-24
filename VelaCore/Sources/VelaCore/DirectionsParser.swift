@@ -20,12 +20,18 @@ enum DirectionsPb {
         """
 
     static func build(origin: LatLng, destination: LatLng, mode: TravelMode,
-                      avoidHighways: Bool = false, avoidTolls: Bool = false) -> String {
+                      avoidHighways: Bool = false, avoidTolls: Bool = false, waypoints: [LatLng] = []) -> String {
         var pb = template
+        // Stops: one more top-level waypoint group each, between origin and destination (Vela's
+        // withWaypoints). Google answers a single route through them.
+        if !waypoints.isEmpty, let r = pb.range(of: "!1m4!3m2!3d{DLAT}!4d{DLNG}!6e2") {
+            pb.insert(contentsOf: waypoints.map { "!1m4!3m2!3d\($0.lat)!4d\($0.lng)!6e2" }.joined(), at: r.lowerBound)
+        }
+        let all = [origin, destination] + waypoints
         // Center the request's map on the trip, the way a browser's map sits around it.
         if let r = pb.range(of: #"!3m12!1m3!1d[0-9.]+!2d-?[0-9.]+!3d-?[0-9.]+"#, options: .regularExpression) {
-            let s = min(origin.lat, destination.lat), n = max(origin.lat, destination.lat)
-            let w = min(origin.lng, destination.lng), e = max(origin.lng, destination.lng)
+            let s = all.map(\.lat).min()!, n = all.map(\.lat).max()!
+            let w = all.map(\.lng).min()!, e = all.map(\.lng).max()!
             let lat = (s + n) / 2, lng = (w + e) / 2
             let span = max((n - s) * 111_320, (e - w) * 111_320 * cos(lat * .pi / 180))
             pb.replaceSubrange(r, with: "!3m12!1m3!1d\(max(span * 1.35, 1500))!2d\(lng)!3d\(lat)")
