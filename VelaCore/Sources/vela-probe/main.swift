@@ -153,6 +153,20 @@ if let uk = try? await OSRM.route(from: LatLng(56.4120, -3.4700), to: LatLng(56.
     print("UK A9: routing failed")
 }
 
+// What Britain maps for cameras around Perth and the A9 (to tune the query above).
+do {
+    let q = "[out:json][timeout:40];(relation[\"type\"=\"enforcement\"](56.3,-4.0,56.8,-3.3);node[\"highway\"=\"speed_camera\"](56.3,-4.0,56.8,-3.3);node[\"enforcement\"](56.3,-4.0,56.8,-3.3););out tags 40;"
+    var r = URLRequest(url: URL(string: "https://overpass-api.de/api/interpreter")!)
+    r.httpMethod = "POST"
+    r.httpBody = ("data=" + q.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!).data(using: .utf8)
+    r.setValue("vela-probe", forHTTPHeaderField: "User-Agent")
+    let (data, _) = try await URLSession.shared.data(for: r)
+    let els = ((try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["elements"] as? [[String: Any]]) ?? []
+    print("UK camera tags: \(els.count) — " + els.prefix(15).map { "\($0["type"] ?? "")\(($0["tags"] as? [String: String] ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" })" }.joined(separator: " ; "))
+} catch {
+    print("UK camera tags failed: \(error)")
+}
+
 // A British postcode in the open-data search.
 let pc = await Postcodes.lookup("cf10 1ns")
 print("Postcode: \(pc.map { "\($0.name) at \($0.location.lat),\($0.location.lng), \($0.address ?? "")" } ?? "failed")")
