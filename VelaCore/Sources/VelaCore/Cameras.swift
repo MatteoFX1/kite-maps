@@ -10,6 +10,8 @@ public struct RoadCamera: Hashable, Sendable, Identifiable {
     public var operatorName: String?
     /** The limit a speed camera checks, when mapped on it. */
     public var maxspeedKmh: Double?
+    /** One of a pair or chain timing average speed (how Britain usually maps them). */
+    public var average = false
 }
 
 /** A stretch of road where average speed is checked between cameras (common in Britain). */
@@ -206,7 +208,8 @@ public enum Overpass {
             let plate = tags["surveillance:type"] == "ALPR"
             return RoadCamera(id: id, kind: plate ? .plate : .speed, location: LatLng(lat, lon),
                               operatorName: plate ? (tags["operator"] ?? tags["manufacturer"]) : nil,
-                              maxspeedKmh: plate ? nil : maxspeedKmh(tags["maxspeed"]))
+                              maxspeedKmh: plate ? nil : maxspeedKmh(tags["maxspeed"]),
+                              average: !plate && tags["enforcement"] == "average_speed")
         }
     }
 }
@@ -237,6 +240,42 @@ public enum CameraAlerts {
             if ahead < bestAhead { bestAhead = ahead; best = i }
         }
         return best
+    }
+
+    /**
+     * Average speed checks from the cameras themselves: a run of average speed cameras along the
+     * route, each within [maxGap] of the last, is one check from the first to the last.
+     */
+    public static func averageZones(_ cams: [(camera: RoadCamera, along: Double)], maxGap: Double = 15_000) -> [AverageSpeedZone] {
+        var out: [AverageSpeedZone] = []
+        var run: [(camera: RoadCamera, along: Double)] = []
+        func close() {
+            if let a = run.first, let b = run.last, b.along - a.along > 300 {
+                out.append(AverageSpeedZone(startMeters: a.along, endMeters: b.along,
+                                            kmh: run.compactMap(\.camera.maxspeedKmh).first))
+            }
+            run = []
+        }
+        for c in cams where c.camera.average {
+            if let last = run.last, c.along - last.along > maxGap { close() }
+            run.append(c)
+        }
+        close()
+        return out
+    }
+
+    /** Zones from both sources, dropping any that overlap one already kept. */
+    public static func merge(_ a: [AverageSpeedZone], _ b: [AverageSpeedZone]) -> [AverageSpeedZone] {
+        var out: [AverageSpeedZone] = []
+        for z in (a + b).sorted(by: { $0.startMeters < $1.startMeters }) {
+            if let last = out.last, z.startMeters <= last.endMeters {
+                out[out.count - 1].endMeters = max(last.endMeters, z.endMeters)
+                if out[out.count - 1].kmh == nil { out[out.count - 1].kmh = z.kmh }
+            } else {
+                out.append(z)
+            }
+        }
+        return out
     }
 
     /**

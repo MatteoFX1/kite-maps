@@ -146,9 +146,17 @@ if let r = merged.routes.first {
 }
 
 // Britain: the A9 north of Perth has average speed cameras; Wales and Scotland drive on the left too.
-if let uk = try? await OSRM.route(from: LatLng(56.4120, -3.4700), to: LatLng(56.7030, -3.7340), mode: .drive).first {
-    let found = await Overpass.alongRoute(uk.polyline, speed: true, plate: false)
-    print("UK A9: \(Int(uk.distanceMeters)) m, roundabout exits \(uk.maneuvers.compactMap(\.exit)), cameras \(found?.cameras.count ?? -1), limits \(found.map { Overpass.speedLimits($0.ways, on: uk.polyline).compactMap(\.kmh).map { Int(($0 / 1.609344).rounded()) } } ?? []), average zones " + (found?.zones.map { "\(Int($0.startMeters))-\(Int($0.endMeters)) m @ \($0.kmh.map { Int(($0 / 1.609344).rounded()) } ?? 0) mph" }.joined(separator: ", ") ?? "failed"))
+if let uk = try? await OSRM.route(from: LatLng(56.4120, -3.4700), to: LatLng(56.9370, -4.2400), mode: .drive).first {
+    if let found = await Overpass.alongRoute(uk.polyline, speed: true, plate: false) {
+        let projected = CameraAlerts.project(found.cameras, on: uk.polyline)
+        let zones = CameraAlerts.merge(found.zones, CameraAlerts.averageZones(projected))
+        let mph: (Double?) -> Int = { k in Int(((k ?? 0) / 1.609344).rounded()) }
+        let limits = Overpass.speedLimits(found.ways, on: uk.polyline).map { mph($0.kmh) }
+        let zoneText = zones.map { "\(Int($0.startMeters))-\(Int($0.endMeters)) m @ \(mph($0.kmh)) mph" }.joined(separator: ", ")
+        print("UK A9: \(Int(uk.distanceMeters)) m, roundabout exits \(uk.maneuvers.compactMap(\.exit)), cameras \(found.cameras.count) on route \(projected.count) (average \(projected.filter { $0.camera.average }.count)), limits \(limits.prefix(20)), average zones: \(zoneText)")
+    } else {
+        print("UK A9: Overpass failed")
+    }
 } else {
     print("UK A9: routing failed")
 }

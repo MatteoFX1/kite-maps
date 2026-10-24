@@ -134,11 +134,16 @@ final class Navigator: ObservableObject {
         let line = route.polyline, id = route.id
         let speed = s.speedCameras, plate = s.plateCameras
         Task {
-            guard let found = await Overpass.alongRoute(line, speed: speed, plate: plate),
-                  self.route.id == id else { return }
+            // The public Overpass servers are sometimes busy: try again a couple of times.
+            var result = await Overpass.alongRoute(line, speed: speed, plate: plate)
+            for _ in 0..<2 where result == nil && self.route.id == id {
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+                result = await Overpass.alongRoute(line, speed: speed, plate: plate)
+            }
+            guard let found = result, self.route.id == id else { return }
             self.routeCameras = CameraAlerts.project(found.cameras, on: line)
             self.route.speedLimits = Overpass.speedLimits(found.ways, on: line)
-            self.zones = found.zones
+            self.zones = CameraAlerts.merge(found.zones, CameraAlerts.averageZones(self.routeCameras))
         }
     }
 
@@ -165,7 +170,7 @@ final class Navigator: ObservableObject {
         if AppSettings.shared.cameraWarnings {
             chime()
             if cam.kind == .speed {
-                speak("Speed camera ahead" + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+                speak((cam.average ? "Average speed camera ahead" : "Speed camera ahead") + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
             } else {
                 speak(Fmt.yards ? "Number plate camera ahead." : "License plate camera ahead.")
             }

@@ -87,6 +87,22 @@ final class CameraTests: XCTestCase {
     }
 }
 
+final class AverageCameraTests: XCTestCase {
+    func testZonesFromCameras() {
+        func cam(_ id: Int64, avg: Bool) -> RoadCamera {
+            RoadCamera(id: id, kind: .speed, location: LatLng(0, 0), maxspeedKmh: 96.56, average: avg)
+        }
+        let z = CameraAlerts.averageZones([(cam(1, avg: true), 1000), (cam(2, avg: false), 2000),
+                                           (cam(3, avg: true), 6000), (cam(4, avg: true), 40000)])
+        XCTAssertEqual(z.count, 1, "the far one is a lone camera, not a check")
+        XCTAssertEqual(z.first?.startMeters, 1000)
+        XCTAssertEqual(z.first?.endMeters, 6000)
+        let m = CameraAlerts.merge(z, [AverageSpeedZone(startMeters: 5000, endMeters: 9000, kmh: nil)])
+        XCTAssertEqual(m.count, 1)
+        XCTAssertEqual(m.first?.endMeters, 9000)
+    }
+}
+
 final class PostcodeTests: XCTestCase {
     func testPostcodes() {
         XCTAssertEqual(Postcodes.normalize("sw1a1aa"), "SW1A 1AA")
