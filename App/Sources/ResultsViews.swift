@@ -73,6 +73,7 @@ struct ResultsList: View {
 
     var body: some View {
         ScrollView {
+            SheetTopMarker()
             LazyVStack(alignment: .leading, spacing: 0) {
                 Divider()
                 ForEach(model.visibleResults) { p in

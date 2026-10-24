@@ -46,6 +46,7 @@ struct PlaceBody: View {
 
     var body: some View {
         ScrollView {
+            SheetTopMarker()
             VStack(alignment: .leading, spacing: 14) {
                 actions
                 PhotoStrip(urls: place.photoUrls, height: 140, opensViewer: true, streetView: place)

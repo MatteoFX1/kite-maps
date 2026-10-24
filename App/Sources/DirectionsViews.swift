@@ -202,6 +202,7 @@ struct TripBody: View {
     var body: some View {
         if let d = model.directions {
             ScrollView {
+                SheetTopMarker()
                 VStack(alignment: .leading, spacing: 12) {
                     if d.transit {
                         TransitBody(model: model, state: d)
