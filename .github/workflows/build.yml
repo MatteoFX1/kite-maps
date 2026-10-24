@@ -92,7 +92,9 @@ jobs:
           set -o pipefail
           xcodebuild -project Vela.xcodeproj -scheme Vela -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO build | tail -n 50
+            -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
+            || { grep -E "error:" build.log | sort -u | head -40; tail -n 20 build.log; exit 1; }
+          tail -n 5 build.log
       - name: Take screenshots
         run: |
           set -x

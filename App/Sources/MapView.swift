@@ -440,7 +440,10 @@ struct VelaMapView: UIViewRepresentable {
             let showList = model.directions == nil && model.nav == nil
             let list = showList ? model.visibleResults : []
             let target = model.nav?.destination ?? model.directions?.destination ?? model.selected
-            let key = list.map(\.id).joined(separator: ",") + "|" + (target?.id ?? "") + "|\(model.directions?.reversed ?? false)|\(model.nav == nil)" + "|" + (model.nav?.stops ?? model.directions?.stops ?? []).map(\.id).joined(separator: ",")
+            let stops: [Place] = model.nav?.stops ?? model.directions?.stops ?? []
+            let ids: String = list.map(\.id).joined(separator: ",")
+            let stopIds: String = stops.map(\.id).joined(separator: ",")
+            let key = "\(ids)|\(target?.id ?? "")|\(model.directions?.reversed ?? false)|\(model.nav == nil)|\(stopIds)"
             guard key != lastResultsKey else { return }
             lastResultsKey = key
             let features: [MLNPointFeature] = list.enumerated().compactMap { i, p in
@@ -464,7 +467,7 @@ struct VelaMapView: UIViewRepresentable {
                 f.coordinate = CLLocationCoordinate2D(latitude: t.location.lat, longitude: t.location.lng)
                 f.attributes = ["id": t.id, "icon": "pin-selected", "anchor": "bottom", "label": t.name]
                 sel.append(f)
-                for (i, stop) in (model.nav?.stops ?? model.directions?.stops ?? []).enumerated() {
+                for (i, stop) in stops.enumerated() {
                     let f = MLNPointFeature()
                     f.coordinate = CLLocationCoordinate2D(latitude: stop.location.lat, longitude: stop.location.lng)
                     f.attributes = ["id": "stop\(i)", "icon": "pin-stop", "anchor": "center", "label": stop.name]

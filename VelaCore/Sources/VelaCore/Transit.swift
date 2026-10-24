@@ -203,7 +203,7 @@ public enum Transitous {
                 return v == .metro || v == .tram || v == .train
             }
             guard !rail.isEmpty, let enc = p["polyline"] as? [String: Any], let pts = enc["points"] as? String else { continue }
-            let color = rail.lazy.compactMap { r in ((r["transitRoutes"] as? [[String: Any]])?.first?["color"]).flatMap(hex) }.first
+            let color = rail.lazy.compactMap { r in hex((r["transitRoutes"] as? [[String: Any]])?.first?["color"]) }.first
             let metro = rail.contains { TransitLeg.Vehicle($0["mode"] as? String ?? "") != .train }
             let names = rail.compactMap { ($0["transitRoutes"] as? [[String: Any]])?.first?["shortName"] as? String }
             let precision = min(7, max(5, (enc["precision"] as? Int) ?? 6))
