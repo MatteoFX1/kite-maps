@@ -30,6 +30,9 @@ final class AppSettings: ObservableObject {
     @Published var voice: Bool { didSet { d.set(voice, forKey: "voice") } }
     @Published var traffic: Bool { didSet { d.set(traffic, forKey: "traffic") } }
     @Published var satellite: Bool { didSet { d.set(satellite, forKey: "satellite") } }
+    /** Hill shading, and metro/rail lines in their colors. */
+    @Published var terrain: Bool { didSet { d.set(terrain, forKey: "terrain") } }
+    @Published var transitLines: Bool { didSet { d.set(transitLines, forKey: "transitLines") } }
     @Published var avoidTolls: Bool { didSet { d.set(avoidTolls, forKey: "avoidTolls") } }
     @Published var avoidHighways: Bool { didSet { d.set(avoidHighways, forKey: "avoidHighways") } }
     /** "Use Vela without Google": search and routes from open data only. */
@@ -61,6 +64,8 @@ final class AppSettings: ObservableObject {
         voice = d.object(forKey: "voice") as? Bool ?? true
         traffic = d.object(forKey: "traffic") as? Bool ?? false
         satellite = d.bool(forKey: "satellite")
+        terrain = d.bool(forKey: "terrain")
+        transitLines = d.bool(forKey: "transitLines")
         avoidTolls = d.bool(forKey: "avoidTolls")
         avoidHighways = d.bool(forKey: "avoidHighways")
         noGoogle = d.bool(forKey: "noGoogle")

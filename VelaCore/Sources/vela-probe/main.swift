@@ -131,4 +131,9 @@ do {
 let viaOSRM = try? await OSRM.route(from: LatLng(38.5449, -121.7405), to: LatLng(38.5816, -121.4944), mode: .drive, via: [LatLng(38.6785, -121.7733)])
 print("OSRM with a stop: \(viaOSRM?.first.map { "\(Int($0.distanceMeters)) m, \($0.maneuvers.count) steps" } ?? "failed")")
 
+
+// Transit lines layer: lower Manhattan.
+let tl = await Transitous.lines(south: 40.70, west: -74.02, north: 40.74, east: -73.97, zoom: 13)
+print("Transit lines: \(tl.map { "\($0.count) stretches, lines \(Set($0.flatMap(\.names)).sorted().prefix(12))" } ?? "failed")")
+
 exit(exitCode)

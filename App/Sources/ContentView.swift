@@ -366,6 +366,13 @@ enum DemoScript {
             return
         }
         if step == "layers" { model.showLayers = true; return }
+        if step == "rail" {
+            // Lower Manhattan with the subway lines and hill shading on.
+            model.settings.transitLines = true
+            model.settings.terrain = true
+            model.map?.setCenter(CLLocationCoordinate2D(latitude: 40.722, longitude: -73.99), zoomLevel: 12.6, animated: false)
+            return
+        }
         if step == "welcome" { model.settings.welcomed = false; return }
         if step == "mine" {
             // Home, work and a parked car around downtown Davis, as icons on the map.

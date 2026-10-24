@@ -172,6 +172,52 @@ public enum Transitous {
         }
     }
 
+    /** A stretch of metro or rail track with its lines' color, for the transit map layer. */
+    public struct Line: Sendable {
+        public var points: [LatLng]
+        public var color: UInt32
+        public var metro: Bool
+        public var names: [String]
+    }
+
+    /**
+     * Metro, tram and train lines in a box, from Transitous' route map (Vela's transit layer).
+     * Buses are left out. Below zoom 9 the service sends long-distance rail only.
+     */
+    public static func lines(south: Double, west: Double, north: Double, east: Double, zoom: Int) async -> [Line]? {
+        guard let url = URL(string: "\(base)/api/experimental/map/routes?min=\(south),\(west)&max=\(north),\(east)&zoom=\(zoom)"),
+              let (data, resp) = try? await session.data(from: url),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return parseLines(data)
+    }
+
+    public static func parseLines(_ data: Data) -> [Line] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let routes = root["routes"] as? [[String: Any]],
+              let polys = root["polylines"] as? [[String: Any]] else { return [] }
+        var out: [Line] = []
+        for p in polys {
+            let rs = (p["routeIndexes"] as? [Int] ?? []).compactMap { routes.indices.contains($0) ? routes[$0] : nil }
+            let rail = rs.filter { r in
+                let v = TransitLeg.Vehicle(r["mode"] as? String ?? "")
+                return v == .metro || v == .tram || v == .train
+            }
+            guard !rail.isEmpty, let enc = p["polyline"] as? [String: Any], let pts = enc["points"] as? String else { continue }
+            let color = rail.lazy.compactMap { r in ((r["transitRoutes"] as? [[String: Any]])?.first?["color"]).flatMap(hex) }.first
+            let metro = rail.contains { TransitLeg.Vehicle($0["mode"] as? String ?? "") != .train }
+            let names = rail.compactMap { ($0["transitRoutes"] as? [[String: Any]])?.first?["shortName"] as? String }
+            let precision = min(7, max(5, (enc["precision"] as? Int) ?? 6))
+            let line = Geo.decodePolyline(pts, precision: pow(10, Double(precision)))
+            guard line.count >= 2 else { continue }
+            // A feed without shapes draws straight chords between distant stops: leave those out.
+            let len = Geo.length(line)
+            if !metro, len / Double(line.count - 1) > 700 { continue }
+            out.append(Line(points: line, color: color ?? (metro ? 0x5F6368 : 0x8E8E93), metro: metro,
+                            names: Array(Set(names)).sorted()))
+        }
+        return out
+    }
+
     public static func parse(_ data: Data) -> [TransitTrip] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let its = root["itineraries"] as? [[String: Any]] else { return [] }

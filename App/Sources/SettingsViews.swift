@@ -19,15 +19,17 @@ struct LayersSheet: View {
                 tile("Satellite", icon: "globe.americas.fill", on: settings.satellite) { settings.satellite = true }
             }
             Text("Map details").font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
-            HStack(spacing: 14) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), alignment: .leading, spacing: 14) {
                 tile("Traffic", icon: "car.2.fill", on: settings.traffic) { settings.traffic.toggle() }
+                tile("Transit", icon: "tram.fill", on: settings.transitLines) { settings.transitLines.toggle() }
+                tile("Terrain", icon: "mountain.2.fill", on: settings.terrain) { settings.terrain.toggle() }
                 tile("Speed cameras", badge: .speed, on: settings.speedCameras) { settings.speedCameras.toggle() }
                 tile("Plate cameras", badge: .plate, on: settings.plateCameras) { settings.plateCameras.toggle() }
             }
             Spacer()
         }
         .padding(20)
-        .presentationDetents([.height(360)])
+        .presentationDetents([.height(470)])
     }
 
     private func tile(_ title: String, icon: String = "", badge: RoadCamera.Kind? = nil, on: Bool, action: @escaping () -> Void) -> some View {

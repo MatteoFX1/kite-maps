@@ -67,6 +67,9 @@ struct VelaMapView: UIViewRepresentable {
         private var cameras: [Int64: RoadCamera] = [:]
         private var cameraCells: Set<String> = []
         private var cameraFetch: Task<Void, Never>?
+        private var railFetch: Task<Void, Never>?
+        /** The box the drawn rail lines cover, so panning inside it asks nothing. */
+        private var railBox: (s: Double, w: Double, n: Double, e: Double, z: Int)?
 
         init(model: AppModel) { self.model = model }
 
@@ -132,6 +135,20 @@ struct VelaMapView: UIViewRepresentable {
                 style.addLayer(satLayer)
             }
 
+            // Terrain shading (Esri World Hillshade), blended over the land, off unless picked.
+            let hill = MLNRasterTileSource(identifier: "vela-terrain", tileURLTemplates: [
+                "https://services.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}",
+            ], options: [.tileSize: 256, .maximumZoomLevel: 16, .attributionHTMLString: "Hillshade © Esri"])
+            style.addSource(hill)
+            let hillLayer = MLNRasterStyleLayer(identifier: "vela-terrain", source: hill)
+            hillLayer.rasterOpacity = NSExpression(forConstantValue: dark ? 0.22 : 0.32)
+            hillLayer.isVisible = false
+            if let below = style.layers.first(where: { $0.identifier.hasPrefix("tunnel_") || $0.identifier.hasPrefix("road_") }) {
+                style.insertLayer(hillLayer, below: below)
+            } else {
+                style.addLayer(hillLayer)
+            }
+
             // Google's live traffic tiles, the same keyless overlay Vela draws.
             let trafficURL = "https://www.google.com/maps/vt/pb=!1m4!1m3!1i{z}!2i{x}!3i{y}!2m9!1e2!2straffic!3i999999" +
                 "!4m2!1sincidents!2s1!4m2!1sincidents_text!2s1!3m8!2sen!3sus!5e1105!12m4!1e68!2m2!1sset!2sRoadmap!4e0!5m1!1e0"
@@ -178,6 +195,18 @@ struct VelaMapView: UIViewRepresentable {
             for (level, color) in [(1, 0xF2A65A), (2, 0xE8453C), (3, 0x9E1C1C)] {
                 let l = line("vela-route-traffic-\(level)", spanSrc, UIColor(hex: UInt32(color)), width: 8)
                 l.predicate = NSPredicate(format: "level == %d", level)
+                insert(l)
+            }
+
+            // Metro, tram and rail lines in their own colors, from zoom 10 in (Transitous).
+            let railSrc = MLNShapeSource(identifier: "vela-rail", shape: nil, options: nil)
+            style.addSource(railSrc)
+            let railCase = line("vela-rail-case", railSrc, UIColor(white: dark ? 0 : 1, alpha: 0.9), width: 5.5)
+            let rail = line("vela-rail", railSrc, .gray, width: 3.2)
+            rail.lineColor = NSExpression(mglJSONObject: ["to-color", ["get", "color"]])
+            for l in [railCase, rail] {
+                l.minimumZoomLevel = 10
+                l.isVisible = false
                 insert(l)
             }
 
@@ -305,12 +334,15 @@ struct VelaMapView: UIViewRepresentable {
             if map.showsUserLocation == navigating { map.showsUserLocation = !navigating }
             style.layer(withIdentifier: "vela-traffic")?.isVisible = s.traffic && !navigating && !s.noGoogle
             style.layer(withIdentifier: "vela-sat")?.isVisible = s.satellite
+            style.layer(withIdentifier: "vela-terrain")?.isVisible = s.terrain && !s.satellite
+            for id in ["vela-rail", "vela-rail-case"] { style.layer(withIdentifier: id)?.isVisible = s.transitLines && !navigating }
             for id in ["building", "building-3d"] { style.layer(withIdentifier: id)?.isVisible = !s.satellite }
             renderResults(style)
             renderRoutes(style)
             renderPuck(style)
             renderCameras(style)
             renderMine(style)
+            if s.transitLines { loadRail(map) }
         }
 
         private func renderMine(_ style: MLNStyle) {
@@ -350,6 +382,29 @@ struct VelaMapView: UIViewRepresentable {
                 return f
             }
             (style.source(withIdentifier: "vela-cameras") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
+        }
+
+        /** Transit lines for the view and a margin around it, when the layer is on. */
+        func loadRail(_ map: MLNMapView) {
+            guard model.settings.transitLines, map.zoomLevel >= 10, railFetch == nil, model.nav == nil else { return }
+            let b = map.visibleCoordinateBounds
+            let z = Int(map.zoomLevel)
+            if let r = railBox, b.sw.latitude >= r.s, b.sw.longitude >= r.w, b.ne.latitude <= r.n, b.ne.longitude <= r.e,
+               abs(z - r.z) <= 2 { return }
+            let dLat = (b.ne.latitude - b.sw.latitude) * 0.5, dLng = (b.ne.longitude - b.sw.longitude) * 0.5
+            let box = (s: b.sw.latitude - dLat, w: b.sw.longitude - dLng, n: b.ne.latitude + dLat, e: b.ne.longitude + dLng, z: z)
+            railFetch = Task { [weak self, weak map] in
+                let lines = await Transitous.lines(south: box.s, west: box.w, north: box.n, east: box.e, zoom: min(z, 14))
+                guard let self else { return }
+                self.railFetch = nil
+                if let lines {
+                    self.railBox = box
+                    let shapes = lines.map { l in
+                        self.polyline(l.points, ["color": String(format: "#%06X", l.color)])
+                    }
+                    (map?.style?.source(withIdentifier: "vela-rail") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: shapes)
+                }
+            }
         }
 
         /** Ask Overpass for the cameras in view, a few 0.1° cells at a time, each cell once. */
@@ -425,7 +480,7 @@ struct VelaMapView: UIViewRepresentable {
             (style.source(withIdentifier: "vela-selected") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: sel)
         }
 
-        private func polyline(_ pts: [LatLng], _ attrs: [String: Any] = [:]) -> MLNPolylineFeature {
+        func polyline(_ pts: [LatLng], _ attrs: [String: Any] = [:]) -> MLNPolylineFeature {
             var coords = pts.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
             let f = MLNPolylineFeature(coordinates: &coords, count: UInt(coords.count))
             f.attributes = attrs
@@ -609,6 +664,7 @@ struct VelaMapView: UIViewRepresentable {
         nonisolated func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) {
             MainActor.assumeIsolated {
                 loadCameras(mapView)
+                loadRail(mapView)
                 noteHeading(mapView)
             }
         }
