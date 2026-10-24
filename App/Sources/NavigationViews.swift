@@ -377,9 +377,10 @@ struct AlongRouteSheet: View {
     @State private var picked: String?
 
     private let kinds: [(String, String, String)] = [
-        ("Gas", "fuelpump.fill", "gas station"), ("EV charging", "bolt.car.fill", "ev charging station"),
+        (Fmt.yards ? "Petrol" : "Gas", "fuelpump.fill", Fmt.yards ? "petrol station" : "gas station"), ("EV charging", "bolt.car.fill", "ev charging station"),
         ("Coffee", "cup.and.saucer.fill", "coffee"), ("Food", "fork.knife", "restaurants"),
-        ("Groceries", "cart.fill", "grocery store"), ("Restrooms", "toilet.fill", "public restroom"),
+        (Fmt.yards ? "Supermarket" : "Groceries", "cart.fill", Fmt.yards ? "supermarket" : "grocery store"),
+        (Fmt.yards ? "Toilets" : "Restrooms", "toilet.fill", Fmt.yards ? "public toilets" : "public restroom"),
         ("Parking", "parkingsign", "parking"), ("Pharmacy", "cross.case.fill", "pharmacy"),
     ]
 

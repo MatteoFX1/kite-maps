@@ -526,7 +526,7 @@ struct StopPicker: View {
                 }
                 if found.isEmpty && !searching {
                     Section("Along the way") {
-                        ForEach(["Gas stations", "Coffee", "Restaurants", "EV charging"], id: \.self) { c in
+                        ForEach([Fmt.yards ? "Petrol stations" : "Gas stations", "Coffee", "Restaurants", "EV charging"], id: \.self) { c in
                             Button { query = c; run() } label: { Label(c, systemImage: "magnifyingglass") }
                         }
                     }
