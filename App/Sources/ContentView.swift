@@ -36,6 +36,11 @@ struct ContentView: View {
         .sheet(isPresented: $model.showSettings) {
             SettingsView(settings: settings, onChange: { model.reloadRoutes() })
         }
+        .fullScreenCover(isPresented: .constant(DemoScript.step?.hasPrefix("svtest") == true)) {
+            // Screenshot run only: the viewer on a test pattern, turned right by the step's number.
+            GoogleStreetViewScreen(name: "Test pattern", pano: StreetView.Panorama(id: PanoramaViewer.testID, location: LatLng(0, 0)),
+                                   heading: Double(DemoScript.step?.dropFirst(6) ?? "") ?? 0)
+        }
         .fullScreenCover(isPresented: Binding(get: { !settings.welcomed && (!DemoScript.active || DemoScript.step == "welcome") }, set: { _ in })) {
             WelcomeView(settings: settings)
         }
@@ -441,13 +446,20 @@ enum DemoScript {
             model.showTransit()
             return
         }
+        if step?.hasPrefix("streetview") == true {
+            // A fixed place with Google imagery 34 m away, so every run looks the same way.
+            var pier = Place(id: "demo-pier50", name: "Pier 50 Sushi", location: LatLng(38.54436, -121.74073), source: "demo")
+            pier.category = "Sushi restaurant"
+            model.select(pier)
+            return
+        }
         model.search("restaurants", title: "Restaurants")
         await wait(8)
         guard step != "search", let first = model.visibleResults.first else { return }
         if step == "copy" { CopyOnHold.demoText = first.address }
         model.select(first)
         await wait(5)
-        guard !["place", "streetview", "streetview90", "lookaround", "copy"].contains(step) else { return }
+        guard !["place", "lookaround", "copy"].contains(step) else { return }
         model.openDirections(to: first)
         if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)

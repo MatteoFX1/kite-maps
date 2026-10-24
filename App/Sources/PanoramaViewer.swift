@@ -45,11 +45,33 @@ struct PanoramaViewer: UIViewRepresentable {
         c.apply()
         view.addGestureRecognizer(UIPanGestureRecognizer(target: c, action: #selector(Coordinator.panned(_:))))
         view.addGestureRecognizer(UIPinchGestureRecognizer(target: c, action: #selector(Coordinator.pinched(_:))))
-        c.load(pano)
+        if pano.id == Self.testID { m.diffuse.contents = Self.testPattern() } else { c.load(pano) }
         return view
     }
 
     func updateUIView(_ view: SCNView, context: Context) {}
+
+    /** A made-up panorama for the screenshot run: each column says how far right of the
+     *  panorama's own heading it is, so the run shows which way the viewer faces. */
+    static let testID = "demo-test"
+
+    static func testPattern() -> UIImage {
+        let size = CGSize(width: 2048, height: 1024)
+        return UIGraphicsImageRenderer(size: size).image { ctx in
+            for i in 0..<16 {
+                UIColor(hue: CGFloat(i) / 16, saturation: 0.6, brightness: 0.9, alpha: 1).setFill()
+                ctx.fill(CGRect(x: CGFloat(i) * 128, y: 0, width: 128, height: size.height))
+            }
+            let attrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 40), .foregroundColor: UIColor.black]
+            for i in 0..<16 {
+                let deg = i * 360 / 16 - 180
+                let x = CGFloat(i) * 128
+                UIColor.black.setFill()
+                ctx.fill(CGRect(x: x - 2, y: 380, width: 4, height: 264))
+                ("\(deg)" as NSString).draw(at: CGPoint(x: x + 6, y: 490), withAttributes: attrs)
+            }
+        }
+    }
 
     static func dismantleUIView(_ view: SCNView, coordinator: Coordinator) {
         coordinator.task?.cancel()

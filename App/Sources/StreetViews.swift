@@ -74,10 +74,8 @@ struct StreetViewTile: View {
         // Google first (the screenshot run can skip it to show Apple's), then Apple.
         if DemoScript.step != "lookaround", !AppSettings.shared.noGoogle,
            let pano = await StreetView.find(near: place.location) {
-            // (The screenshot run turns a quarter right in "streetview90", to check the viewer's aim.)
-            let turn = DemoScript.step == "streetview90" ? 90.0 : 0
-            withAnimation { found = .google(pano, heading: Geo.bearing(pano.location, place.location) + turn) }
-            if DemoScript.step?.hasPrefix("streetview") == true { open = true }
+            withAnimation { found = .google(pano, heading: Geo.bearing(pano.location, place.location)) }
+            if DemoScript.step == "streetview" { open = true }
             return
         }
         let coord = CLLocationCoordinate2D(latitude: place.location.lat, longitude: place.location.lng)
