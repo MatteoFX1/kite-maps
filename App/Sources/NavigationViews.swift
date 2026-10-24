@@ -6,7 +6,15 @@ struct NavigationOverlay: View {
     @ObservedObject var model: AppModel
     @ObservedObject var nav: Navigator
     @State private var showSteps = false
+    @State private var showAlong = false
     @Environment(\.colorScheme) private var scheme
+
+    /** "On my way to X, arriving around 5:42 PM (25 min)" with a map link. */
+    private var etaText: String {
+        let left = nav.progress?.remainingSeconds ?? nav.route.durationSeconds
+        let link = nav.destination.shareURL.map { "\n\($0.absoluteString)" } ?? ""
+        return "On my way to \(nav.destination.name), arriving around \(Fmt.arrival(left)) (\(Fmt.duration(left)) away).\(link)"
+    }
 
     var body: some View {
         ZStack {
@@ -51,6 +59,17 @@ struct NavigationOverlay: View {
                     }
                     Spacer()
                     VStack(spacing: 12) {
+                        MapFab(icon: "magnifyingglass", size: 48) { showAlong = true }
+                            .accessibilityLabel("Search along the route")
+                        ShareLink(item: etaText) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 19, weight: .semibold))
+                                .foregroundColor(.primary)
+                                .frame(width: 48, height: 48)
+                                .background(Circle().fill(Vela.sheet(scheme)))
+                                .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+                        }
+                        .accessibilityLabel("Share arrival time")
                         MapFab(icon: "arrow.up.left.and.arrow.down.right", size: 48) { model.overviewNav() }
                         MapFab(icon: nav.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 48) { nav.muted.toggle() }
                         MapFab(icon: "square.3.layers.3d", size: 48) { model.showLayers = true }
@@ -59,6 +78,9 @@ struct NavigationOverlay: View {
                 .padding(.horizontal, 14)
                 TripBar(nav: nav, onEnd: { model.endNavigation() }, onSteps: { showSteps = true })
             }
+        }
+        .sheet(isPresented: $showAlong) {
+            AlongRouteSheet(nav: nav)
         }
         .sheet(isPresented: $showSteps) {
             NavigationView {
@@ -267,5 +289,105 @@ struct CameraBadge: View {
         Image(uiImage: kind == .speed ? MapIcons.speedCamera() : MapIcons.plateCamera())
             .resizable()
             .frame(width: size, height: size)
+    }
+}
+
+/** Find a stop ahead without leaving navigation: gas, food, coffee… near the road still to drive. */
+struct AlongRouteSheet: View {
+    @ObservedObject var nav: Navigator
+    @ObservedObject private var settings = AppSettings.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var found: [(place: Place, ahead: Double)] = []
+    @State private var searching = false
+    @State private var picked: String?
+
+    private let kinds: [(String, String, String)] = [
+        ("Gas", "fuelpump.fill", "gas station"), ("EV charging", "bolt.car.fill", "ev charging station"),
+        ("Coffee", "cup.and.saucer.fill", "coffee"), ("Food", "fork.knife", "restaurants"),
+        ("Groceries", "cart.fill", "grocery store"), ("Restrooms", "toilet.fill", "public restroom"),
+        ("Parking", "parkingsign", "parking"), ("Pharmacy", "cross.case.fill", "pharmacy"),
+    ]
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
+                        ForEach(kinds, id: \.0) { k in
+                            Button { run(k.2, label: k.0) } label: {
+                                Label(k.0, systemImage: k.1)
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 12).frame(height: 40)
+                                    .background(RoundedRectangle(cornerRadius: 10).fill(picked == k.0 ? Vela.routeBlue.opacity(0.22) : Color.secondary.opacity(0.12)))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                }
+                if searching {
+                    HStack { ProgressView(); Text("Looking along your route…").foregroundColor(.secondary) }
+                } else if picked != nil && found.isEmpty {
+                    Text("Nothing found close to the road ahead.").foregroundColor(.secondary)
+                }
+                if !found.isEmpty {
+                    Section("Ahead on your route") {
+                        ForEach(found, id: \.place.id) { f in
+                            Button {
+                                nav.addStop(f.place)
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(f.place.name).foregroundColor(.primary).lineLimit(1)
+                                        HStack(spacing: 6) {
+                                            if let r = f.place.rating { Text(String(format: "%.1f ★", r)) }
+                                            if let st = f.place.statusText { Text(st).lineLimit(1) }
+                                        }
+                                        .font(.caption).foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text("in \(Fmt.distance(f.ahead))").font(.subheadline.weight(.medium)).foregroundColor(.primary)
+                                        Text("Add stop").font(.caption.weight(.semibold)).foregroundColor(Vela.routeBlue)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Search along route")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+        }
+    }
+
+    private func run(_ query: String, label: String) {
+        picked = label
+        searching = true
+        found = []
+        let line = nav.route.polyline
+        let cum = Geo.cumulative(line)
+        let here = nav.progress?.alongMeters ?? 0
+        let total = cum.last ?? 0
+        // The next stretch of road, up to 40 km: search around its middle, wide enough to cover it.
+        let end = min(total, here + 40_000)
+        let mid = Geo.point(along: line, meters: (here + end) / 2, cumulative: cum)
+        let span = max(end - here, 3_000)
+        let useGoogle = !settings.noGoogle
+        Task {
+            let r = await PlaceSearch.search(query, center: mid, spanMeters: span, useGoogle: useGoogle)
+            var out: [(Place, Double)] = []
+            for p in r.places {
+                let at = Geo.project(p.location, on: line, cumulative: cum)
+                // Close to the road (a short detour) and still ahead of you.
+                guard at.offset < 800, at.along > here + 100 else { continue }
+                out.append((p, at.along - here))
+            }
+            found = out.sorted { $0.1 < $1.1 }.prefix(20).map { (place: $0.0, ahead: $0.1) }
+            searching = false
+        }
     }
 }

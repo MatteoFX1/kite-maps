@@ -272,11 +272,35 @@ struct SuggestionsPanel: View {
                     ForEach(Category.all) { c in
                         row(icon: c.icon, text: c.label) { done(); model.search(c.query, title: c.label) }
                     }
-                    if !settings.recents.isEmpty {
-                        Text("Recent").font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
-                            .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 4)
-                        ForEach(settings.recents, id: \.self) { q in
-                            row(icon: "clock.arrow.circlepath", text: q) { done(); model.search(q) }
+                    if !settings.recentPlaces.isEmpty || !settings.recents.isEmpty {
+                        HStack {
+                            Text("Recent").font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
+                            Spacer()
+                            Button("Clear") { settings.recents = []; settings.recentPlaces = [] }
+                                .font(.subheadline).foregroundColor(Vela.routeBlue)
+                        }
+                        .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 4)
+                        ForEach(settings.recentPlaces.prefix(5)) { p in
+                            Button { done(); model.openSuggestion(p) } label: {
+                                HStack(spacing: 16) {
+                                    Image(systemName: "clock").frame(width: 22).foregroundColor(.secondary)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(p.name).foregroundColor(.primary).lineLimit(1)
+                                        if let a = p.address ?? p.category { Text(a).font(.caption).foregroundColor(.secondary).lineLimit(1) }
+                                    }
+                                    Spacer()
+                                    if let d = model.userLatLng?.distance(to: p.location) {
+                                        Text(Fmt.distance(d)).font(.caption).foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding(.horizontal, 18)
+                                .frame(minHeight: 52)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        ForEach(settings.recents.filter { q in !settings.recentPlaces.prefix(5).contains { $0.name == q } }.prefix(6), id: \.self) { q in
+                            row(icon: "magnifyingglass", text: q) { done(); model.search(q) }
                         }
                     }
                 }

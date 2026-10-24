@@ -98,6 +98,13 @@ final class Navigator: ObservableObject {
         }
     }
 
+    /** A stop picked on the way (search along the route): go there first, then on. */
+    func addStop(_ p: Place) {
+        stops.insert(p, at: 0)
+        speak("Adding a stop at \(p.name).")
+        if let fix = lastFix { reroute(from: fix, quiet: true) }
+    }
+
     /** Says when a stop is reached (within 40 m of it along the route) and drops it. */
     private func checkStops(_ p: RouteTracker.Progress) {
         guard let next = stops.first else { return }
@@ -164,10 +171,10 @@ final class Navigator: ObservableObject {
         }
     }
 
-    private func reroute(from loc: CLLocation) {
+    private func reroute(from loc: CLLocation, quiet: Bool = false) {
         rerouting = true
         lastReroute = Date()
-        speak("Rerouting.")
+        if !quiet { speak("Rerouting.") }
         let from = LatLng(loc.coordinate.latitude, loc.coordinate.longitude)
         let mode = route.mode
         let to = destination.location

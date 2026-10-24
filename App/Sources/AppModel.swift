@@ -49,6 +49,9 @@ struct DirectionsState {
     var transit = false
     var trips: [TransitTrip]?
     var tripsError: String?
+    /** Nil for "leave now". */
+    var transitTime: Date?
+    var arriveBy = false
     var trip = 0
 
     var current: [Route] { transit ? [] : routes[mode] ?? [] }
@@ -213,6 +216,7 @@ final class AppModel: ObservableObject {
 
     func select(_ place: Place) {
         var p = place
+        if !DemoScript.active { settings.addRecentPlace(place) }
         if p.distanceMeters == nil, let u = userLatLng { p.distanceMeters = u.distance(to: p.location) }
         selected = p
         detent = .half
@@ -252,6 +256,7 @@ final class AppModel: ObservableObject {
                 var b = best
                 b.distanceMeters = userLatLng?.distance(to: b.location)
                 selected = b
+                if !DemoScript.active { settings.addRecentPlace(b) }
             }
         }
     }
@@ -357,6 +362,13 @@ final class AppModel: ObservableObject {
         reloadRoutes()
     }
 
+    /** 0 leave now, 1 depart at, 2 arrive by. */
+    func setTransitTime(kind: Int, at date: Date) {
+        directions?.transitTime = kind == 0 ? nil : date
+        directions?.arriveBy = kind == 2
+        loadTransit()
+    }
+
     func showTransit() {
         directions?.transit = true
         frameRoute()
@@ -407,12 +419,22 @@ final class AppModel: ObservableObject {
                 }
             }
         }
+        loadTransit()
+    }
+
+    /** Transit trips for the current trip, leaving now or at the picked time. */
+    func loadTransit() {
+        guard let d = directions, let me = userLatLng else { return }
+        let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
+        let destId = d.destination.id
+        let time = d.transitTime, arriveBy = d.arriveBy
         directions?.trips = nil
         directions?.tripsError = nil
+        directions?.trip = 0
         Task {
             do {
-                let trips = try await Transitous.plan(from: from, to: to)
-                guard directions?.destination.id == destId else { return }
+                let trips = try await Transitous.plan(from: from, to: to, time: time, arriveBy: arriveBy)
+                guard directions?.destination.id == destId, directions?.transitTime == time, directions?.arriveBy == arriveBy else { return }
                 directions?.trips = trips
                 if trips.isEmpty { directions?.tripsError = "No transit trips found here." }
             } catch {

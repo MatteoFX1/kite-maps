@@ -327,7 +327,33 @@ struct TransitBody: View {
     let state: DirectionsState
     @Environment(\.colorScheme) private var scheme
 
+    @State private var kind = 0
+    @State private var when = Date()
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("", selection: $kind) {
+                Text("Leave now").tag(0)
+                Text("Depart at").tag(1)
+                Text("Arrive by").tag(2)
+            }
+            .pickerStyle(.segmented)
+            if kind != 0 {
+                DatePicker("Time", selection: $when, in: Date().addingTimeInterval(-3600)..., displayedComponents: [.date, .hourAndMinute])
+                    .font(.subheadline)
+            }
+        }
+        .onAppear {
+            kind = state.transitTime == nil ? 0 : (state.arriveBy ? 2 : 1)
+            when = state.transitTime ?? Date()
+        }
+        .onChange(of: kind) { k in model.setTransitTime(kind: k, at: when) }
+        .onChange(of: when) { w in if kind != 0 { model.setTransitTime(kind: kind, at: w) } }
+        trips
+    }
+
+    @ViewBuilder
+    private var trips: some View {
         if let trips = state.trips, !trips.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(trips.enumerated()), id: \.element.id) { i, t in

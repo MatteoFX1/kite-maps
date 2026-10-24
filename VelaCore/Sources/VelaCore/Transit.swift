@@ -84,13 +84,19 @@ public enum Transitous {
         return URLSession(configuration: c)
     }()
 
-    public static func planURL(from: LatLng, to: LatLng, max: Int = 5) -> URL? {
-        URL(string: "\(base)/api/v1/plan?fromPlace=\(from.lat),\(from.lng)&toPlace=\(to.lat),\(to.lng)&numItineraries=\(max)")
+    public static func planURL(from: LatLng, to: LatLng, max: Int = 5, time: Date? = nil, arriveBy: Bool = false) -> URL? {
+        var s = "\(base)/api/v1/plan?fromPlace=\(from.lat),\(from.lng)&toPlace=\(to.lat),\(to.lng)&numItineraries=\(max)"
+        if let time {
+            let f = ISO8601DateFormatter()
+            s += "&time=" + f.string(from: time)
+            if arriveBy { s += "&arriveBy=true" }
+        }
+        return URL(string: s)
     }
 
-    /** Trips leaving now. Throws on a network error so the caller can say so. */
-    public static func plan(from: LatLng, to: LatLng) async throws -> [TransitTrip] {
-        guard let url = planURL(from: from, to: to) else { return [] }
+    /** Trips leaving now, or around [time] (arriving by it when [arriveBy]). Throws on a network error. */
+    public static func plan(from: LatLng, to: LatLng, time: Date? = nil, arriveBy: Bool = false) async throws -> [TransitTrip] {
+        guard let url = planURL(from: from, to: to, time: time, arriveBy: arriveBy) else { return [] }
         let (data, resp) = try await session.data(from: url)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else { throw URLError(.badServerResponse) }

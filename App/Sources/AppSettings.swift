@@ -52,6 +52,8 @@ final class AppSettings: ObservableObject {
     @Published var defaultMode: TravelMode { didSet { d.set(defaultMode.rawValue, forKey: "defaultMode") } }
     @Published var saved: [Place] { didSet { save(saved, "saved") } }
     @Published var recents: [String] { didSet { d.set(recents, forKey: "recents") } }
+    /** Places you opened lately, newest first. */
+    @Published var recentPlaces: [Place] { didSet { save(recentPlaces, "recentPlaces") } }
 
     private init() {
         theme = ThemeMode(rawValue: d.string(forKey: "theme") ?? "") ?? .system
@@ -74,6 +76,7 @@ final class AppSettings: ObservableObject {
         defaultMode = TravelMode(rawValue: d.integer(forKey: "defaultMode")) ?? .drive
         saved = (d.data(forKey: "saved")).flatMap { try? JSONDecoder().decode([Place].self, from: $0) } ?? []
         recents = d.stringArray(forKey: "recents") ?? []
+        recentPlaces = d.data(forKey: "recentPlaces").flatMap { try? JSONDecoder().decode([Place].self, from: $0) } ?? []
     }
 
     private func save<T: Encodable>(_ v: T, _ key: String) {
@@ -92,6 +95,18 @@ final class AppSettings: ObservableObject {
 
     func toggleSaved(_ p: Place) {
         if let i = saved.firstIndex(where: { $0.id == p.id }) { saved.remove(at: i) } else { saved.insert(p, at: 0) }
+    }
+
+    func addRecentPlace(_ p: Place) {
+        guard !p.id.hasPrefix("pin:"), !p.id.hasPrefix("parking"), !p.id.hasPrefix("tap:"), !p.id.hasPrefix("demo") else { return }
+        var slim = p
+        slim.distanceMeters = nil
+        slim.photoUrls = Array(p.photoUrls.prefix(1))
+        slim.about = []
+        slim.featuredReview = nil
+        var r = recentPlaces.filter { $0.id != p.id && $0.name != p.name }
+        r.insert(slim, at: 0)
+        recentPlaces = Array(r.prefix(15))
     }
 
     func addRecent(_ q: String) {
