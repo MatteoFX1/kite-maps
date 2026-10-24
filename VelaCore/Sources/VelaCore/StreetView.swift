@@ -10,12 +10,19 @@ public enum StreetView {
         public var location: LatLng
     }
 
-    public static func searchURL(_ p: LatLng, radius: Int) -> URL {
-        let pb = "!1m5!1sapiv3!5sUS!11m2!1m1!1b0!2m4!1m2!3d\(p.lat)!4d\(p.lng)!2d\(radius)"
-            + "!3m20!1m1!3b1!2m2!1sen!2sUS!9m1!1e2!11m12!1m3!1e2!2b1!3e2!1m3!1e3!2b1!3e2!1m3!1e10!2b1!3e2"
-            + "!4m6!1e1!1e2!1e3!1e4!1e8!1e6"
-        return URL(string: "https://maps.googleapis.com/maps/api/js/GeoPhotoService.SingleImageSearch?pb=" + pb
-                   + "&callback=_xdc_._v")!
+    /** Google retired the old GeoPhotoService.SingleImageSearch; its pages now ask this RPC. */
+    static let searchEndpoint = URL(string: "https://maps.googleapis.com/$rpc/google.internal.maps.mapsjs.v1.MapsJsInternalService/SingleImageSearch")!
+
+    public static func searchRequest(_ p: LatLng, radius: Int) -> URLRequest {
+        var r = URLRequest(url: searchEndpoint)
+        r.httpMethod = "POST"
+        r.setValue("application/json+protobuf", forHTTPHeaderField: "Content-Type")
+        let body = "[[\"apiv3\",null,null,null,\"US\",null,null,null,null,null,[[0]]],"
+            + "[[null,null,\(p.lat),\(p.lng)],\(radius)],"
+            + "[null,[\"en\",\"US\"],null,null,null,null,null,null,[2],null,[[[2,true,2],[3,true,2],[10,true,2]]]],"
+            + "[[1,2,3,4,8,6]]]"
+        r.httpBody = body.data(using: .utf8)
+        return r
     }
 
     private static let session: URLSession = {
@@ -30,16 +37,16 @@ public enum StreetView {
 
     /** The nearest Google panorama within [radius] meters (official Street View only), or nil. */
     public static func find(near p: LatLng, radius: Int = 60) async -> Panorama? {
-        guard let (data, _) = try? await session.data(from: searchURL(p, radius: radius)) else { return nil }
+        guard let (data, _) = try? await session.data(for: searchRequest(p, radius: radius)) else { return nil }
         return parse(String(decoding: data, as: UTF8.self))
     }
 
     /** Pulls the panorama id (Google's are 22 characters) and its position out of the reply. */
     static func parse(_ text: String) -> Panorama? {
-        guard let idMatch = text.range(of: #"\[2,"[A-Za-z0-9_-]{22}"\]"#, options: .regularExpression) else { return nil }
-        let id = String(text[idMatch].dropFirst(4).dropLast(2))
-        guard let r = text.range(of: #"\[\[null,null,-?\d+\.\d+,-?\d+\.\d+\]"#, options: .regularExpression) else { return nil }
-        let nums = text[r].dropFirst(12).dropLast().split(separator: ",").compactMap { Double($0) }
+        guard let idMatch = text.range(of: #"\[2,\s*"[A-Za-z0-9_-]{22}"\]"#, options: .regularExpression) else { return nil }
+        let id = String(text[idMatch].filter { $0 != " " }.dropFirst(4).dropLast(2))
+        guard let r = text.range(of: #"\[\[null,null,-?\d+\.\d+,\s*-?\d+\.\d+\]"#, options: .regularExpression) else { return nil }
+        let nums = text[r].dropFirst(12).dropLast().split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
         guard nums.count == 2 else { return nil }
         return Panorama(id: id, location: LatLng(nums[0], nums[1]))
     }
