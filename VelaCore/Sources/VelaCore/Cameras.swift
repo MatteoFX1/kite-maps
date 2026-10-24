@@ -70,7 +70,43 @@ public enum Overpass {
      */
     public static func alongRoute(_ line: [LatLng], speed: Bool, plate: Bool) async -> (cameras: [RoadCamera], ways: [LimitWay], zones: [AverageSpeedZone])? {
         guard line.count >= 2 else { return ([], [], []) }
-        let maxPts = 250
+        // Long drives go in pieces of about 40 km: one query for a whole motorway trip is often
+        // too much for the public servers.
+        var cams: [Int64: RoadCamera] = [:]
+        var ways: [LimitWay] = []
+        var zones: [AverageSpeedZone] = []
+        var answered = false
+        for piece in pieces(line, meters: 40_000) {
+            guard let data = await alongQuery(piece, speed: speed, plate: plate) else { continue }
+            answered = true
+            for c in parse(data) ?? [] { cams[c.id] = c }
+            ways += parseWays(data)
+            zones += averageZones(data, on: line)
+        }
+        guard answered else { return nil }
+        return (Array(cams.values), ways, CameraAlerts.merge(zones, []))
+    }
+
+    /** [line] cut into runs of about [meters], each sharing its first point with the last run's end. */
+    static func pieces(_ line: [LatLng], meters: Double) -> [[LatLng]] {
+        var out: [[LatLng]] = []
+        var cur: [LatLng] = [line[0]]
+        var len = 0.0
+        for p in line.dropFirst() {
+            len += cur.last!.distance(to: p)
+            cur.append(p)
+            if len >= meters {
+                out.append(cur)
+                cur = [p]
+                len = 0
+            }
+        }
+        if cur.count >= 2 { out.append(cur) }
+        return out
+    }
+
+    private static func alongQuery(_ line: [LatLng], speed: Bool, plate: Bool) async -> Data? {
+        let maxPts = 200
         let pts = line.count <= maxPts ? line : (0..<maxPts).map {
             line[min(line.count - 1, Int((Double($0) * Double(line.count - 1) / Double(maxPts - 1)).rounded()))]
         }
@@ -82,9 +118,8 @@ public enum Overpass {
         if speed { parts.append("relation[\"enforcement\"=\"average_speed\"](around:200,\(coords));") }
         let q = "[out:json][timeout:40];(" + parts.joined() + ");out body geom 6000;"
         for ep in endpoints {
-            guard let (data, status) = await fetch(ep, query: q), status == 200,
-                  let cams = parse(data) else { continue }
-            return (cams, parseWays(data), averageZones(data, on: line))
+            guard let (data, status) = await fetch(ep, query: q), status == 200, parse(data) != nil else { continue }
+            return data
         }
         return nil
     }
@@ -189,12 +224,16 @@ public enum Overpass {
         return nil
     }
 
-    /** One GET to one mirror, the way Vela asks (`?data=` in the URL). Nil on a network error. */
+    /** One request to one mirror. A POST, since a route's query is too long for a URL. Nil on a network error. */
     public static func fetch(_ endpoint: String, query: String) async -> (Data, Int)? {
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-._~")
-        guard let url = URL(string: endpoint + "?data=" + (query.addingPercentEncoding(withAllowedCharacters: allowed) ?? "")),
-              let (data, resp) = try? await session.data(from: url) else { return nil }
+        guard let url = URL(string: endpoint) else { return nil }
+        var r = URLRequest(url: url)
+        r.httpMethod = "POST"
+        r.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        r.httpBody = ("data=" + (query.addingPercentEncoding(withAllowedCharacters: allowed) ?? "")).data(using: .utf8)
+        guard let (data, resp) = try? await session.data(for: r) else { return nil }
         return (data, (resp as? HTTPURLResponse)?.statusCode ?? 0)
     }
 

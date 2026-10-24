@@ -103,6 +103,17 @@ final class AverageCameraTests: XCTestCase {
     }
 }
 
+final class PiecesTests: XCTestCase {
+    func testLongRoutesAreCut() {
+        // About 111 km due north in 1 km steps: three pieces of ~40 km, joined end to start.
+        let line = (0...100).map { LatLng(Double($0) * 0.01, 0) }
+        let p = Overpass.pieces(line, meters: 40_000)
+        XCTAssertEqual(p.count, 3)
+        XCTAssertEqual(p[0].last, p[1].first)
+        XCTAssertEqual(p.last?.last, line.last)
+    }
+}
+
 final class PostcodeTests: XCTestCase {
     func testPostcodes() {
         XCTAssertEqual(Postcodes.normalize("sw1a1aa"), "SW1A 1AA")
