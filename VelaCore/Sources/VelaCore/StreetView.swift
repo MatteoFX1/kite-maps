@@ -12,9 +12,10 @@ public enum StreetView {
 
     public static func searchURL(_ p: LatLng, radius: Int) -> URL {
         let pb = "!1m5!1sapiv3!5sUS!11m2!1m1!1b0!2m4!1m2!3d\(p.lat)!4d\(p.lng)!2d\(radius)"
-            + "!3m18!2m2!1sen!2sUS!9m1!1e2!11m12!1m3!1e2!2b1!3e2!1m3!1e3!2b1!3e2!1m3!1e10!2b1!3e2"
+            + "!3m20!1m1!3b1!2m2!1sen!2sUS!9m1!1e2!11m12!1m3!1e2!2b1!3e2!1m3!1e3!2b1!3e2!1m3!1e10!2b1!3e2"
             + "!4m6!1e1!1e2!1e3!1e4!1e8!1e6"
-        return URL(string: "https://maps.googleapis.com/maps/api/js/GeoPhotoService.SingleImageSearch?pb=" + pb)!
+        return URL(string: "https://maps.googleapis.com/maps/api/js/GeoPhotoService.SingleImageSearch?pb=" + pb
+                   + "&callback=_xdc_._v")!
     }
 
     private static let session: URLSession = {
