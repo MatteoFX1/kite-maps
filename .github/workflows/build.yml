@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
 
+# A newer push to the same pull request replaces the run still going.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   core:
     name: Check search code
@@ -127,6 +132,8 @@ jobs:
           path: shots
       - name: Save screenshots to the ci-screenshots branch
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        # Only a convenience for reviewing; never fails the build.
+        continue-on-error: true
         run: |
           cd shots
           for f in *.png; do sips -s format jpeg -s formatOptions 70 -Z 1200 "$f" --out "${f%.png}.jpg" >/dev/null; done
