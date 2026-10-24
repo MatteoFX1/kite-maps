@@ -219,7 +219,7 @@ public enum Overpass {
         guard speed || plate else { return [] }
         let q = query(filter: filter, speed: speed, plate: plate)
         for ep in endpoints {
-            guard let (data, status) = await fetch(ep, query: q), status == 200, let list = parse(data) else { continue }
+            guard let (data, status) = await fetch(ep, query: q), status == 200, !timedOut(data), let list = parse(data) else { continue }
             return list
         }
         return nil
