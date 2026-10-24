@@ -8,6 +8,17 @@ public struct RoadCamera: Hashable, Sendable, Identifiable {
     public var location: LatLng
     /** Who runs a plate reader ("Flock Safety"), when mapped. */
     public var operatorName: String?
+    /** The limit a speed camera checks, when mapped on it. */
+    public var maxspeedKmh: Double?
+    /** One of a pair or chain timing average speed (how Britain usually maps them). */
+    public var average = false
+}
+
+/** A stretch of road where average speed is checked between cameras (common in Britain). */
+public struct AverageSpeedZone: Hashable, Sendable {
+    public var startMeters: Double
+    public var endMeters: Double
+    public var kmh: Double?
 }
 
 /**
@@ -57,9 +68,45 @@ public enum Overpass {
      * Cameras and posted speed limits along a route in one query: cameras within 150 m, roads
      * with a `maxspeed` within 12 m. Nil when every mirror failed.
      */
-    public static func alongRoute(_ line: [LatLng], speed: Bool, plate: Bool) async -> (cameras: [RoadCamera], ways: [LimitWay])? {
-        guard line.count >= 2 else { return ([], []) }
-        let maxPts = 250
+    public static func alongRoute(_ line: [LatLng], speed: Bool, plate: Bool) async -> (cameras: [RoadCamera], ways: [LimitWay], zones: [AverageSpeedZone])? {
+        guard line.count >= 2 else { return ([], [], []) }
+        // Long drives go in pieces of about 40 km: one query for a whole motorway trip is often
+        // too much for the public servers.
+        var cams: [Int64: RoadCamera] = [:]
+        var ways: [LimitWay] = []
+        var zones: [AverageSpeedZone] = []
+        var answered = false
+        for piece in pieces(line, meters: 40_000) {
+            guard let data = await alongQuery(piece, speed: speed, plate: plate) else { continue }
+            answered = true
+            for c in parse(data) ?? [] { cams[c.id] = c }
+            ways += parseWays(data)
+            zones += averageZones(data, on: line)
+        }
+        guard answered else { return nil }
+        return (Array(cams.values), ways, CameraAlerts.merge(zones, []))
+    }
+
+    /** [line] cut into runs of about [meters], each sharing its first point with the last run's end. */
+    static func pieces(_ line: [LatLng], meters: Double) -> [[LatLng]] {
+        var out: [[LatLng]] = []
+        var cur: [LatLng] = [line[0]]
+        var len = 0.0
+        for p in line.dropFirst() {
+            len += cur.last!.distance(to: p)
+            cur.append(p)
+            if len >= meters {
+                out.append(cur)
+                cur = [p]
+                len = 0
+            }
+        }
+        if cur.count >= 2 { out.append(cur) }
+        return out
+    }
+
+    private static func alongQuery(_ line: [LatLng], speed: Bool, plate: Bool) async -> Data? {
+        let maxPts = 200
         let pts = line.count <= maxPts ? line : (0..<maxPts).map {
             line[min(line.count - 1, Int((Double($0) * Double(line.count - 1) / Double(maxPts - 1)).rounded()))]
         }
@@ -68,13 +115,40 @@ public enum Overpass {
         if speed { parts.append("node[\"highway\"=\"speed_camera\"](around:150,\(coords));") }
         if plate { parts.append("node[\"surveillance:type\"=\"ALPR\"](around:150,\(coords));") }
         parts.append("way[\"highway\"][\"maxspeed\"](around:12,\(coords));")
+        if speed { parts.append("relation[\"enforcement\"=\"average_speed\"](around:200,\(coords));") }
         let q = "[out:json][timeout:40];(" + parts.joined() + ");out body geom 6000;"
         for ep in endpoints {
-            guard let (data, status) = await fetch(ep, query: q), status == 200,
-                  let cams = parse(data) else { continue }
-            return (cams, parseWays(data))
+            guard let (data, status) = await fetch(ep, query: q), status == 200, parse(data) != nil,
+                  !timedOut(data) else { continue }
+            return data
         }
         return nil
+    }
+
+    /**
+     * Average speed check zones along [line]: each enforcement relation's mapped points (its
+     * cameras, its start and end) that lie on the route, from the first to the last.
+     */
+    public static func averageZones(_ data: Data, on line: [LatLng]) -> [AverageSpeedZone] {
+        guard line.count >= 2, let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let elements = root["elements"] as? [[String: Any]] else { return [] }
+        let cum = Geo.cumulative(line)
+        var out: [AverageSpeedZone] = []
+        for e in elements where e["type"] as? String == "relation" {
+            let tags = e["tags"] as? [String: String] ?? [:]
+            guard tags["enforcement"] == "average_speed" else { continue }
+            var pts: [LatLng] = []
+            for m in e["members"] as? [[String: Any]] ?? [] {
+                if let lat = m["lat"] as? Double, let lon = m["lon"] as? Double { pts.append(LatLng(lat, lon)) }
+                for g in m["geometry"] as? [[String: Any]] ?? [] {
+                    if let lat = g["lat"] as? Double, let lon = g["lon"] as? Double { pts.append(LatLng(lat, lon)) }
+                }
+            }
+            let along = pts.map { Geo.project($0, on: line, cumulative: cum) }.filter { $0.offset < 60 }.map(\.along)
+            guard let a = along.min(), let b = along.max(), b - a > 300 else { continue }
+            out.append(AverageSpeedZone(startMeters: a, endMeters: b, kmh: maxspeedKmh(tags["maxspeed"])))
+        }
+        return out.sorted { $0.startMeters < $1.startMeters }
     }
 
     static func parseWays(_ data: Data) -> [LimitWay] {
@@ -91,10 +165,17 @@ public enum Overpass {
         }
     }
 
-    /** OSM `maxspeed` to km/h, as Vela reads it: "50", "30 mph", "50 km/h"; nil for "none", "DE:urban" and the like. */
+    /** OSM `maxspeed` to km/h, as Vela reads it: "50", "30 mph", "50 km/h", Britain's "national"; nil for "none", "DE:urban" and the like. */
     public static func maxspeedKmh(_ raw: String?) -> Double? {
         guard let s = raw?.trimmingCharacters(in: .whitespaces).lowercased(), !s.isEmpty else { return nil }
         if s == "walk" { return 7 }
+        // Britain's implied limits, as they are mapped: national single and dual carriageway, motorway, built-up.
+        switch s {
+        case "national", "gb:nsl_single", "uk:nsl_single": return 60 * 1.609344
+        case "gb:nsl_dual", "uk:nsl_dual", "gb:motorway", "uk:motorway": return 70 * 1.609344
+        case "gb:nsl_restricted", "uk:nsl_restricted", "gb:urban": return 30 * 1.609344
+        default: break
+        }
         guard let r = s.range(of: #"^\d+(\.\d+)?"#, options: .regularExpression), let n = Double(s[r]) else { return nil }
         let kmh = s.contains("mph") ? n * 1.609344 : n
         return (1...200).contains(kmh) ? kmh : nil
@@ -138,19 +219,30 @@ public enum Overpass {
         guard speed || plate else { return [] }
         let q = query(filter: filter, speed: speed, plate: plate)
         for ep in endpoints {
-            guard let (data, status) = await fetch(ep, query: q), status == 200, let list = parse(data) else { continue }
+            guard let (data, status) = await fetch(ep, query: q), status == 200, !timedOut(data), let list = parse(data) else { continue }
             return list
         }
         return nil
     }
 
-    /** One GET to one mirror, the way Vela asks (`?data=` in the URL). Nil on a network error. */
+    /** One request to one mirror. A POST, since a route's query is too long for a URL. Nil on a network error. */
     public static func fetch(_ endpoint: String, query: String) async -> (Data, Int)? {
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-._~")
-        guard let url = URL(string: endpoint + "?data=" + (query.addingPercentEncoding(withAllowedCharacters: allowed) ?? "")),
-              let (data, resp) = try? await session.data(from: url) else { return nil }
+        guard let url = URL(string: endpoint) else { return nil }
+        var r = URLRequest(url: url)
+        r.httpMethod = "POST"
+        r.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        r.httpBody = ("data=" + (query.addingPercentEncoding(withAllowedCharacters: allowed) ?? "")).data(using: .utf8)
+        guard let (data, resp) = try? await session.data(for: r) else { return nil }
         return (data, (resp as? HTTPURLResponse)?.statusCode ?? 0)
+    }
+
+    /** A busy server can answer 200 with a "remark" that the query ran out of time, and no data. */
+    static func timedOut(_ data: Data) -> Bool {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let remark = root["remark"] as? String else { return false }
+        return remark.contains("runtime error") || remark.contains("timed out") || remark.contains("out of memory")
     }
 
     static func parse(_ data: Data) -> [RoadCamera]? {
@@ -162,7 +254,9 @@ public enum Overpass {
             let id = (e["id"] as? NSNumber)?.int64Value ?? 0
             let plate = tags["surveillance:type"] == "ALPR"
             return RoadCamera(id: id, kind: plate ? .plate : .speed, location: LatLng(lat, lon),
-                              operatorName: plate ? (tags["operator"] ?? tags["manufacturer"]) : nil)
+                              operatorName: plate ? (tags["operator"] ?? tags["manufacturer"]) : nil,
+                              maxspeedKmh: plate ? nil : maxspeedKmh(tags["maxspeed"]),
+                              average: !plate && tags["enforcement"] == "average_speed")
         }
     }
 }
@@ -193,6 +287,42 @@ public enum CameraAlerts {
             if ahead < bestAhead { bestAhead = ahead; best = i }
         }
         return best
+    }
+
+    /**
+     * Average speed checks from the cameras themselves: a run of average speed cameras along the
+     * route, each within [maxGap] of the last, is one check from the first to the last.
+     */
+    public static func averageZones(_ cams: [(camera: RoadCamera, along: Double)], maxGap: Double = 15_000) -> [AverageSpeedZone] {
+        var out: [AverageSpeedZone] = []
+        var run: [(camera: RoadCamera, along: Double)] = []
+        func close() {
+            if let a = run.first, let b = run.last, b.along - a.along > 300 {
+                out.append(AverageSpeedZone(startMeters: a.along, endMeters: b.along,
+                                            kmh: run.compactMap(\.camera.maxspeedKmh).first))
+            }
+            run = []
+        }
+        for c in cams where c.camera.average {
+            if let last = run.last, c.along - last.along > maxGap { close() }
+            run.append(c)
+        }
+        close()
+        return out
+    }
+
+    /** Zones from both sources, dropping any that overlap one already kept. */
+    public static func merge(_ a: [AverageSpeedZone], _ b: [AverageSpeedZone]) -> [AverageSpeedZone] {
+        var out: [AverageSpeedZone] = []
+        for z in (a + b).sorted(by: { $0.startMeters < $1.startMeters }) {
+            if let last = out.last, z.startMeters <= last.endMeters {
+                out[out.count - 1].endMeters = max(last.endMeters, z.endMeters)
+                if out[out.count - 1].kmh == nil { out[out.count - 1].kmh = z.kmh }
+            } else {
+                out.append(z)
+            }
+        }
+        return out
     }
 
     /**

@@ -79,10 +79,10 @@ public actor GoogleClient {
 
     /** Driving, cycling or walking routes with live traffic times, alternates first-to-last. */
     public func directions(from origin: LatLng, to destination: LatLng, mode: TravelMode,
-                           avoidHighways: Bool = false, avoidTolls: Bool = false) async throws -> [Route] {
+                           avoidHighways: Bool = false, avoidTolls: Bool = false, via: [LatLng] = []) async throws -> [Route] {
         try await warm()
         let pb = DirectionsPb.build(origin: origin, destination: destination, mode: mode,
-                                    avoidHighways: avoidHighways, avoidTolls: avoidTolls)
+                                    avoidHighways: avoidHighways, avoidTolls: avoidTolls, waypoints: via)
         let url = URL(string: Self.directionsEndpoint + "&pb=" + enc(pb))!
         let body = try await get(url, referer: "https://www.google.com/", xhr: true)
         guard let root = GoogleJSON.parse(body) else { throw VelaError.unexpectedResponse(String(body.prefix(200))) }

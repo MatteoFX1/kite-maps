@@ -59,4 +59,71 @@ final class CameraTests: XCTestCase {
         XCTAssertEqual(r.speedLimit(at: 200), 50)
         XCTAssertEqual(r.speedLimit(at: 900), 30)
     }
+
+    func testBritishLimits() {
+        XCTAssertEqual(Overpass.maxspeedKmh("national") ?? 0, 96.56, accuracy: 0.1)
+        XCTAssertEqual(Overpass.maxspeedKmh("GB:nsl_dual") ?? 0, 112.65, accuracy: 0.1)
+        XCTAssertEqual(Overpass.maxspeedKmh("20 mph") ?? 0, 32.19, accuracy: 0.1)
+        XCTAssertTrue(Geo.drivesOnLeft(LatLng(51.5074, -0.1278)), "London")
+        XCTAssertTrue(Geo.drivesOnLeft(LatLng(55.95, -3.19)), "Edinburgh")
+        XCTAssertTrue(Geo.drivesOnLeft(LatLng(51.48, -3.18)), "Cardiff")
+        XCTAssertFalse(Geo.drivesOnLeft(LatLng(48.85, 2.35)), "Paris")
+        XCTAssertFalse(Geo.drivesOnLeft(LatLng(38.54, -121.74)), "Davis")
+    }
+
+    func testAverageZones() {
+        // A straight road north; a relation whose start and end nodes sit 0.9 km apart on it.
+        let line = [LatLng(51.0, -1.0), LatLng(51.02, -1.0)]
+        let json = """
+        {"elements":[{"type":"relation","tags":{"enforcement":"average_speed","maxspeed":"50 mph"},
+          "members":[{"type":"node","lat":51.002,"lon":-1.0},{"type":"node","lat":51.0101,"lon":-1.0},
+                     {"type":"node","lat":51.05,"lon":-1.2}]}]}
+        """
+        let z = Overpass.averageZones(Data(json.utf8), on: line)
+        XCTAssertEqual(z.count, 1)
+        XCTAssertEqual(z.first?.startMeters ?? 0, 222, accuracy: 5)
+        XCTAssertEqual(z.first?.endMeters ?? 0, 1123, accuracy: 5)
+        XCTAssertEqual(z.first?.kmh ?? 0, 80.47, accuracy: 0.1)
+    }
+}
+
+final class AverageCameraTests: XCTestCase {
+    func testZonesFromCameras() {
+        func cam(_ id: Int64, avg: Bool) -> RoadCamera {
+            RoadCamera(id: id, kind: .speed, location: LatLng(0, 0), maxspeedKmh: 96.56, average: avg)
+        }
+        let z = CameraAlerts.averageZones([(cam(1, avg: true), 1000), (cam(2, avg: false), 2000),
+                                           (cam(3, avg: true), 6000), (cam(4, avg: true), 40000)])
+        XCTAssertEqual(z.count, 1, "the far one is a lone camera, not a check")
+        XCTAssertEqual(z.first?.startMeters, 1000)
+        XCTAssertEqual(z.first?.endMeters, 6000)
+        let m = CameraAlerts.merge(z, [AverageSpeedZone(startMeters: 5000, endMeters: 9000, kmh: nil)])
+        XCTAssertEqual(m.count, 1)
+        XCTAssertEqual(m.first?.endMeters, 9000)
+    }
+}
+
+final class PiecesTests: XCTestCase {
+    func testLongRoutesAreCut() {
+        // About 111 km due north in 1 km steps: three pieces of ~40 km, joined end to start.
+        let line = (0...100).map { LatLng(Double($0) * 0.01, 0) }
+        let p = Overpass.pieces(line, meters: 40_000)
+        XCTAssertEqual(p.count, 3)
+        XCTAssertEqual(p[0].last, p[1].first)
+        XCTAssertEqual(p.last?.last, line.last)
+    }
+}
+
+final class PostcodeTests: XCTestCase {
+    func testPostcodes() {
+        XCTAssertEqual(Postcodes.normalize("sw1a1aa"), "SW1A 1AA")
+        XCTAssertEqual(Postcodes.normalize(" CF10 1NS "), "CF10 1NS")
+        XCTAssertEqual(Postcodes.normalize("EH1 1YZ"), "EH1 1YZ")
+        XCTAssertNil(Postcodes.normalize("pizza"))
+        XCTAssertNil(Postcodes.normalize("12345"))
+        let json = #"{"status":200,"result":{"postcode":"CF10 1NS","latitude":51.48,"longitude":-3.18,"admin_district":"Cardiff","admin_ward":"Cathays","country":"Wales"}}"#
+        let p = Postcodes.parse(Data(json.utf8), code: "CF10 1NS")
+        XCTAssertEqual(p?.name, "CF10 1NS")
+        XCTAssertEqual(p?.address, "Cathays, Cardiff, Wales")
+    }
 }

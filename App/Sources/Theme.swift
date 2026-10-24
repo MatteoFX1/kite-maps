@@ -46,8 +46,17 @@ enum Fmt {
     static var metric: Bool {
         switch AppSettings.shared.units {
         case .metric: return true
-        case .imperial: return false
+        case .imperial, .yards: return false
         case .auto: return Locale.current.measurementSystem == .metric
+        }
+    }
+
+    /** Short distances in yards, the British way. */
+    static var yards: Bool {
+        switch AppSettings.shared.units {
+        case .yards: return true
+        case .auto: return Locale.current.measurementSystem == .uk
+        default: return false
         }
     }
 
@@ -56,8 +65,13 @@ enum Fmt {
             if m < 950 { return "\(Int((m / 10).rounded()) * 10) m" }
             return m < 9_950 ? String(format: "%.1f km", m / 1000) : "\(Int((m / 1000).rounded())) km"
         }
-        let ft = m * 3.28084
-        if ft < 1000 { return "\(max(Int((ft / 50).rounded()) * 50, 50)) ft" }
+        if yards {
+            let yd = m * 1.09361
+            if yd < 500 { return "\(max(Int((yd / 10).rounded()) * 10, 10)) yd" }
+        } else {
+            let ft = m * 3.28084
+            if ft < 1000 { return "\(max(Int((ft / 50).rounded()) * 50, 50)) ft" }
+        }
         let mi = m / 1609.344
         return mi < 9.95 ? String(format: "%.1f mi", mi) : "\(Int(mi.rounded())) mi"
     }
@@ -69,13 +83,31 @@ enum Fmt {
             let km = m / 1000
             return km < 1.05 ? "1 kilometer" : String(format: "%.1f kilometers", km)
         }
-        let ft = m * 3.28084
-        if ft < 1000 { return "\(max(Int((ft / 100).rounded()) * 100, 100)) feet" }
+        if yards {
+            let yd = m * 1.09361
+            if yd < 500 { return "\(max(Int((yd / 50).rounded()) * 50, 50)) yards" }
+        } else {
+            let ft = m * 3.28084
+            if ft < 1000 { return "\(max(Int((ft / 100).rounded()) * 100, 100)) feet" }
+        }
         let mi = m / 1609.344
         if mi < 0.3 { return "a quarter mile" }
         if mi < 0.6 { return "half a mile" }
         return mi < 1.05 ? "1 mile" : String(format: "%.1f miles", mi)
     }
+
+    /** A limit for the voice: "30 miles per hour" (to the posted 5), "50 kilometers per hour". */
+    static func spokenSpeed(_ kmh: Double) -> String {
+        if metric { return "\(Int((kmh / 5).rounded()) * 5) kilometers per hour" }
+        return "\(Int((kmh / 1.609344 / 5).rounded()) * 5) miles per hour"
+    }
+
+    /** A speed in the user's units, without the unit. */
+    static func speed(_ kmh: Double) -> Int {
+        Int((metric ? kmh : kmh / 1.609344).rounded())
+    }
+
+    static var speedUnit: String { metric ? "km/h" : "mph" }
 
     static func duration(_ s: Double) -> String {
         let mins = max(1, Int((s / 60).rounded()))

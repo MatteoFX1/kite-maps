@@ -19,15 +19,17 @@ struct LayersSheet: View {
                 tile("Satellite", icon: "globe.americas.fill", on: settings.satellite) { settings.satellite = true }
             }
             Text("Map details").font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
-            HStack(spacing: 14) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), alignment: .leading, spacing: 14) {
                 tile("Traffic", icon: "car.2.fill", on: settings.traffic) { settings.traffic.toggle() }
+                tile("Transit", icon: "tram.fill", on: settings.transitLines) { settings.transitLines.toggle() }
+                tile("Terrain", icon: "mountain.2.fill", on: settings.terrain) { settings.terrain.toggle() }
                 tile("Speed cameras", badge: .speed, on: settings.speedCameras) { settings.speedCameras.toggle() }
                 tile("Plate cameras", badge: .plate, on: settings.plateCameras) { settings.plateCameras.toggle() }
             }
             Spacer()
         }
         .padding(20)
-        .presentationDetents([.height(360)])
+        .presentationDetents([.height(470)])
     }
 
     private func tile(_ title: String, icon: String = "", badge: RoadCamera.Kind? = nil, on: Bool, action: @escaping () -> Void) -> some View {
@@ -66,15 +68,27 @@ struct SettingsView: View {
                 Section("Navigation") {
                     Toggle("Voice guidance", isOn: $settings.voice)
                     Toggle("Avoid tolls", isOn: $settings.avoidTolls)
-                    Toggle("Avoid highways", isOn: $settings.avoidHighways)
+                    Toggle(Fmt.yards ? "Avoid motorways" : "Avoid highways", isOn: $settings.avoidHighways)
                     Toggle("Say when a camera is ahead", isOn: $settings.cameraWarnings)
+                    Toggle("Say when I'm over the speed limit", isOn: $settings.speedingAlert)
                     Picker("Default travel mode", selection: $settings.defaultMode) {
                         ForEach(TravelMode.allCases) { Text($0.label).tag($0) }
                     }
                 }
+                Section("My places") {
+                    Toggle("Parking button on the map", isOn: $settings.parkingButton)
+                    if let h = settings.home {
+                        LabeledContent("Home", value: h.name)
+                        Button("Remove home", role: .destructive) { settings.home = nil }
+                    }
+                    if let w = settings.work {
+                        LabeledContent("Work", value: w.name)
+                        Button("Remove work", role: .destructive) { settings.work = nil }
+                    }
+                }
                 Section {
                     Toggle("Speed cameras", isOn: $settings.speedCameras)
-                    Toggle("License plate cameras", isOn: $settings.plateCameras)
+                    Toggle(Fmt.yards ? "Number plate cameras" : "License plate cameras", isOn: $settings.plateCameras)
                 } header: {
                     Text("Cameras")
                 } footer: {

@@ -1,3 +1,4 @@
+import AudioToolbox
 import AVFoundation
 import CoreLocation
 import Foundation
@@ -20,9 +21,13 @@ final class Navigator: ObservableObject {
     @Published private(set) var speedMps: Double = 0
     @Published private(set) var lastFix: CLLocation?
     /** A camera coming up within about twelve seconds, for the warning card. */
-    @Published private(set) var cameraAhead: (kind: RoadCamera.Kind, meters: Double)?
+    @Published private(set) var cameraAhead: CameraAlert?
+    /** An average speed check the user is driving through, with their average so far. */
+    @Published private(set) var averageCheck: AverageCheck?
 
     let destination: Place
+    /** Stops still ahead, in trip order; each is dropped once reached. */
+    @Published private(set) var stops: [Place]
     private var tracker: RouteTracker
     private let speech = AVSpeechSynthesizer()
     private var spokenStage: [Int: Int] = [:]
@@ -31,10 +36,15 @@ final class Navigator: ObservableObject {
     private var avoidTolls: Bool
     private var routeCameras: [(camera: RoadCamera, along: Double)] = []
     private var spokenCameras: Set<Int> = []
+    private var zones: [AverageSpeedZone] = []
+    private var zoneEntry: (index: Int, time: Date, along: Double)?
+    private var demoAlerts = false
+    private var speeding = SpeedingAlerts()
 
-    init(route: Route, destination: Place, settings: AppSettings) {
+    init(route: Route, destination: Place, stops: [Place] = [], settings: AppSettings) {
         self.route = route
         self.destination = destination
+        self.stops = stops
         tracker = RouteTracker(route: route)
         muted = !settings.voice
         avoidHighways = settings.avoidHighways
@@ -87,6 +97,28 @@ final class Navigator: ObservableObject {
         }
         announce(p)
         checkCameras(p)
+        checkZones(p)
+        checkStops(p)
+        if route.mode == .drive, AppSettings.shared.speedingAlert,
+           speeding.update(speedKmh: loc.speed >= 0 ? loc.speed * 3.6 : nil, limitKmh: speedLimitKmh, now: loc.timestamp.timeIntervalSince1970) {
+            speak("You're over the speed limit.")
+        }
+    }
+
+    /** A stop picked on the way (search along the route): go there first, then on. */
+    func addStop(_ p: Place) {
+        stops.insert(p, at: 0)
+        speak("Adding a stop at \(p.name).")
+        if let fix = lastFix { reroute(from: fix, quiet: true) }
+    }
+
+    /** Says when a stop is reached (within 40 m of it along the route) and drops it. */
+    private func checkStops(_ p: RouteTracker.Progress) {
+        guard let next = stops.first else { return }
+        let at = Geo.project(next.location, on: route.polyline)
+        guard at.offset < 150, p.alongMeters >= at.along - 40 else { return }
+        stops.removeFirst()
+        speak("You've reached \(next.name). Continuing to \(stops.first?.name ?? destination.name).")
     }
 
     /** Cameras and speed limits along the route, from OpenStreetMap, in one query per route. */
@@ -94,35 +126,94 @@ final class Navigator: ObservableObject {
         routeCameras = []
         spokenCameras = []
         cameraAhead = nil
+        zones = []
+        zoneEntry = nil
+        averageCheck = nil
         let s = AppSettings.shared
         guard route.mode == .drive else { return }
         let line = route.polyline, id = route.id
         let speed = s.speedCameras, plate = s.plateCameras
         Task {
-            guard let found = await Overpass.alongRoute(line, speed: speed, plate: plate),
-                  self.route.id == id else { return }
+            // The public Overpass servers are sometimes busy: try again a couple of times.
+            var result = await Overpass.alongRoute(line, speed: speed, plate: plate)
+            for _ in 0..<2 where result == nil && self.route.id == id {
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+                result = await Overpass.alongRoute(line, speed: speed, plate: plate)
+            }
+            guard let found = result, self.route.id == id else { return }
             self.routeCameras = CameraAlerts.project(found.cameras, on: line)
             self.route.speedLimits = Overpass.speedLimits(found.ways, on: line)
+            self.zones = CameraAlerts.merge(found.zones, CameraAlerts.averageZones(self.routeCameras))
         }
     }
 
     private func checkCameras(_ p: RouteTracker.Progress) {
+        guard !demoAlerts else { return }
         let meters = routeCameras.map(\.along)
-        if let ahead = cameraAhead, let next = meters.first(where: { $0 > p.alongMeters }) {
-            // Keep the card up until the camera is passed.
-            cameraAhead = (ahead.kind, next - p.alongMeters)
-        }
-        if cameraAhead != nil && !meters.contains(where: { $0 > p.alongMeters && $0 - p.alongMeters < CameraAlerts.maxLead }) {
-            cameraAhead = nil
+        if let ahead = cameraAhead {
+            // Keep the card up, counting down, until the camera is passed.
+            if let next = meters.first(where: { $0 > p.alongMeters }), next - p.alongMeters < CameraAlerts.maxLead {
+                var a = ahead
+                a.meters = next - p.alongMeters
+                cameraAhead = a
+            } else {
+                cameraAhead = nil
+            }
         }
         guard let i = CameraAlerts.due(cameraMeters: meters, traveled: p.alongMeters, speedMps: speedMps, spoken: spokenCameras) else { return }
         // Cameras a few meters apart are one warning.
         for (j, m) in meters.enumerated() where m >= meters[i] && m - meters[i] < 40 { spokenCameras.insert(j) }
-        let kind = routeCameras[i].camera.kind
-        cameraAhead = (kind, meters[i] - p.alongMeters)
+        let cam = routeCameras[i].camera
+        let ahead = meters[i] - p.alongMeters
+        let limit = cam.kind == .speed ? (cam.maxspeedKmh ?? route.speedLimit(at: meters[i])) : nil
+        cameraAhead = CameraAlert(kind: cam.kind, meters: ahead, startMeters: max(ahead, 1), limitKmh: limit)
         if AppSettings.shared.cameraWarnings {
-            speak(kind == .speed ? "Speed camera ahead." : "License plate camera ahead.")
+            chime()
+            if cam.kind == .speed {
+                speak((cam.average ? "Average speed camera ahead" : "Speed camera ahead") + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+            } else {
+                speak(Fmt.yards ? "Number plate camera ahead." : "License plate camera ahead.")
+            }
         }
+    }
+
+    /** Average speed checks: say when one starts and ends, and keep the user's average on screen. */
+    private func checkZones(_ p: RouteTracker.Progress) {
+        guard !demoAlerts else { return }
+        let at = p.alongMeters
+        let inside = zones.firstIndex { at >= $0.startMeters && at <= $0.endMeters }
+        if let entry = zoneEntry, entry.index != inside {
+            zoneEntry = nil
+            averageCheck = nil
+            if AppSettings.shared.cameraWarnings { speak("Average speed check ended.") }
+        }
+        guard let i = inside else { return }
+        let z = zones[i]
+        let limit = z.kmh ?? route.speedLimit(at: at)
+        if zoneEntry == nil {
+            zoneEntry = (i, Date(), at)
+            if AppSettings.shared.cameraWarnings {
+                chime()
+                speak("Average speed check for \(Fmt.spokenDistance(z.endMeters - at))" + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+            }
+        }
+        guard let entry = zoneEntry else { return }
+        let secs = Date().timeIntervalSince(entry.time)
+        let avg = secs > 5 ? (at - entry.along) / secs * 3.6 : speedMps * 3.6
+        averageCheck = AverageCheck(limitKmh: limit, averageKmh: avg, metersLeft: z.endMeters - at)
+    }
+
+    /** For the build's screenshots: a camera coming up and an average speed check. */
+    func showDemoAlerts() {
+        demoAlerts = true
+        cameraAhead = CameraAlert(kind: .speed, meters: 180, startMeters: 400, limitKmh: 48.3)
+        averageCheck = AverageCheck(limitKmh: 80.5, averageKmh: 77, metersLeft: 2400)
+    }
+
+    /** A short tone before a camera warning, the way Waze does it. */
+    private func chime() {
+        guard !muted else { return }
+        AudioServicesPlaySystemSound(1057)
     }
 
     private func announce(_ p: RouteTracker.Progress) {
@@ -146,17 +237,17 @@ final class Navigator: ObservableObject {
         }
     }
 
-    private func reroute(from loc: CLLocation) {
+    private func reroute(from loc: CLLocation, quiet: Bool = false) {
         rerouting = true
         lastReroute = Date()
-        speak("Rerouting.")
+        if !quiet { speak("Rerouting.") }
         let from = LatLng(loc.coordinate.latitude, loc.coordinate.longitude)
         let mode = route.mode
         let to = destination.location
         let hw = avoidHighways, tolls = avoidTolls
         Task {
             let r = await Directions.routes(from: from, to: to, mode: mode, avoidHighways: hw, avoidTolls: tolls,
-                                            useGoogle: !AppSettings.shared.noGoogle)
+                                            useGoogle: !AppSettings.shared.noGoogle, via: self.stops.map(\.location))
             self.rerouting = false
             guard let fresh = r.routes.first else { return }
             self.route = fresh
@@ -180,4 +271,20 @@ final class Navigator: ObservableObject {
 
 extension String {
     var lowercasedFirst: String { prefix(1).lowercased() + dropFirst() }
+}
+
+struct CameraAlert: Equatable {
+    var kind: RoadCamera.Kind
+    /** How far ahead the camera is now. */
+    var meters: Double
+    /** How far it was when first warned about, so the bar can count down. */
+    var startMeters: Double
+    /** The limit it checks, when known. */
+    var limitKmh: Double?
+}
+
+struct AverageCheck: Equatable {
+    var limitKmh: Double?
+    var averageKmh: Double
+    var metersLeft: Double
 }

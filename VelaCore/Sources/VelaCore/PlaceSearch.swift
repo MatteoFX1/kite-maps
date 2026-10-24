@@ -22,6 +22,7 @@ public enum PlaceSearch {
         } catch {
             googleError = error.localizedDescription
         } }
+        if let pc = await Postcodes.lookup(q) { return Result(places: [pc], googleError: googleError) }
         let osm = (try? await Photon.search(q, near: center)) ?? []
         return Result(places: osm, googleError: googleError)
     }

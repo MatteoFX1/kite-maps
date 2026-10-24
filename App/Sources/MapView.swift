@@ -60,12 +60,16 @@ struct VelaMapView: UIViewRepresentable {
         private var originalLabels: [String: (NSExpression?, NSExpression?, NSExpression?)] = [:]
         private var lastResultsKey = ""
         private var lastRouteKey = ""
+        private var lastMineKey = ""
         private var lastPuckKey = ""
         private var lastCameraKey = ""
         /** Cameras fetched so far, and the 0.1° cells already asked for (cameras don't move). */
         private var cameras: [Int64: RoadCamera] = [:]
         private var cameraCells: Set<String> = []
         private var cameraFetch: Task<Void, Never>?
+        private var railFetch: Task<Void, Never>?
+        /** The box the drawn rail lines cover, so panning inside it asks nothing. */
+        private var railBox: (s: Double, w: Double, n: Double, e: Double, z: Int)?
 
         init(model: AppModel) { self.model = model }
 
@@ -83,7 +87,7 @@ struct VelaMapView: UIViewRepresentable {
             addVelaLayers(style)
             styleReady = true
             repaint(mapView)
-            lastResultsKey = ""; lastRouteKey = ""; lastPuckKey = ""; lastCameraKey = ""
+            lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""
             render(mapView)
         }
 
@@ -99,6 +103,8 @@ struct VelaMapView: UIViewRepresentable {
                 }
             }
             MapStyler.apply(style, dark: dark)
+            (style.layer(withIdentifier: "vela-rail-case") as? MLNLineStyleLayer)?.lineColor =
+                NSExpression(forConstantValue: UIColor(white: dark ? 0 : 1, alpha: 0.9))
             // Names next to our pins: dark text on a white halo by day, light text on navy at night.
             let text = dark ? UIColor(hex: 0xE8EAED) : UIColor(hex: 0x202124)
             let halo = dark ? UIColor(hex: 0x0B1526) : UIColor.white
@@ -129,6 +135,20 @@ struct VelaMapView: UIViewRepresentable {
                 style.insertLayer(satLayer, below: below)
             } else {
                 style.addLayer(satLayer)
+            }
+
+            // Terrain shading (Esri World Hillshade), blended over the land, off unless picked.
+            let hill = MLNRasterTileSource(identifier: "vela-terrain", tileURLTemplates: [
+                "https://services.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}",
+            ], options: [.tileSize: 256, .maximumZoomLevel: 16, .attributionHTMLString: "Hillshade © Esri"])
+            style.addSource(hill)
+            let hillLayer = MLNRasterStyleLayer(identifier: "vela-terrain", source: hill)
+            hillLayer.rasterOpacity = NSExpression(forConstantValue: dark ? 0.22 : 0.32)
+            hillLayer.isVisible = false
+            if let below = style.layers.first(where: { $0.identifier.hasPrefix("tunnel_") || $0.identifier.hasPrefix("road_") }) {
+                style.insertLayer(hillLayer, below: below)
+            } else {
+                style.addLayer(hillLayer)
             }
 
             // Google's live traffic tiles, the same keyless overlay Vela draws.
@@ -180,6 +200,18 @@ struct VelaMapView: UIViewRepresentable {
                 insert(l)
             }
 
+            // Metro, tram and rail lines in their own colors, from zoom 10 in (Transitous).
+            let railSrc = MLNShapeSource(identifier: "vela-rail", shape: nil, options: nil)
+            style.addSource(railSrc)
+            let railCase = line("vela-rail-case", railSrc, UIColor(white: dark ? 0 : 1, alpha: 0.9), width: 5.5)
+            let rail = line("vela-rail", railSrc, .gray, width: 3.2)
+            rail.lineColor = NSExpression(format: "CAST(color, 'UIColor')")
+            for l in [railCase, rail] {
+                l.minimumZoomLevel = 10
+                l.isVisible = false
+                insert(l)
+            }
+
             // Speed cameras and plate readers, from zoom 12 in.
             let camSrc = MLNShapeSource(identifier: "vela-cameras", shape: nil, options: nil)
             style.addSource(camSrc)
@@ -188,6 +220,22 @@ struct VelaMapView: UIViewRepresentable {
             cams.iconAllowsOverlap = NSExpression(forConstantValue: true)
             cams.minimumZoomLevel = 12
             style.addLayer(cams)
+
+            // My places: home, work, the parked car and saved places, under the result pins.
+            let mineSrc = MLNShapeSource(identifier: "vela-mine", shape: nil, options: nil)
+            style.addSource(mineSrc)
+            let mine = MLNSymbolStyleLayer(identifier: "vela-mine", source: mineSrc)
+            mine.iconImageName = NSExpression(forKeyPath: "icon")
+            mine.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            mine.text = NSExpression(forKeyPath: "label")
+            mine.textFontNames = NSExpression(forConstantValue: ["Noto Sans Bold"])
+            mine.textFontSize = NSExpression(forConstantValue: 11)
+            mine.textAnchor = NSExpression(forConstantValue: "top")
+            mine.textOffset = NSExpression(forConstantValue: NSValue(cgVector: CGVector(dx: 0, dy: 1.1)))
+            mine.textOptional = NSExpression(forConstantValue: true)
+            mine.maximumTextWidth = NSExpression(forConstantValue: 8)
+            mine.minimumZoomLevel = 9
+            style.addLayer(mine)
 
             // Result pins with names, the picked place's red pin, the time bubbles and the puck.
             let results = MLNShapeSource(identifier: "vela-results", shape: nil, options: nil)
@@ -238,6 +286,25 @@ struct VelaMapView: UIViewRepresentable {
                 style.addLayer(b)
             }
 
+            // The next turn drawn on the road while navigating, like Vela's turn arrows.
+            let arrowSrc = MLNShapeSource(identifier: "vela-turn-arrow", shape: nil, options: nil)
+            style.addSource(arrowSrc)
+            let arrowEdge = line("vela-turn-arrow-edge", arrowSrc, UIColor(hex: 0x0B3D91), width: 11)
+            arrowEdge.predicate = NSPredicate(format: "part == 'shaft'")
+            arrowEdge.lineCap = NSExpression(forConstantValue: "butt")
+            let arrowLine = line("vela-turn-arrow", arrowSrc, .white, width: 7)
+            arrowLine.predicate = NSPredicate(format: "part == 'shaft'")
+            arrowLine.lineCap = NSExpression(forConstantValue: "butt")
+            let head = MLNSymbolStyleLayer(identifier: "vela-turn-arrow-head", source: arrowSrc)
+            head.predicate = NSPredicate(format: "part == 'head'")
+            head.iconImageName = NSExpression(forConstantValue: "turn-head")
+            head.iconRotation = NSExpression(forKeyPath: "bearing")
+            head.iconRotationAlignment = NSExpression(forConstantValue: "map")
+            head.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            head.iconIgnoresPlacement = NSExpression(forConstantValue: true)
+            for l in [arrowEdge, arrowLine] as [MLNStyleLayer] { style.addLayer(l) }
+            style.addLayer(head)
+
             let puckSrc = MLNShapeSource(identifier: "vela-puck", shape: nil, options: nil)
             style.addSource(puckSrc)
             let puck = MLNSymbolStyleLayer(identifier: "vela-puck", source: puckSrc)
@@ -269,11 +336,39 @@ struct VelaMapView: UIViewRepresentable {
             if map.showsUserLocation == navigating { map.showsUserLocation = !navigating }
             style.layer(withIdentifier: "vela-traffic")?.isVisible = s.traffic && !navigating && !s.noGoogle
             style.layer(withIdentifier: "vela-sat")?.isVisible = s.satellite
+            style.layer(withIdentifier: "vela-terrain")?.isVisible = s.terrain && !s.satellite
+            for id in ["vela-rail", "vela-rail-case"] { style.layer(withIdentifier: id)?.isVisible = s.transitLines && !navigating }
             for id in ["building", "building-3d"] { style.layer(withIdentifier: id)?.isVisible = !s.satellite }
             renderResults(style)
             renderRoutes(style)
             renderPuck(style)
             renderCameras(style)
+            renderMine(style)
+            if s.transitLines { loadRail(map) }
+        }
+
+        private func renderMine(_ style: MLNStyle) {
+            let s = model.settings
+            let hidden = model.nav != nil || model.directions != nil
+            var items: [(Place, String, String)] = []
+            if !hidden {
+                if let h = s.home { items.append((h, "mine-home", "Home")) }
+                if let w = s.work { items.append((w, "mine-work", "Work")) }
+                if let p = s.parking { items.append((p, "mine-parking", "Parked car")) }
+                for p in s.saved.prefix(200) where !items.contains(where: { $0.0.id == p.id }) { items.append((p, "mine-saved", p.name)) }
+            }
+            let sel = model.selected?.id
+            let key = items.map { $0.0.id + $0.1 }.joined(separator: ",") + "|" + (sel ?? "")
+            guard key != lastMineKey else { return }
+            lastMineKey = key
+            let features: [MLNPointFeature] = items.compactMap { p, icon, label in
+                guard p.id != sel else { return nil }
+                let f = MLNPointFeature()
+                f.coordinate = CLLocationCoordinate2D(latitude: p.location.lat, longitude: p.location.lng)
+                f.attributes = ["id": p.id, "icon": icon, "label": label]
+                return f
+            }
+            (style.source(withIdentifier: "vela-mine") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
         }
 
         private func renderCameras(_ style: MLNStyle) {
@@ -289,6 +384,31 @@ struct VelaMapView: UIViewRepresentable {
                 return f
             }
             (style.source(withIdentifier: "vela-cameras") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
+        }
+
+        /** Transit lines for the view and a margin around it, when the layer is on. */
+        func loadRail(_ map: MLNMapView) {
+            guard model.settings.transitLines, map.zoomLevel >= 10, railFetch == nil, model.nav == nil else { return }
+            let b = map.visibleCoordinateBounds
+            let z = Int(map.zoomLevel)
+            if let r = railBox, b.sw.latitude >= r.s, b.sw.longitude >= r.w, b.ne.latitude <= r.n, b.ne.longitude <= r.e,
+               abs(z - r.z) <= 2 { return }
+            let dLat = (b.ne.latitude - b.sw.latitude) * 0.5, dLng = (b.ne.longitude - b.sw.longitude) * 0.5
+            let box = (s: b.sw.latitude - dLat, w: b.sw.longitude - dLng, n: b.ne.latitude + dLat, e: b.ne.longitude + dLng, z: z)
+            railFetch = Task { [weak self, weak map] in
+                let lines = await Transitous.lines(south: box.s, west: box.w, north: box.n, east: box.e, zoom: min(z, 14))
+                guard let self else { return }
+                self.railFetch = nil
+                if let lines {
+                    self.railBox = box
+                    let shapes = lines.map { l in
+                        self.polyline(l.points, ["color": String(format: "#%06X", l.color)])
+                    }
+                    (map?.style?.source(withIdentifier: "vela-rail") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: shapes)
+                }
+                // The map may have moved on while this was loading.
+                if lines != nil, let map { self.loadRail(map) }
+            }
         }
 
         /** Ask Overpass for the cameras in view, a few 0.1° cells at a time, each cell once. */
@@ -324,7 +444,10 @@ struct VelaMapView: UIViewRepresentable {
             let showList = model.directions == nil && model.nav == nil
             let list = showList ? model.visibleResults : []
             let target = model.nav?.destination ?? model.directions?.destination ?? model.selected
-            let key = list.map(\.id).joined(separator: ",") + "|" + (target?.id ?? "") + "|\(model.directions?.reversed ?? false)|\(model.nav == nil)"
+            let stops: [Place] = model.nav?.stops ?? model.directions?.stops ?? []
+            let ids: String = list.map(\.id).joined(separator: ",")
+            let stopIds: String = stops.map(\.id).joined(separator: ",")
+            let key = "\(ids)|\(target?.id ?? "")|\(model.directions?.reversed ?? false)|\(model.nav == nil)|\(stopIds)"
             guard key != lastResultsKey else { return }
             lastResultsKey = key
             let features: [MLNPointFeature] = list.enumerated().compactMap { i, p in
@@ -348,6 +471,12 @@ struct VelaMapView: UIViewRepresentable {
                 f.coordinate = CLLocationCoordinate2D(latitude: t.location.lat, longitude: t.location.lng)
                 f.attributes = ["id": t.id, "icon": "pin-selected", "anchor": "bottom", "label": t.name]
                 sel.append(f)
+                for (i, stop) in stops.enumerated() {
+                    let f = MLNPointFeature()
+                    f.coordinate = CLLocationCoordinate2D(latitude: stop.location.lat, longitude: stop.location.lng)
+                    f.attributes = ["id": "stop\(i)", "icon": "pin-stop", "anchor": "center", "label": stop.name]
+                    sel.append(f)
+                }
                 if let d = model.directions, d.reversed == false, model.nav == nil, let me = model.userLatLng {
                     let o = MLNPointFeature()
                     o.coordinate = CLLocationCoordinate2D(latitude: me.lat, longitude: me.lng)
@@ -358,7 +487,7 @@ struct VelaMapView: UIViewRepresentable {
             (style.source(withIdentifier: "vela-selected") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: sel)
         }
 
-        private func polyline(_ pts: [LatLng], _ attrs: [String: Any] = [:]) -> MLNPolylineFeature {
+        func polyline(_ pts: [LatLng], _ attrs: [String: Any] = [:]) -> MLNPolylineFeature {
             var coords = pts.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
             let f = MLNPolylineFeature(coordinates: &coords, count: UInt(coords.count))
             f.attributes = attrs
@@ -408,6 +537,25 @@ struct VelaMapView: UIViewRepresentable {
                 return piece.count >= 2 ? polyline(piece, ["level": min(s.level, 3)]) : nil
             }
             spanSrc?.shape = MLNShapeCollectionFeature(shapes: spans)
+
+            // Turn arrow: 35 m of road before the next turn and 22 m after it, from 14 m away.
+            let arrowSrc = style.source(withIdentifier: "vela-turn-arrow") as? MLNShapeSource
+            if let n = model.nav, let m = n.nextManeuver, m.type != .arrive, m.type != .depart, m.type != .straight,
+               let p = n.progress, m.alongMeters - p.alongMeters < 600 {
+                let a = max(m.alongMeters - 35, from), b = min(m.alongMeters + 22, total)
+                let shaft = Geo.slice(r.polyline, from: a, to: b, cumulative: cum)
+                if shaft.count >= 2 {
+                    let tip = shaft[shaft.count - 1], prev = Geo.point(along: r.polyline, meters: max(a, b - 4), cumulative: cum)
+                    let head = MLNPointFeature()
+                    head.coordinate = CLLocationCoordinate2D(latitude: tip.lat, longitude: tip.lng)
+                    head.attributes = ["part": "head", "bearing": Geo.bearing(prev, tip)]
+                    arrowSrc?.shape = MLNShapeCollectionFeature(shapes: [polyline(shaft, ["part": "shaft"]), head])
+                } else {
+                    arrowSrc?.shape = nil
+                }
+            } else {
+                arrowSrc?.shape = nil
+            }
 
             // Time bubbles: on each route, at a point the others don't share.
             guard model.nav == nil, let d = model.directions else { bubbleSrc?.shape = nil; return }
@@ -474,6 +622,11 @@ struct VelaMapView: UIViewRepresentable {
                     }
                     return
                 }
+                let mine = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-mine"])
+                if let id = mine.first?.attribute(forKey: "id") as? String, let place = self.model.myPlace(id) {
+                    self.model.select(place)
+                    return
+                }
                 let pins = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-results"])
                 if let id = pins.first?.attribute(forKey: "id") as? String,
                    let place = self.model.results.first(where: { $0.id == id }) {
@@ -516,7 +669,23 @@ struct VelaMapView: UIViewRepresentable {
         }
 
         nonisolated func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) {
-            MainActor.assumeIsolated { loadCameras(mapView) }
+            MainActor.assumeIsolated {
+                loadCameras(mapView)
+                loadRail(mapView)
+                noteHeading(mapView)
+            }
+        }
+
+        nonisolated func mapViewRegionIsChanging(_ mapView: MLNMapView) {
+            MainActor.assumeIsolated { noteHeading(mapView) }
+        }
+
+        /** The compass button shows while the map isn't facing north. */
+        private func noteHeading(_ map: MLNMapView) {
+            let h = map.direction
+            if abs(h - model.mapHeading) > 2 || (h.truncatingRemainder(dividingBy: 360) == 0) != (model.mapHeading == 0) {
+                model.mapHeading = h.truncatingRemainder(dividingBy: 360) == 0 ? 0 : h
+            }
         }
 
         nonisolated func mapView(_ mapView: MLNMapView, didUpdate userLocation: MLNUserLocation?) {

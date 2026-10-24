@@ -117,4 +117,67 @@ if let b = await Transitous.departures(near: LatLng(38.5435, -121.7377)) {
     print("Departures: none or failed")
 }
 
+
+// A trip with a stop: Davis to Sacramento through Woodland.
+do {
+    let davis = LatLng(38.5449, -121.7405), sac = LatLng(38.5816, -121.4944), woodland = LatLng(38.6785, -121.7733)
+    let g = try await GoogleClient.shared.directions(from: davis, to: sac, mode: .drive, via: [woodland])
+    print("Google with a stop: \(g.count) routes" + (g.first.map { r in
+        ", \(Int(r.distanceMeters)) m, \(Int(r.durationSeconds / 60)) min, \(r.polyline.count) pts, ends \(Int(r.polyline.last!.distance(to: sac))) m from Sacramento, passes \(Int(r.polyline.map { $0.distance(to: woodland) }.min()!)) m from Woodland, \(r.maneuvers.count) steps"
+    } ?? ""))
+} catch {
+    print("Google with a stop failed: \(error)")
+}
+let viaOSRM = try? await OSRM.route(from: LatLng(38.5449, -121.7405), to: LatLng(38.5816, -121.4944), mode: .drive, via: [LatLng(38.6785, -121.7733)])
+print("OSRM with a stop: \(viaOSRM?.first.map { "\(Int($0.distanceMeters)) m, \($0.maneuvers.count) steps" } ?? "failed")")
+
+
+// Transit lines layer: lower Manhattan.
+let tl = await Transitous.lines(south: 40.70, west: -74.02, north: 40.74, east: -73.97, zoom: 13)
+if let first = tl?.first { print("Transit line sample: color \(String(format: "%06X", first.color)), \(first.points.count) pts, from \(first.points.first!) to \(first.points.last!)") }
+print("Transit lines: \(tl.map { "\($0.count) stretches, lines \(Set($0.flatMap(\.names)).sorted().prefix(12))" } ?? "failed")")
+
+
+// Lanes and roundabout exits in the merged steps.
+if let r = merged.routes.first {
+    let withLanes = r.maneuvers.filter { !$0.lanes.isEmpty }
+    print("Lanes: \(withLanes.count) of \(r.maneuvers.count) steps; " + withLanes.prefix(3).map { m in
+        m.instruction + " " + m.lanes.map { ($0.valid ? "*" : "") + $0.indications.joined(separator: "/") }.joined(separator: "|")
+    }.joined(separator: "; "))
+}
+
+// Britain: the A9 north of Perth has average speed cameras; Wales and Scotland drive on the left too.
+if let uk = try? await OSRM.route(from: LatLng(56.4120, -3.4700), to: LatLng(56.9370, -4.2400), mode: .drive).first {
+    if let found = await Overpass.alongRoute(uk.polyline, speed: true, plate: false) {
+        let projected = CameraAlerts.project(found.cameras, on: uk.polyline)
+        let zones = CameraAlerts.merge(found.zones, CameraAlerts.averageZones(projected))
+        let mph: (Double?) -> Int = { k in Int(((k ?? 0) / 1.609344).rounded()) }
+        let limits = Overpass.speedLimits(found.ways, on: uk.polyline).map { mph($0.kmh) }
+        let zoneText = zones.map { "\(Int($0.startMeters))-\(Int($0.endMeters)) m @ \(mph($0.kmh)) mph" }.joined(separator: ", ")
+        print("UK A9: \(Int(uk.distanceMeters)) m, roundabout exits \(uk.maneuvers.compactMap(\.exit)), cameras \(found.cameras.count) on route \(projected.count) (average \(projected.filter { $0.camera.average }.count)), limits \(limits.prefix(20)), average zones: \(zoneText)")
+    } else {
+        print("UK A9: Overpass failed")
+    }
+} else {
+    print("UK A9: routing failed")
+}
+
+// What Britain maps for cameras around Perth and the A9 (to tune the query above).
+do {
+    let q = "[out:json][timeout:40];(relation[\"type\"=\"enforcement\"](56.3,-4.0,56.8,-3.3);node[\"highway\"=\"speed_camera\"](56.3,-4.0,56.8,-3.3);node[\"enforcement\"](56.3,-4.0,56.8,-3.3););out tags 40;"
+    var r = URLRequest(url: URL(string: "https://overpass-api.de/api/interpreter")!)
+    r.httpMethod = "POST"
+    r.httpBody = ("data=" + q.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!).data(using: .utf8)
+    r.setValue("vela-probe", forHTTPHeaderField: "User-Agent")
+    let (data, _) = try await URLSession.shared.data(for: r)
+    let els = ((try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["elements"] as? [[String: Any]]) ?? []
+    print("UK camera tags: \(els.count) — " + els.prefix(15).map { "\($0["type"] ?? "")\(($0["tags"] as? [String: String] ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" })" }.joined(separator: " ; "))
+} catch {
+    print("UK camera tags failed: \(error)")
+}
+
+// A British postcode in the open-data search.
+let pc = await Postcodes.lookup("cf10 1ns")
+print("Postcode: \(pc.map { "\($0.name) at \($0.location.lat),\($0.location.lng), \($0.address ?? "")" } ?? "failed")")
+
 exit(exitCode)

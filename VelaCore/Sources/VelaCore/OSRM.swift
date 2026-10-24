@@ -7,11 +7,11 @@ import Foundation
 public enum OSRM {
     static let userAgent = "VelaMaps-iOS/0.2 (+https://github.com/matteofx1/vela-ios)"
 
-    public static func route(from a: LatLng, to b: LatLng, mode: TravelMode) async throws -> [Route] {
+    public static func route(from a: LatLng, to b: LatLng, mode: TravelMode, via: [LatLng] = []) async throws -> [Route] {
         let profile = mode == .drive ? "driving" : (mode == .bike ? "bike" : "foot")
-        let coords = "\(a.lng),\(a.lat);\(b.lng),\(b.lat)"
+        let coords = ([a] + via + [b]).map { "\($0.lng),\($0.lat)" }.joined(separator: ";")
         let s = "https://routing.openstreetmap.de/\(mode.osrmBackend)/route/v1/\(profile)/\(coords)" +
-            "?overview=full&geometries=polyline6&steps=true&alternatives=\(mode == .drive)"
+            "?overview=full&geometries=polyline6&steps=true&alternatives=\(mode == .drive && via.isEmpty)"
         var r = URLRequest(url: URL(string: s)!)
         r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         r.timeoutInterval = 20
@@ -88,10 +88,13 @@ public enum OSRM {
                     if let n = name ?? ref { roads[n, default: 0] += dist }
                     let loc = (m["location"] as? [Double]).map { LatLng($0[1], $0[0]) } ?? Geo.point(along: line, meters: along, cumulative: cum)
                     let mt = maneuverType(type, modifier)
-                    maneuvers.append(Maneuver(type: mt, instruction: instruction(type: type, modifier: modifier, road: name ?? ref,
-                                                                                 exit: m["exit"] as? Int, mode: mode),
-                                              location: loc, alongMeters: min(along, cum.last ?? along),
-                                              distanceMeters: dist, road: name ?? ref, laneHint: nil))
+                    var man = Maneuver(type: mt, instruction: instruction(type: type, modifier: modifier, road: name ?? ref,
+                                                                         exit: m["exit"] as? Int, mode: mode),
+                                       location: loc, alongMeters: min(along, cum.last ?? along),
+                                       distanceMeters: dist, road: name ?? ref, laneHint: nil)
+                    man.lanes = lanes(step)
+                    man.exit = m["exit"] as? Int
+                    maneuvers.append(man)
                     along += dist
                 }
             }
@@ -104,6 +107,15 @@ public enum OSRM {
             route.speedLimits = speedLimits(legs, line: line, cumulative: cum)
             return route
         }
+    }
+
+    /** The turn lanes at a step's maneuver point (its first intersection), left to right. */
+    static func lanes(_ step: [String: Any]) -> [Lane] {
+        guard let first = (step["intersections"] as? [[String: Any]])?.first,
+              let raw = first["lanes"] as? [[String: Any]], raw.count > 1 else { return [] }
+        let lanes = raw.map { Lane(indications: $0["indications"] as? [String] ?? ["none"], valid: $0["valid"] as? Bool ?? false) }
+        // All lanes valid tells the driver nothing.
+        return lanes.allSatisfy(\.valid) ? [] : lanes
     }
 
     /**
@@ -206,14 +218,14 @@ public enum Directions {
 
     public static func routes(from a: LatLng, to b: LatLng, mode: TravelMode,
                               avoidHighways: Bool = false, avoidTolls: Bool = false,
-                              useGoogle: Bool = true) async -> Result {
+                              useGoogle: Bool = true, via: [LatLng] = []) async -> Result {
         // Ask both at once: Google's route knows traffic, OSRM's steps read better (Vela puts
         // the open router's turn-by-turn on Google's line the same way).
-        let osrmTask = Task { try await OSRM.route(from: a, to: b, mode: mode) }
+        let osrmTask = Task { try await OSRM.route(from: a, to: b, mode: mode, via: via) }
         var err: String?
         if useGoogle { do {
             var g = try await GoogleClient.shared.directions(from: a, to: b, mode: mode,
-                                                              avoidHighways: avoidHighways, avoidTolls: avoidTolls)
+                                                              avoidHighways: avoidHighways, avoidTolls: avoidTolls, via: via)
             if !g.isEmpty {
                 // One at a time: the FOSSGIS server turns away bursts.
                 var vias: [Int: Route] = [:]

@@ -41,8 +41,35 @@ struct EndpointsCard: View {
             .buttonStyle(.plain)
             VStack(spacing: 0) {
                 endpoint(icon: "circle", color: Vela.routeBlue, text: state.reversed ? state.destination.name : "Your location")
+                ForEach(Array(state.stops.enumerated()), id: \.offset) { i, stop in
+                    Divider().padding(.leading, 30)
+                    HStack(spacing: 12) {
+                        Text("\(i + 1)").font(.system(size: 11, weight: .bold)).foregroundColor(.white)
+                            .frame(width: 18, height: 18).background(Circle().fill(Color.secondary))
+                        Text(stop.name).font(.body.weight(.medium)).lineLimit(1)
+                        Spacer()
+                        Button { model.removeStop(i) } label: { Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)) }
+                            .buttonStyle(.plain).foregroundColor(.secondary)
+                            .accessibilityLabel("Remove stop")
+                    }
+                    .frame(height: 42)
+                }
                 Divider().padding(.leading, 30)
                 endpoint(icon: "mappin.circle.fill", color: Vela.closed, text: state.reversed ? "Your location" : state.destination.name)
+                if !state.transit && state.stops.count < 8 {
+                    Divider().padding(.leading, 30)
+                    Button { model.addingStop = true } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "plus").font(.system(size: 14, weight: .bold)).frame(width: 18)
+                            Text("Add stop").font(.subheadline.weight(.medium))
+                            Spacer()
+                        }
+                        .foregroundColor(Vela.routeBlue)
+                        .frame(height: 36)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             Button { model.reverseDirections() } label: {
                 Image(systemName: "arrow.up.arrow.down").font(.system(size: 16, weight: .medium))
@@ -78,7 +105,7 @@ struct TripHeader: View {
                     Spacer()
                     Menu {
                         Toggle("Avoid tolls", isOn: $settings.avoidTolls)
-                        Toggle("Avoid highways", isOn: $settings.avoidHighways)
+                        Toggle(Fmt.yards ? "Avoid motorways" : "Avoid highways", isOn: $settings.avoidHighways)
                     } label: {
                         Image(systemName: "slider.horizontal.3")
                             .font(.system(size: 14, weight: .semibold))
@@ -114,7 +141,10 @@ struct ModeTabs: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) { tabs }
-                .onAppear { if state.transit { proxy.scrollTo("transit", anchor: .trailing) } }
+                .onAppear {
+                    guard state.transit else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { proxy.scrollTo("transit", anchor: .trailing) }
+                }
                 .onChange(of: state.transit) { on in
                     withAnimation { proxy.scrollTo(on ? "transit" : "drive", anchor: on ? .trailing : .leading) }
                 }
@@ -300,7 +330,33 @@ struct TransitBody: View {
     let state: DirectionsState
     @Environment(\.colorScheme) private var scheme
 
+    @State private var kind = 0
+    @State private var when = Date()
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("", selection: $kind) {
+                Text("Leave now").tag(0)
+                Text("Depart at").tag(1)
+                Text("Arrive by").tag(2)
+            }
+            .pickerStyle(.segmented)
+            if kind != 0 {
+                DatePicker("Time", selection: $when, in: Date().addingTimeInterval(-3600)..., displayedComponents: [.date, .hourAndMinute])
+                    .font(.subheadline)
+            }
+        }
+        .onAppear {
+            kind = state.transitTime == nil ? 0 : (state.arriveBy ? 2 : 1)
+            when = state.transitTime ?? Date()
+        }
+        .onChange(of: kind) { k in model.setTransitTime(kind: k, at: when) }
+        .onChange(of: when) { w in if kind != 0 { model.setTransitTime(kind: kind, at: w) } }
+        trips
+    }
+
+    @ViewBuilder
+    private var trips: some View {
         if let trips = state.trips, !trips.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(trips.enumerated()), id: \.element.id) { i, t in
@@ -441,5 +497,82 @@ struct TransitSteps: View {
 
     private func times(_ d: Date?, _ text: String) -> String {
         d.map { "\(clock.string(from: $0))  \(text)" } ?? text
+    }
+}
+
+/** Search for a place to stop at on the way. Home, work and saved places are one tap. */
+struct StopPicker: View {
+    @ObservedObject var model: AppModel
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var query = ""
+    @State private var found: [Place] = []
+    @State private var searching = false
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationView {
+            List {
+                if !found.isEmpty {
+                    Section("Results") { ForEach(found) { row($0, icon: "mappin.circle.fill") } }
+                } else if searching {
+                    HStack { ProgressView(); Text("Searching…").foregroundColor(.secondary) }
+                }
+                let mine = [settings.home.map { ($0, "house.fill") }, settings.work.map { ($0, "briefcase.fill") }].compactMap { $0 }
+                    + settings.saved.prefix(12).map { ($0, "bookmark.fill") }
+                if !mine.isEmpty && found.isEmpty {
+                    Section("Your places") { ForEach(mine, id: \.0.id) { row($0.0, icon: $0.1) } }
+                }
+                if found.isEmpty && !searching {
+                    Section("Along the way") {
+                        ForEach(["Gas stations", "Coffee", "Restaurants", "EV charging"], id: \.self) { c in
+                            Button { query = c; run() } label: { Label(c, systemImage: "magnifyingglass") }
+                        }
+                    }
+                }
+            }
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search for a stop")
+            .onSubmit(of: .search) { run() }
+            .navigationTitle("Add stop")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+    }
+
+    private func row(_ p: Place, icon: String) -> some View {
+        Button {
+            model.addStop(p)
+            dismiss()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon).foregroundColor(.secondary).frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(p.name).foregroundColor(.primary).lineLimit(1)
+                    if let a = p.address { Text(a).font(.caption).foregroundColor(.secondary).lineLimit(1) }
+                }
+                Spacer()
+                if let d = model.userLatLng?.distance(to: p.location) {
+                    Text(Fmt.distance(d)).font(.caption).foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    private func run() {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return }
+        searching = true
+        found = []
+        // Look between you and where you're going, so stops fall along the way.
+        let a = model.userLatLng ?? model.viewport.center
+        let b = model.directions?.destination.location ?? a
+        let mid = LatLng((a.lat + b.lat) / 2, (a.lng + b.lng) / 2)
+        let span = max(a.distance(to: b) * 1.2, 5_000)
+        let useGoogle = !settings.noGoogle
+        Task {
+            let r = await PlaceSearch.search(q, center: mid, spanMeters: span, useGoogle: useGoogle)
+            found = Array(r.places.prefix(30))
+            searching = false
+        }
     }
 }

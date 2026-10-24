@@ -44,9 +44,14 @@ struct DirectionsState {
     var errors: [TravelMode: String] = [:]
     var selected = 0
     /** The Transit tab is showing (its trips come from Transitous, not the road routers). */
+    /** Places to stop at on the way, in order. */
+    var stops: [Place] = []
     var transit = false
     var trips: [TransitTrip]?
     var tripsError: String?
+    /** Nil for "leave now". */
+    var transitTime: Date?
+    var arriveBy = false
     var trip = 0
 
     var current: [Route] { transit ? [] : routes[mode] ?? [] }
@@ -77,12 +82,16 @@ final class AppModel: ObservableObject {
     @Published var nav: Navigator?
     @Published var showLayers = false
     @Published var showSettings = false
+    /** The "Add stop" search sheet. */
+    @Published var addingStop = false
     @Published var showSaved = false
     @Published var showSteps = false
     /** "Start" on a place: begin the drive as soon as its route arrives. */
     @Published var autoStart = false
     /** Bumped when the map should redraw overlays that don't come from a published value. */
     @Published var mapTick = 0
+    /** Which way the map faces, for the compass button. */
+    @Published var mapHeading: Double = 0
 
     weak var map: MLNMapView?
     private var searchTask: Task<Void, Never>?
@@ -112,7 +121,7 @@ final class AppModel: ObservableObject {
         return r
     }
 
-    private var viewport: (center: LatLng, span: Double?) {
+    var viewport: (center: LatLng, span: Double?) {
         guard let map, map.bounds.width > 0 else { return (userLatLng ?? LatLng(40.7484, -73.9857), nil) }
         let c = map.centerCoordinate
         let b = map.visibleCoordinateBounds
@@ -207,6 +216,7 @@ final class AppModel: ObservableObject {
 
     func select(_ place: Place) {
         var p = place
+        if !DemoScript.active { settings.addRecentPlace(place) }
         if p.distanceMeters == nil, let u = userLatLng { p.distanceMeters = u.distance(to: p.location) }
         selected = p
         detent = .half
@@ -246,8 +256,72 @@ final class AppModel: ObservableObject {
                 var b = best
                 b.distanceMeters = userLatLng?.distance(to: b.location)
                 selected = b
+                if !DemoScript.active { settings.addRecentPlace(b) }
             }
         }
+    }
+
+    // MARK: My places
+
+    /** A Siri or Shortcuts request: directions home or to work, or back to the car. */
+    func perform(_ kind: LaunchAction.Kind) async {
+        // At a cold start, give location a few seconds to come in first.
+        for _ in 0..<20 where userLatLng == nil { try? await Task.sleep(nanoseconds: 250_000_000) }
+        if nav != nil { endNavigation() }
+        let target: Place?
+        switch kind {
+        case .home: target = settings.home
+        case .work: target = settings.work
+        case .car: target = settings.parking
+        }
+        guard let target else {
+            notice = kind == .car ? "No parking spot saved yet. Tap P on the map when you park."
+                : "Set your \(kind == .home ? "home" : "work") first: open a place, tap More, then Set as \(kind == .home ? "home" : "work")."
+            return
+        }
+        openDirections(to: target)
+        if kind == .car { directions?.mode = .walk }
+    }
+
+    /** Home, work, the parked car or a saved place, by id, for a tap on its map icon. */
+    func myPlace(_ id: String) -> Place? {
+        [settings.home, settings.work, settings.parking].compactMap { $0 }.first { $0.id == id }
+            ?? settings.saved.first { $0.id == id }
+    }
+
+    func setHome(_ p: Place?) {
+        settings.home = p.map { var h = $0; h.distanceMeters = nil; return h }
+        if p != nil { notice = "Saved as your home." }
+    }
+
+    func setWork(_ p: Place?) {
+        settings.work = p.map { var w = $0; w.distanceMeters = nil; return w }
+        if p != nil { notice = "Saved as your work." }
+    }
+
+    /** Remember where the car is: here, now, with the street name when one is found. */
+    func saveParking() {
+        guard let me = userLatLng else {
+            notice = "Turn on location to save where you parked."
+            return
+        }
+        var p = Place(id: "parking:\(Int(Date().timeIntervalSince1970))", name: "Parked car", location: me, source: "osm")
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        p.category = "Parked at \(f.string(from: Date()))"
+        settings.parking = p
+        notice = "Parking spot saved. Tap the P button to find your car."
+        let pid = p.id
+        Task {
+            guard let found = await Photon.reverse(me), settings.parking?.id == pid else { return }
+            settings.parking?.address = [found.name, found.address].compactMap { $0 }.joined(separator: ", ")
+        }
+    }
+
+    func clearParking() {
+        if selected?.id == settings.parking?.id { selected = nil }
+        settings.parking = nil
     }
 
     /** Long press: a dropped pin with the address there. */
@@ -296,6 +370,25 @@ final class AppModel: ObservableObject {
         frameRoute()
     }
 
+    func addStop(_ p: Place) {
+        guard directions != nil, (directions?.stops.count ?? 0) < 8 else { return }
+        directions?.stops.append(p)
+        reloadRoutes()
+    }
+
+    func removeStop(_ i: Int) {
+        guard let d = directions, d.stops.indices.contains(i) else { return }
+        directions?.stops.remove(at: i)
+        reloadRoutes()
+    }
+
+    /** 0 leave now, 1 depart at, 2 arrive by. */
+    func setTransitTime(kind: Int, at date: Date) {
+        directions?.transitTime = kind == 0 ? nil : date
+        directions?.arriveBy = kind == 2
+        loadTransit()
+    }
+
     func showTransit() {
         directions?.transit = true
         frameRoute()
@@ -314,6 +407,8 @@ final class AppModel: ObservableObject {
     func reloadRoutes() {
         guard directions != nil else { return }
         directions?.routes = [:]
+        directions?.errors = [:]
+        directions?.selected = 0
         loadAllModes()
     }
 
@@ -324,12 +419,13 @@ final class AppModel: ObservableObject {
             return
         }
         let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
+        let via = (d.reversed ? d.stops.reversed() : d.stops).map(\.location)
         let destId = d.destination.id
         let hw = settings.avoidHighways, tolls = settings.avoidTolls, google = !settings.noGoogle
         for m in TravelMode.allCases {
             directions?.loading.insert(m)
             Task {
-                let r = await Directions.routes(from: from, to: to, mode: m, avoidHighways: hw, avoidTolls: tolls, useGoogle: google)
+                let r = await Directions.routes(from: from, to: to, mode: m, avoidHighways: hw, avoidTolls: tolls, useGoogle: google, via: via)
                 guard directions?.destination.id == destId else { return }
                 directions?.loading.remove(m)
                 directions?.routes[m] = r.routes
@@ -343,12 +439,22 @@ final class AppModel: ObservableObject {
                 }
             }
         }
+        loadTransit()
+    }
+
+    /** Transit trips for the current trip, leaving now or at the picked time. */
+    func loadTransit() {
+        guard let d = directions, let me = userLatLng else { return }
+        let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
+        let destId = d.destination.id
+        let time = d.transitTime, arriveBy = d.arriveBy
         directions?.trips = nil
         directions?.tripsError = nil
+        directions?.trip = 0
         Task {
             do {
-                let trips = try await Transitous.plan(from: from, to: to)
-                guard directions?.destination.id == destId else { return }
+                let trips = try await Transitous.plan(from: from, to: to, time: time, arriveBy: arriveBy)
+                guard directions?.destination.id == destId, directions?.transitTime == time, directions?.arriveBy == arriveBy else { return }
                 directions?.trips = trips
                 if trips.isEmpty { directions?.tripsError = "No transit trips found here." }
             } catch {
@@ -367,14 +473,14 @@ final class AppModel: ObservableObject {
             return
         }
         guard let r = directions?.route else { mapTick += 1; return }
-        frame(r.polyline, bottomFraction: 0.42)
+        frame(r.polyline, bottomFraction: 0.42, top: 170 + CGFloat(directions?.stops.count ?? 0) * 42)
     }
 
     // MARK: Navigation
 
     func startNavigation() {
         guard let d = directions, let route = d.route, !d.reversed else { return }
-        let n = Navigator(route: route, destination: d.destination, settings: settings)
+        let n = Navigator(route: route, destination: d.destination, stops: d.stops, settings: settings)
         nav = n
         navSub = n.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         location.setNavigating(true, mode: route.mode.rawValue)
