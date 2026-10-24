@@ -5,6 +5,7 @@ import VelaCore
 
 struct ContentView: View {
     @StateObject private var model = AppModel()
+    @ObservedObject private var launch = LaunchAction.shared
     @ObservedObject private var settings = AppSettings.shared
     @Environment(\.colorScheme) private var systemScheme
 
@@ -24,6 +25,11 @@ struct ContentView: View {
         }
         .preferredColorScheme(settings.colorScheme)
         .task { await DemoScript.run(model) }
+        .onReceive(launch.$pending) { kind in
+            guard let kind else { return }
+            launch.pending = nil
+            Task { await model.perform(kind) }
+        }
         .sheet(isPresented: $model.showLayers) {
             LayersSheet(settings: settings)
         }

@@ -263,6 +263,26 @@ final class AppModel: ObservableObject {
 
     // MARK: My places
 
+    /** A Siri or Shortcuts request: directions home or to work, or back to the car. */
+    func perform(_ kind: LaunchAction.Kind) async {
+        // At a cold start, give location a few seconds to come in first.
+        for _ in 0..<20 where userLatLng == nil { try? await Task.sleep(nanoseconds: 250_000_000) }
+        if nav != nil { endNavigation() }
+        let target: Place?
+        switch kind {
+        case .home: target = settings.home
+        case .work: target = settings.work
+        case .car: target = settings.parking
+        }
+        guard let target else {
+            notice = kind == .car ? "No parking spot saved yet. Tap P on the map when you park."
+                : "Set your \(kind == .home ? "home" : "work") first: open a place, tap More, then Set as \(kind == .home ? "home" : "work")."
+            return
+        }
+        openDirections(to: target)
+        if kind == .car { directions?.mode = .walk }
+    }
+
     /** Home, work, the parked car or a saved place, by id, for a tap on its map icon. */
     func myPlace(_ id: String) -> Place? {
         [settings.home, settings.work, settings.parking].compactMap { $0 }.first { $0.id == id }

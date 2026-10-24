@@ -136,11 +136,14 @@ struct ResultRow: View {
 struct PhotoStrip: View {
     let urls: [String]
     var height: CGFloat = 130
+    /** Tapping a photo opens it full screen (on the place page; the result list opens the place). */
+    var opensViewer = false
+    @State private var viewing: Int?
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(urls, id: \.self) { u in
+                ForEach(Array(urls.enumerated()), id: \.offset) { i, u in
                     AsyncImage(url: URL(string: u)) { phase in
                         if let img = phase.image {
                             img.resizable().scaledToFill()
@@ -150,9 +153,54 @@ struct PhotoStrip: View {
                     }
                     .frame(width: height * 1.4, height: height)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .contentShape(Rectangle())
+                    .onTapGesture { if opensViewer { viewing = i } }
                 }
             }
         }
+        .fullScreenCover(isPresented: Binding(get: { viewing != nil }, set: { if !$0 { viewing = nil } })) {
+            PhotoViewer(urls: urls, start: viewing ?? 0)
+        }
+    }
+}
+
+/** Photos full screen, swiped through, at a larger size than the strip asks for. */
+struct PhotoViewer: View {
+    let urls: [String]
+    let start: Int
+    @State private var page = 0
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+            TabView(selection: $page) {
+                ForEach(Array(urls.enumerated()), id: \.offset) { i, u in
+                    AsyncImage(url: URL(string: Self.large(u))) { phase in
+                        if let img = phase.image {
+                            img.resizable().scaledToFit()
+                        } else {
+                            ProgressView().tint(.white)
+                        }
+                    }
+                    .tag(i)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: urls.count > 1 ? .always : .never))
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.system(size: 17, weight: .bold)).foregroundColor(.white)
+                    .frame(width: 40, height: 40).background(Circle().fill(Color.white.opacity(0.2)))
+            }
+            .padding(16)
+            .accessibilityLabel("Close")
+        }
+        .onAppear { page = start }
+    }
+
+    /** Google photo links carry their size ("=w408-h306-k-no"): ask for a bigger one. */
+    static func large(_ u: String) -> String {
+        guard let r = u.range(of: #"=w\d+-h\d+"#, options: .regularExpression) else { return u }
+        return u.replacingCharacters(in: r, with: "=w1600-h1200")
     }
 }
 

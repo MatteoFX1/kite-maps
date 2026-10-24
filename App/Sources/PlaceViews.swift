@@ -47,7 +47,7 @@ struct PlaceBody: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 actions
-                if !place.photoUrls.isEmpty { PhotoStrip(urls: place.photoUrls, height: 140) }
+                if !place.photoUrls.isEmpty { PhotoStrip(urls: place.photoUrls, height: 140, opensViewer: true) }
                 if hasAbout {
                     Picker("", selection: $tab) {
                         Text("Overview").tag(0)

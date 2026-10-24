@@ -7,6 +7,7 @@ struct NavigationOverlay: View {
     @ObservedObject var nav: Navigator
     @State private var showSteps = false
     @State private var showAlong = false
+    @State private var confirmEnd = false
     @Environment(\.colorScheme) private var scheme
 
     /** "On my way to X, arriving around 5:42 PM (25 min)" with a map link. */
@@ -76,7 +77,11 @@ struct NavigationOverlay: View {
                     }
                 }
                 .padding(.horizontal, 14)
-                TripBar(nav: nav, onEnd: { model.endNavigation() }, onSteps: { showSteps = true })
+                TripBar(nav: nav, onEnd: { if nav.arrived { model.endNavigation() } else { confirmEnd = true } }, onSteps: { showSteps = true })
+                    .confirmationDialog("End this trip?", isPresented: $confirmEnd, titleVisibility: .visible) {
+                        Button("End trip", role: .destructive) { model.endNavigation() }
+                        Button("Keep going", role: .cancel) {}
+                    }
             }
         }
         .sheet(isPresented: $showAlong) {
