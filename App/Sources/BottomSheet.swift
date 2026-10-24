@@ -67,12 +67,23 @@ struct BottomSheet<Header: View, Content: View>: View {
         .frame(height: current, alignment: .top)
         .frame(maxWidth: .infinity)
         .background(
-            UnevenTopRounded(radius: 22)
-                .fill(Vela.sheet(scheme))
-                .shadow(color: .black.opacity(0.25), radius: 10, y: -2)
-                .ignoresSafeArea(edges: .bottom)
+            // Frosted, like iOS 26: mostly solid so text stays easy to read.
+            shape.fill(.ultraThinMaterial)
+                .overlay(shape.fill(Vela.sheet(scheme).opacity(0.88)))
+                .overlay(shape.stroke(Color.white.opacity(scheme == .dark ? 0.12 : 0.5), lineWidth: 0.75))
+                .shadow(color: .black.opacity(0.25), radius: 14, y: -2)
         )
-        .clipShape(UnevenTopRounded(radius: 22))
+        .clipShape(shape)
+        // Below full height it floats just off the screen's edges, the way iOS 26 sheets do.
+        .padding(.horizontal, floating ? 8 : 0)
+        .padding(.bottom, floating ? 8 : 0)
+        .animation(.spring(response: 0.32, dampingFraction: 0.85), value: floating)
+    }
+
+    private var floating: Bool { detent != .full }
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: floating ? 34 : 28, style: .continuous)
     }
 }
 

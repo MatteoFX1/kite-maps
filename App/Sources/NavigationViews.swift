@@ -35,7 +35,7 @@ struct NavigationOverlay: View {
                     Label("Rerouting…", systemImage: "arrow.triangle.2.circlepath")
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 14).frame(height: 34)
-                        .background(Capsule().fill(Vela.sheet(scheme)).shadow(radius: 3))
+                        .glass(Capsule())
                 }
                 Spacer()
             }
@@ -70,7 +70,7 @@ struct NavigationOverlay: View {
                                 .font(.system(size: 19, weight: .semibold))
                                 .foregroundColor(.primary)
                                 .frame(width: 48, height: 48)
-                                .background(Circle().fill(Vela.sheet(scheme)))
+                                .glass(Circle())
                                 .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
                         }
                         .accessibilityLabel("Share arrival time")
@@ -172,7 +172,7 @@ struct SpeedBadge: View {
             Text(metric ? "km/h" : "mph").font(.system(size: 10, weight: .medium)).foregroundColor(.secondary)
         }
         .frame(width: 64, height: 64)
-        .background(Circle().fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.25), radius: 4, y: 2))
+        .glass(Circle())
     }
 }
 

@@ -122,7 +122,7 @@ struct ListeningCard: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 22).fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.25), radius: 10))
+        .glass(RoundedRectangle(cornerRadius: 22))
         .padding(.horizontal, 12)
     }
 }

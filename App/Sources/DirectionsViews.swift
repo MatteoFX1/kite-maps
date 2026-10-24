@@ -79,7 +79,7 @@ struct EndpointsCard: View {
         .foregroundColor(.primary)
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 18).fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.22), radius: 6, y: 2))
+        .glass(RoundedRectangle(cornerRadius: 18))
         .padding(.horizontal, 12)
     }
 

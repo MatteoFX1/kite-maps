@@ -82,8 +82,7 @@ struct BrowseOverlay: View {
                                     CompassNeedle()
                                         .rotationEffect(.degrees(-model.mapHeading))
                                         .frame(width: 44, height: 44)
-                                        .background(Circle().fill(Vela.sheet(scheme)))
-                                        .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+                                        .glass(Circle())
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("Face north")
@@ -223,7 +222,7 @@ struct SearchBar: View {
         .foregroundColor(.primary)
         .padding(.horizontal, 18)
         .frame(height: 52)
-        .background(Capsule().fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.22), radius: 6, y: 2))
+        .glass(Capsule())
         .padding(.horizontal, 12)
     }
 }
@@ -243,7 +242,7 @@ struct CategoryChips: View {
                         }
                         .padding(.horizontal, 14)
                         .frame(height: 36)
-                        .background(Capsule().fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.18), radius: 3, y: 1))
+                        .glass(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -334,7 +333,7 @@ struct SuggestionsPanel: View {
             }
             .padding(.vertical, 8)
         }
-        .background(RoundedRectangle(cornerRadius: 20).fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.2), radius: 8))
+        .glass(RoundedRectangle(cornerRadius: 20))
         .padding(.horizontal, 12)
         .frame(maxHeight: 460)
     }
@@ -366,7 +365,7 @@ struct NoticeBanner: View {
             Button(action: dismiss) { Image(systemName: "xmark").font(.footnote) }.buttonStyle(.plain)
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.18), radius: 4))
+        .glass(RoundedRectangle(cornerRadius: 14))
         .padding(.horizontal, 12)
     }
 }
