@@ -447,7 +447,7 @@ enum DemoScript {
         if step == "copy" { CopyOnHold.demoText = first.address }
         model.select(first)
         await wait(5)
-        guard !["place", "streetview", "lookaround", "copy"].contains(step) else { return }
+        guard !["place", "streetview", "streetview90", "lookaround", "copy"].contains(step) else { return }
         model.openDirections(to: first)
         if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)
