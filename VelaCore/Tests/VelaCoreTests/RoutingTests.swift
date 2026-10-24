@@ -106,4 +106,18 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(r.speedLimit(at: 10), 50)
         XCTAssertNil(r.speedLimit(at: cum[2] + 1))
     }
+
+    func testLanes() {
+        let step: [String: Any] = ["intersections": [["lanes": [
+            ["indications": ["left"], "valid": true],
+            ["indications": ["straight"], "valid": false],
+            ["indications": ["straight", "right"], "valid": false],
+        ]]]]
+        let lanes = OSRM.lanes(step)
+        XCTAssertEqual(lanes.count, 3)
+        XCTAssertTrue(lanes[0].valid)
+        XCTAssertEqual(lanes[2].indications, ["straight", "right"])
+        let allValid: [String: Any] = ["intersections": [["lanes": [["indications": ["straight"], "valid": true], ["indications": ["straight"], "valid": true]]]]]
+        XCTAssertTrue(OSRM.lanes(allValid).isEmpty, "every lane fine says nothing")
+    }
 }

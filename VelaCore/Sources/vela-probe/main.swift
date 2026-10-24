@@ -136,4 +136,21 @@ print("OSRM with a stop: \(viaOSRM?.first.map { "\(Int($0.distanceMeters)) m, \(
 let tl = await Transitous.lines(south: 40.70, west: -74.02, north: 40.74, east: -73.97, zoom: 13)
 print("Transit lines: \(tl.map { "\($0.count) stretches, lines \(Set($0.flatMap(\.names)).sorted().prefix(12))" } ?? "failed")")
 
+
+// Lanes and roundabout exits in the merged steps.
+if let r = merged.routes.first {
+    let withLanes = r.maneuvers.filter { !$0.lanes.isEmpty }
+    print("Lanes: \(withLanes.count) of \(r.maneuvers.count) steps; " + withLanes.prefix(3).map { m in
+        m.instruction + " " + m.lanes.map { ($0.valid ? "*" : "") + $0.indications.joined(separator: "/") }.joined(separator: "|")
+    }.joined(separator: "; "))
+}
+
+// Britain: the A9 north of Perth has average speed cameras; Wales and Scotland drive on the left too.
+if let uk = try? await OSRM.route(from: LatLng(56.4120, -3.4700), to: LatLng(56.7030, -3.7340), mode: .drive).first {
+    let found = await Overpass.alongRoute(uk.polyline, speed: true, plate: false)
+    print("UK A9: \(Int(uk.distanceMeters)) m, roundabout exits \(uk.maneuvers.compactMap(\.exit)), cameras \(found?.cameras.count ?? -1), limits \(found.map { Overpass.speedLimits($0.ways, on: uk.polyline).compactMap(\.kmh).map { Int(($0 / 1.609344).rounded()) } } ?? []), average zones " + (found?.zones.map { "\(Int($0.startMeters))-\(Int($0.endMeters)) m @ \($0.kmh.map { Int(($0 / 1.609344).rounded()) } ?? 0) mph" }.joined(separator: ", ") ?? "failed"))
+} else {
+    print("UK A9: routing failed")
+}
+
 exit(exitCode)

@@ -9,13 +9,14 @@ enum ThemeMode: String, CaseIterable, Identifiable {
 }
 
 enum UnitsMode: String, CaseIterable, Identifiable {
-    case auto, metric, imperial
+    case auto, metric, imperial, yards
     var id: String { rawValue }
     var label: String {
         switch self {
         case .auto: return "Automatic"
         case .metric: return "Kilometers"
-        case .imperial: return "Miles"
+        case .imperial: return "Miles and feet"
+        case .yards: return "Miles and yards (UK)"
         }
     }
 }

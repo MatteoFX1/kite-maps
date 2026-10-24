@@ -88,10 +88,13 @@ public enum OSRM {
                     if let n = name ?? ref { roads[n, default: 0] += dist }
                     let loc = (m["location"] as? [Double]).map { LatLng($0[1], $0[0]) } ?? Geo.point(along: line, meters: along, cumulative: cum)
                     let mt = maneuverType(type, modifier)
-                    maneuvers.append(Maneuver(type: mt, instruction: instruction(type: type, modifier: modifier, road: name ?? ref,
-                                                                                 exit: m["exit"] as? Int, mode: mode),
-                                              location: loc, alongMeters: min(along, cum.last ?? along),
-                                              distanceMeters: dist, road: name ?? ref, laneHint: nil))
+                    var man = Maneuver(type: mt, instruction: instruction(type: type, modifier: modifier, road: name ?? ref,
+                                                                         exit: m["exit"] as? Int, mode: mode),
+                                       location: loc, alongMeters: min(along, cum.last ?? along),
+                                       distanceMeters: dist, road: name ?? ref, laneHint: nil)
+                    man.lanes = lanes(step)
+                    man.exit = m["exit"] as? Int
+                    maneuvers.append(man)
                     along += dist
                 }
             }
@@ -104,6 +107,15 @@ public enum OSRM {
             route.speedLimits = speedLimits(legs, line: line, cumulative: cum)
             return route
         }
+    }
+
+    /** The turn lanes at a step's maneuver point (its first intersection), left to right. */
+    static func lanes(_ step: [String: Any]) -> [Lane] {
+        guard let first = (step["intersections"] as? [[String: Any]])?.first,
+              let raw = first["lanes"] as? [[String: Any]], raw.count > 1 else { return [] }
+        let lanes = raw.map { Lane(indications: $0["indications"] as? [String] ?? ["none"], valid: $0["valid"] as? Bool ?? false) }
+        // All lanes valid tells the driver nothing.
+        return lanes.allSatisfy(\.valid) ? [] : lanes
     }
 
     /**

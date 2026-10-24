@@ -26,7 +26,10 @@ struct NavigationOverlay: View {
                     InstructionBanner(nav: nav)
                 }
                 if let cam = nav.cameraAhead, !nav.arrived {
-                    CameraCard(kind: cam.kind, meters: cam.meters)
+                    CameraCard(alert: cam, speedKmh: nav.speedMps * 3.6)
+                }
+                if let check = nav.averageCheck, !nav.arrived {
+                    AverageCheckCard(check: check)
                 }
                 if nav.rerouting {
                     Label("Rerouting…", systemImage: "arrow.triangle.2.circlepath")
@@ -105,9 +108,13 @@ struct InstructionBanner: View {
         let m = nav.nextManeuver
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 14) {
-                Image(systemName: maneuverSymbol(m?.type ?? .straight))
-                    .font(.system(size: 40, weight: .bold))
-                    .frame(width: 56)
+                if m?.type == .roundabout, let exit = m?.exit {
+                    RoundaboutGlyph(exit: exit, rightHand: !Geo.drivesOnLeft(m?.location ?? LatLng(0, 0)))
+                } else {
+                    Image(systemName: maneuverSymbol(m?.type ?? .straight))
+                        .font(.system(size: 40, weight: .bold))
+                        .frame(width: 56)
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     if let p = nav.progress {
                         Text(Fmt.distance(p.distanceToNext)).font(.system(size: 30, weight: .bold))
@@ -128,6 +135,10 @@ struct InstructionBanner: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
+            if let m, m.lanes.count > 1, let p = nav.progress, p.distanceToNext < 1_500 {
+                LaneStrip(lanes: m.lanes, turn: m.type)
+                    .padding(.bottom, 12)
+            }
             if let then = nav.thenManeuver {
                 HStack(spacing: 8) {
                     Text("Then").font(.subheadline.weight(.semibold))
@@ -170,8 +181,9 @@ struct SpeedLimitSign: View {
     let kmh: Double
 
     var body: some View {
-        if Fmt.metric {
-            Text("\(Int(kmh.rounded()))")
+        if Fmt.metric || Fmt.yards {
+            // Round red ring: kilometers on the Continent, miles in Britain.
+            Text("\(Fmt.metric ? Int(kmh.rounded()) : Int((kmh / 1.609344 / 5).rounded()) * 5)")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundColor(.black)
                 .frame(width: 56, height: 56)
@@ -270,23 +282,77 @@ struct ArrivedCard: View {
     }
 }
 
-/** "Speed camera ahead · 200 m", amber like Vela's speed camera badge; purple for plate readers. */
+/**
+ * The Waze-style camera warning: the camera, how far, a bar that empties as it gets close, and
+ * the limit it checks. Turns red while the user is over that limit.
+ */
 struct CameraCard: View {
-    let kind: RoadCamera.Kind
-    let meters: Double
+    let alert: CameraAlert
+    let speedKmh: Double
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(spacing: 10) {
-            CameraBadge(kind: kind, size: 30)
-            Text(kind == .speed ? "Speed camera ahead" : "License plate camera ahead")
-                .font(.subheadline.weight(.semibold))
-            Spacer(minLength: 4)
-            Text(Fmt.distance(meters)).font(.subheadline).foregroundColor(.secondary)
+        let over = alert.limitKmh.map { speedKmh > $0 + 3 } ?? false
+        let left = min(max(alert.meters / alert.startMeters, 0), 1)
+        let tint: Color = alert.kind == .speed ? Color(hex: 0xF9AB00) : Color(hex: 0x8E44AD)
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                CameraBadge(kind: alert.kind, size: 40)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(Fmt.distance(alert.meters)).font(.system(size: 24, weight: .bold)).monospacedDigit()
+                    Text(alert.kind == .speed ? "Speed camera" : (Fmt.yards ? "Number plate camera" : "License plate camera"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(over ? .white.opacity(0.9) : .secondary)
+                }
+                Spacer(minLength: 4)
+                if let limit = alert.limitKmh { SpeedLimitSign(kmh: limit) }
+            }
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.secondary.opacity(0.25))
+                    Capsule().fill(over ? Color.white : tint).frame(width: g.size.width * left)
+                }
+            }
+            .frame(height: 6)
         }
-        .padding(.horizontal, 12)
-        .frame(height: 48)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Vela.sheet(scheme)).shadow(color: .black.opacity(0.25), radius: 4, y: 2))
+        .foregroundColor(over ? .white : .primary)
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 18).fill(over ? Vela.closed : Vela.sheet(scheme))
+            .shadow(color: .black.opacity(0.25), radius: 4, y: 2))
+        .animation(.easeOut(duration: 0.3), value: over)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/** Inside an average speed check: your average so far against the limit, and how much is left. */
+struct AverageCheckCard: View {
+    let check: AverageCheck
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let over = check.limitKmh.map { check.averageKmh > $0 + 2 } ?? false
+        HStack(spacing: 12) {
+            Image(systemName: "gauge.with.dots.needle.33percent")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundColor(over ? .white : Color(hex: 0xF9AB00))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Average speed check").font(.subheadline.weight(.semibold))
+                Text("\(Fmt.distance(max(check.metersLeft, 0))) left").font(.caption)
+                    .foregroundColor(over ? .white.opacity(0.9) : .secondary)
+            }
+            Spacer(minLength: 4)
+            VStack(spacing: -2) {
+                Text("\(Fmt.speed(check.averageKmh))").font(.system(size: 24, weight: .bold)).monospacedDigit()
+                Text("avg \(Fmt.speedUnit)").font(.system(size: 10, weight: .medium))
+                    .foregroundColor(over ? .white.opacity(0.9) : .secondary)
+            }
+            if let limit = check.limitKmh { SpeedLimitSign(kmh: limit) }
+        }
+        .foregroundColor(over ? .white : .primary)
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 18).fill(over ? Vela.closed : Vela.sheet(scheme))
+            .shadow(color: .black.opacity(0.25), radius: 4, y: 2))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -472,5 +538,79 @@ struct InterstateShape: InsettableShape {
                    control2: CGPoint(x: r.minX - r.width * 0.05, y: r.minY + r.height * 0.6))
         p.closeSubpath()
         return p
+    }
+}
+
+/** Which lanes to be in, the way Waze and Google draw it: the right ones bright, the rest dim. */
+struct LaneStrip: View {
+    let lanes: [Lane]
+    let turn: ManeuverType
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(lanes.enumerated()), id: \.offset) { i, lane in
+                if i > 0 { Rectangle().fill(Color.white.opacity(0.35)).frame(width: 1, height: 26) }
+                Image(systemName: Self.symbol(pick(lane)))
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(lane.valid ? .white : .white.opacity(0.32))
+                    .frame(width: 38, height: 36)
+            }
+        }
+        .padding(.horizontal, 6)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.22)))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Use the highlighted lanes")
+    }
+
+    /** A lane that goes several ways shows the way this turn goes when it's a good lane. */
+    private func pick(_ lane: Lane) -> String {
+        guard lane.valid, lane.indications.count > 1 else { return lane.indications.first ?? "straight" }
+        let want: [String]
+        switch turn {
+        case .turnLeft, .sharpLeft, .rampLeft: want = ["left", "sharp left", "slight left"]
+        case .slightLeft, .forkLeft, .keepLeft: want = ["slight left", "left"]
+        case .turnRight, .sharpRight, .rampRight: want = ["right", "sharp right", "slight right"]
+        case .slightRight, .forkRight, .keepRight: want = ["slight right", "right"]
+        case .uturn: want = ["uturn"]
+        default: want = ["straight"]
+        }
+        return want.first { lane.indications.contains($0) } ?? lane.indications[0]
+    }
+
+    static func symbol(_ indication: String) -> String {
+        switch indication {
+        case "left": return "arrow.turn.up.left"
+        case "sharp left": return "arrow.turn.left.down"
+        case "slight left": return "arrow.up.left"
+        case "right": return "arrow.turn.up.right"
+        case "sharp right": return "arrow.turn.right.down"
+        case "slight right": return "arrow.up.right"
+        case "uturn": return "arrow.uturn.down"
+        default: return "arrow.up"
+        }
+    }
+}
+
+/** A roundabout with the exit to take drawn as the way out, and its number. */
+struct RoundaboutGlyph: View {
+    let exit: Int
+    /** Drives on the right: traffic goes round counterclockwise. */
+    var rightHand = true
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(Color.white.opacity(0.45), lineWidth: 5).frame(width: 26, height: 26)
+            // Entry from the bottom, around to the exit, one exit about every 90 degrees.
+            let turn = Double(min(max(exit, 1), 6)) * 90
+            Circle()
+                .trim(from: 0, to: min(turn, 330) / 360)
+                .stroke(Color.white, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                .frame(width: 26, height: 26)
+                .rotationEffect(.degrees(90))
+                .scaleEffect(x: rightHand ? -1 : 1, y: 1)
+            Rectangle().fill(Color.white).frame(width: 5, height: 12).offset(y: 19)
+            Text("\(exit)").font(.system(size: 13, weight: .heavy)).foregroundColor(.white)
+        }
+        .frame(width: 56, height: 56)
     }
 }

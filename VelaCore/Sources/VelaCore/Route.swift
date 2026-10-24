@@ -41,6 +41,20 @@ public struct Maneuver: Hashable, Sendable {
     public var distanceMeters: Double
     public var road: String?
     public var laneHint: String?
+    /** The lanes on the way into this maneuver, left to right, when OpenStreetMap maps them. */
+    public var lanes: [Lane] = []
+    /** Which exit to take at a roundabout. */
+    public var exit: Int?
+}
+
+/** One lane: where it goes ("left", "straight", "slight right"…) and whether it's a lane for this maneuver. */
+public struct Lane: Hashable, Sendable {
+    public var indications: [String]
+    public var valid: Bool
+    public init(indications: [String], valid: Bool) {
+        self.indications = indications
+        self.valid = valid
+    }
 }
 
 /** The posted limit from [startMeters] on, in km/h; nil where it isn't mapped. */
@@ -89,6 +103,24 @@ public struct Route: Identifiable, Hashable, Sendable {
 }
 
 public enum Geo {
+    /** Whether traffic keeps left here (Britain, Ireland, Japan, Australia and the like), roughly by area. */
+    public static func drivesOnLeft(_ p: LatLng) -> Bool {
+        let boxes: [(s: Double, w: Double, n: Double, e: Double)] = [
+            (49.8, -11.0, 61.0, 1.8),      // Britain and Ireland
+            (24.0, 122.9, 45.6, 146.0),    // Japan
+            (-44.0, 112.0, -10.0, 154.0),  // Australia
+            (-47.5, 166.0, -34.0, 179.0),  // New Zealand
+            (6.5, 68.0, 35.5, 97.5),       // India, Sri Lanka, Bangladesh, Nepal
+            (-35.0, 16.0, -22.0, 33.0),    // South Africa and neighbors
+            (-11.0, 95.0, 7.5, 141.0),     // Indonesia, Malaysia, Singapore
+            (5.5, 97.3, 20.5, 105.7),      // Thailand
+            (22.1, 113.8, 22.6, 114.4),    // Hong Kong
+            (-5.0, 33.9, 5.0, 41.9),       // Kenya
+        ]
+        // Gibraltar keeps right inside the first box; close enough to skip.
+        return boxes.contains { p.lat >= $0.s && p.lat <= $0.n && p.lng >= $0.w && p.lng <= $0.e }
+    }
+
     /** Cumulative distance at each vertex. */
     public static func cumulative(_ line: [LatLng]) -> [Double] {
         var out = [0.0]

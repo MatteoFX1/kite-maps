@@ -417,8 +417,12 @@ enum DemoScript {
         model.openDirections(to: first)
         if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)
-        guard step == "nav" else { return }
+        guard step == "nav" || step == "camalert" else { return }
         model.startNavigation()
+        if step == "camalert" {
+            await wait(4)
+            model.nav?.showDemoAlerts()
+        }
     }
 }
 
