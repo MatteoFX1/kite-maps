@@ -118,7 +118,8 @@ public enum Overpass {
         if speed { parts.append("relation[\"enforcement\"=\"average_speed\"](around:200,\(coords));") }
         let q = "[out:json][timeout:40];(" + parts.joined() + ");out body geom 6000;"
         for ep in endpoints {
-            guard let (data, status) = await fetch(ep, query: q), status == 200, parse(data) != nil else { continue }
+            guard let (data, status) = await fetch(ep, query: q), status == 200, parse(data) != nil,
+                  !timedOut(data) else { continue }
             return data
         }
         return nil
@@ -235,6 +236,13 @@ public enum Overpass {
         r.httpBody = ("data=" + (query.addingPercentEncoding(withAllowedCharacters: allowed) ?? "")).data(using: .utf8)
         guard let (data, resp) = try? await session.data(for: r) else { return nil }
         return (data, (resp as? HTTPURLResponse)?.statusCode ?? 0)
+    }
+
+    /** A busy server can answer 200 with a "remark" that the query ran out of time, and no data. */
+    static func timedOut(_ data: Data) -> Bool {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let remark = root["remark"] as? String else { return false }
+        return remark.contains("runtime error") || remark.contains("timed out") || remark.contains("out of memory")
     }
 
     static func parse(_ data: Data) -> [RoadCamera]? {

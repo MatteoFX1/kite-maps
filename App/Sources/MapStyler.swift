@@ -52,6 +52,8 @@ enum MapStyler {
         let p = dark ? Self.dark : Self.light
         for layer in style.layers {
             let id = layer.identifier
+            // Vela's own layers keep their colors (the transit lines' ids contain "rail").
+            if id.hasPrefix("vela") { continue }
             if id == "natural_earth" || id == "road_area_pattern" { layer.isVisible = false; continue }
             if let bg = layer as? MLNBackgroundStyleLayer {
                 bg.backgroundColor = c(p.land)
