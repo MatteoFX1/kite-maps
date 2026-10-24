@@ -58,7 +58,7 @@ enum MapIcons {
             p.addLine(to: CGPoint(x: 28, y: 22))
             p.addLine(to: CGPoint(x: 2, y: 22))
             p.close()
-            p.lineJoin = .round
+            p.lineJoinStyle = .round
             UIColor.white.setFill()
             UIColor(hex: 0x0B3D91).setStroke()
             p.lineWidth = 2.5
