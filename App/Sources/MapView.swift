@@ -397,6 +397,9 @@ struct VelaMapView: UIViewRepresentable {
                 let lines = await Transitous.lines(south: box.s, west: box.w, north: box.n, east: box.e, zoom: min(z, 14))
                 guard let self else { return }
                 self.railFetch = nil
+                if DemoScript.step == "rail" {
+                    self.model.notice = "Lines: \(lines?.count ?? -1) at z\(box.z), visible \(map?.style?.layer(withIdentifier: "vela-rail")?.isVisible == true)"
+                }
                 if let lines {
                     self.railBox = box
                     let shapes = lines.map { l in
