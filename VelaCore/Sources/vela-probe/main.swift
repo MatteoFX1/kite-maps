@@ -184,13 +184,13 @@ print("Postcode: \(pc.map { "\($0.name) at \($0.location.lat),\($0.location.lng)
 do {
     let near = LatLng(38.54436, -121.74073)
     let raw = (try? await URLSession.shared.data(for: StreetView.searchRequest(near, radius: 60))).map { String(decoding: $0.0, as: UTF8.self) } ?? "failed"
-    print("Street View reply: " + String(raw.prefix(500)))
+    print("Street View reply: " + String(raw.prefix(1200)))
     var pano = await StreetView.find(near: near)
     if pano == nil { pano = await StreetView.find(near: LatLng(51.50080, -0.12460)) }
     if let pano {
         let heading = Geo.bearing(pano.location, pano.location.distance(to: near) < 1000 ? near : LatLng(51.5007, -0.1246))
-        print("Street View: \(pano.id) at \(pano.location), \(Int(pano.location.distance(to: near))) m away, heading \(Int(heading))")
-        for url in [StreetView.thumbnailURL(pano, heading: heading), StreetView.viewerURL(pano, heading: heading)] {
+        print("Street View: \(pano.id) \(pano.width)x\(pano.height) facing \(Int(pano.heading)) at \(pano.location), \(Int(pano.location.distance(to: near))) m away, heading \(Int(heading))")
+        for url in [StreetView.thumbnailURL(pano, heading: heading), StreetView.tileURL(pano, x: 7, y: 3, zoom: 3)] {
             if let (data, resp) = try? await URLSession.shared.data(from: url) {
                 let h = resp as? HTTPURLResponse
                 print("  \(h?.statusCode ?? 0) \(h?.value(forHTTPHeaderField: "Content-Type") ?? "") \(data.count) bytes: \(url.absoluteString.prefix(90))")

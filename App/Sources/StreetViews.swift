@@ -1,7 +1,6 @@
 import MapKit
 import SwiftUI
 import VelaCore
-import WebKit
 
 /**
  * The first tile of a place's photos, like Google Maps: Google Street View looking at the place,
@@ -88,18 +87,39 @@ struct StreetViewTile: View {
     }
 }
 
-/** Google's Street View viewer, full screen: drag to look around, tap the arrows on the road to move. */
+/** Google Street View, full screen: drag to look around, pinch to zoom. Google Maps can take you
+ *  walking down the street from here. */
 struct GoogleStreetViewScreen: View {
     let name: String
     let pano: StreetView.Panorama
     let heading: Double
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             Color.black.ignoresSafeArea()
-            WebPage(url: StreetView.viewerURL(pano, heading: heading)).ignoresSafeArea()
+            PanoramaViewer(pano: pano, heading: heading).ignoresSafeArea()
             PanoramaBar(name: name, source: "Street View") { dismiss() }
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button {
+                        openURL(URL(string: "https://www.google.com/maps/@?api=1&map_action=pano&pano=\(pano.id)&heading=\(Int(heading))")!)
+                    } label: {
+                        Label("Walk around in Google Maps", systemImage: "figure.walk")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16).frame(height: 42)
+                            .background(Capsule().fill(.ultraThinMaterial))
+                            .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.75))
+                    }
+                    .environment(\.colorScheme, .dark)
+                    Spacer()
+                }
+                .padding(.bottom, 24)
+            }
         }
     }
 }
@@ -143,24 +163,6 @@ struct PanoramaBar: View {
         .padding(.horizontal, 12)
         .padding(.top, 8)
     }
-}
-
-struct WebPage: UIViewRepresentable {
-    let url: URL
-
-    func makeUIView(context: Context) -> WKWebView {
-        let cfg = WKWebViewConfiguration()
-        cfg.allowsInlineMediaPlayback = true
-        let web = WKWebView(frame: .zero, configuration: cfg)
-        web.isOpaque = false
-        web.backgroundColor = .black
-        web.scrollView.isScrollEnabled = false
-        web.scrollView.bounces = false
-        web.load(URLRequest(url: url))
-        return web
-    }
-
-    func updateUIView(_ web: WKWebView, context: Context) {}
 }
 
 struct LookAroundView: UIViewControllerRepresentable {

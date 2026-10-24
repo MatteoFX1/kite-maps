@@ -130,11 +130,15 @@ final class PostcodeTests: XCTestCase {
 
 final class StreetViewTests: XCTestCase {
     func testParse() {
-        let reply = #")]}'\#n[[0],[[1],[2,"AbCdEfGhIjKlMnOpQrStUv"]],[[null,null,38.544912,-121.740501],[50]]]"#
+        let reply = #"[[0],[[1],[2,"AbCdEfGhIjKlMnOpQrStUv"],[2,2,[6656,13312],[[1]]],[[null,null,38.544912,-121.740501],[15.2],[201.5,90.1,0.3]]]]"#
         let p = StreetView.parse(reply)
         XCTAssertEqual(p?.id, "AbCdEfGhIjKlMnOpQrStUv")
         XCTAssertEqual(p?.location.lat ?? 0, 38.544912, accuracy: 1e-6)
         XCTAssertEqual(p?.location.lng ?? 0, -121.740501, accuracy: 1e-6)
+        XCTAssertEqual(p?.width, 13312)
+        XCTAssertEqual(p?.height, 6656)
+        XCTAssertEqual(p?.heading ?? 0, 201.5, accuracy: 0.01)
+        XCTAssertEqual(p?.size(zoom: 3).width, 3328)
         XCTAssertNil(StreetView.parse(#"[[5,"search returned no images"]]"#))
     }
 }

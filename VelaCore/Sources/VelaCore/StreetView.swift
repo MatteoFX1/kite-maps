@@ -2,12 +2,31 @@ import Foundation
 
 /**
  * Google Street View, keyless: the same panorama lookup Google's own map pages use, a thumbnail
- * for the place page, and the embeddable viewer for looking around.
+ * for the place page, and the image tiles the app's own viewer stitches into a 360° view.
  */
 public enum StreetView {
     public struct Panorama: Equatable, Sendable {
         public var id: String
         public var location: LatLng
+        /** Full size in pixels (width is twice height); older panoramas are smaller. */
+        public var width = 16384
+        public var height = 8192
+        /** The compass direction at the middle of the image. */
+        public var heading = 0.0
+
+        public init(id: String, location: LatLng, width: Int = 16384, height: Int = 8192, heading: Double = 0) {
+            self.id = id
+            self.location = location
+            self.width = width
+            self.height = height
+            self.heading = heading
+        }
+
+        /** Image size at [zoom] (0 to 5): each step down halves it. */
+        public func size(zoom: Int) -> (width: Int, height: Int) {
+            let f = 1 << max(0, 5 - zoom)
+            return (width / f, height / f)
+        }
     }
 
     /** Google retired the old GeoPhotoService.SingleImageSearch; its pages now ask this RPC. */
@@ -49,7 +68,26 @@ public enum StreetView {
         guard let r = text.range(of: #"\[\[null,null,-?\d+\.\d+,\s*-?\d+\.\d+\]"#, options: .regularExpression) else { return nil }
         let nums = text[r].dropFirst(12).dropLast().split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
         guard nums.count == 2 else { return nil }
-        return Panorama(id: id, location: LatLng(nums[0], nums[1]))
+        var pano = Panorama(id: id, location: LatLng(nums[0], nums[1]))
+        // Its size follows the id: [2,2,[height,width],...
+        let after = text[idMatch.upperBound...]
+        if let m = after.range(of: #"^,\[\d+,\d+,\[\d+,\d+\]"#, options: .regularExpression) {
+            let n = after[m].split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+            if n.count == 4, n[3] >= 1024 { pano.height = n[2]; pano.width = n[3] }
+        }
+        // Its heading follows the position: [[null,null,lat,lng],[altitude],[heading,tilt,roll]]
+        let rest = text[r.upperBound...]
+        if let m = rest.range(of: #"^,\[[^\]]*\],\[-?\d+(\.\d+)?"#, options: .regularExpression),
+           let h = Double(rest[m].split(separator: "[").last ?? "") {
+            pano.heading = h
+        }
+        return pano
+    }
+
+    /** One 512-pixel square of the panorama at [zoom]. */
+    public static func tileURL(_ pano: Panorama, x: Int, y: Int, zoom: Int) -> URL {
+        URL(string: "https://streetviewpixels-pa.googleapis.com/v1/tile?cb_client=maps_sv.tactile&panoid=\(pano.id)"
+            + "&x=\(x)&y=\(y)&zoom=\(zoom)&nbt=1&fover=2")!
     }
 
     /** A still from the panorama, looking toward [heading]. */
