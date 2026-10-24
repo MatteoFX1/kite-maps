@@ -19,7 +19,7 @@ public enum StreetView {
         r.setValue("application/json+protobuf", forHTTPHeaderField: "Content-Type")
         let body = "[[\"apiv3\",null,null,null,\"US\",null,null,null,null,null,[[0]]],"
             + "[[null,null,\(p.lat),\(p.lng)],\(radius)],"
-            + "[null,[\"en\",\"US\"],null,null,null,null,null,null,[2],null,[[[2,true,2],[3,true,2],[10,true,2]]]],"
+            + "[null,[\"en\",\"US\"],null,null,null,null,null,null,[2],null,[[[2,true,2],[3,true,2]]]],"
             + "[[1,2,3,4,8,6]]]"
         r.httpBody = body.data(using: .utf8)
         return r
@@ -35,7 +35,8 @@ public enum StreetView {
         return URLSession(configuration: c)
     }()
 
-    /** The nearest Google panorama within [radius] meters (official Street View only), or nil. */
+    /** The nearest Google panorama within [radius] meters, or nil. Official Street View only: not
+     *  the photo spheres people upload (type 10), which are often indoors or years old. */
     public static func find(near p: LatLng, radius: Int = 60) async -> Panorama? {
         guard let (data, _) = try? await session.data(for: searchRequest(p, radius: radius)) else { return nil }
         return parse(String(decoding: data, as: UTF8.self))

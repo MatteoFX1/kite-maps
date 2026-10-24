@@ -185,8 +185,10 @@ do {
     let near = LatLng(38.54436, -121.74073)
     let raw = (try? await URLSession.shared.data(for: StreetView.searchRequest(near, radius: 60))).map { String(decoding: $0.0, as: UTF8.self) } ?? "failed"
     print("Street View reply: " + String(raw.prefix(500)))
-    if let pano = await StreetView.find(near: near) {
-        let heading = Geo.bearing(pano.location, near)
+    var pano = await StreetView.find(near: near)
+    if pano == nil { pano = await StreetView.find(near: LatLng(51.50080, -0.12460)) }
+    if let pano {
+        let heading = Geo.bearing(pano.location, pano.location.distance(to: near) < 1000 ? near : LatLng(51.5007, -0.1246))
         print("Street View: \(pano.id) at \(pano.location), \(Int(pano.location.distance(to: near))) m away, heading \(Int(heading))")
         for url in [StreetView.thumbnailURL(pano, heading: heading), StreetView.viewerURL(pano, heading: heading)] {
             if let (data, resp) = try? await URLSession.shared.data(from: url) {
