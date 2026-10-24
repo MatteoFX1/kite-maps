@@ -40,6 +40,7 @@ enum MapIcons {
         style.setImage(speedCamera(), forName: "cam-speed")
         style.setImage(plateCamera(), forName: "cam-plate")
         style.setImage(turnHead(), forName: "turn-head")
+        style.setImage(dot("smallcircle.filled.circle", UIColor(hex: 0x5F6368)), forName: "pin-stop")
         // My places: home, work, the parked car and saved places.
         style.setImage(dot("house.fill", UIColor(hex: 0x1A73E8)), forName: "mine-home")
         style.setImage(dot("briefcase.fill", UIColor(hex: 0x8D6E63)), forName: "mine-work")

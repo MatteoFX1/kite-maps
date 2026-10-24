@@ -44,6 +44,8 @@ struct DirectionsState {
     var errors: [TravelMode: String] = [:]
     var selected = 0
     /** The Transit tab is showing (its trips come from Transitous, not the road routers). */
+    /** Places to stop at on the way, in order. */
+    var stops: [Place] = []
     var transit = false
     var trips: [TransitTrip]?
     var tripsError: String?
@@ -77,6 +79,8 @@ final class AppModel: ObservableObject {
     @Published var nav: Navigator?
     @Published var showLayers = false
     @Published var showSettings = false
+    /** The "Add stop" search sheet. */
+    @Published var addingStop = false
     @Published var showSaved = false
     @Published var showSteps = false
     /** "Start" on a place: begin the drive as soon as its route arrives. */
@@ -114,7 +118,7 @@ final class AppModel: ObservableObject {
         return r
     }
 
-    private var viewport: (center: LatLng, span: Double?) {
+    var viewport: (center: LatLng, span: Double?) {
         guard let map, map.bounds.width > 0 else { return (userLatLng ?? LatLng(40.7484, -73.9857), nil) }
         let c = map.centerCoordinate
         let b = map.visibleCoordinateBounds
@@ -341,6 +345,18 @@ final class AppModel: ObservableObject {
         frameRoute()
     }
 
+    func addStop(_ p: Place) {
+        guard directions != nil, (directions?.stops.count ?? 0) < 8 else { return }
+        directions?.stops.append(p)
+        reloadRoutes()
+    }
+
+    func removeStop(_ i: Int) {
+        guard let d = directions, d.stops.indices.contains(i) else { return }
+        directions?.stops.remove(at: i)
+        reloadRoutes()
+    }
+
     func showTransit() {
         directions?.transit = true
         frameRoute()
@@ -359,6 +375,8 @@ final class AppModel: ObservableObject {
     func reloadRoutes() {
         guard directions != nil else { return }
         directions?.routes = [:]
+        directions?.errors = [:]
+        directions?.selected = 0
         loadAllModes()
     }
 
@@ -369,12 +387,13 @@ final class AppModel: ObservableObject {
             return
         }
         let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
+        let via = (d.reversed ? d.stops.reversed() : d.stops).map(\.location)
         let destId = d.destination.id
         let hw = settings.avoidHighways, tolls = settings.avoidTolls, google = !settings.noGoogle
         for m in TravelMode.allCases {
             directions?.loading.insert(m)
             Task {
-                let r = await Directions.routes(from: from, to: to, mode: m, avoidHighways: hw, avoidTolls: tolls, useGoogle: google)
+                let r = await Directions.routes(from: from, to: to, mode: m, avoidHighways: hw, avoidTolls: tolls, useGoogle: google, via: via)
                 guard directions?.destination.id == destId else { return }
                 directions?.loading.remove(m)
                 directions?.routes[m] = r.routes
@@ -412,14 +431,14 @@ final class AppModel: ObservableObject {
             return
         }
         guard let r = directions?.route else { mapTick += 1; return }
-        frame(r.polyline, bottomFraction: 0.42)
+        frame(r.polyline, bottomFraction: 0.42, top: 170 + CGFloat(directions?.stops.count ?? 0) * 42)
     }
 
     // MARK: Navigation
 
     func startNavigation() {
         guard let d = directions, let route = d.route, !d.reversed else { return }
-        let n = Navigator(route: route, destination: d.destination, settings: settings)
+        let n = Navigator(route: route, destination: d.destination, stops: d.stops, settings: settings)
         nav = n
         navSub = n.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         location.setNavigating(true, mode: route.mode.rawValue)

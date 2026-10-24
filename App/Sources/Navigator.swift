@@ -23,6 +23,8 @@ final class Navigator: ObservableObject {
     @Published private(set) var cameraAhead: (kind: RoadCamera.Kind, meters: Double)?
 
     let destination: Place
+    /** Stops still ahead, in trip order; each is dropped once reached. */
+    @Published private(set) var stops: [Place]
     private var tracker: RouteTracker
     private let speech = AVSpeechSynthesizer()
     private var spokenStage: [Int: Int] = [:]
@@ -33,9 +35,10 @@ final class Navigator: ObservableObject {
     private var spokenCameras: Set<Int> = []
     private var speeding = SpeedingAlerts()
 
-    init(route: Route, destination: Place, settings: AppSettings) {
+    init(route: Route, destination: Place, stops: [Place] = [], settings: AppSettings) {
         self.route = route
         self.destination = destination
+        self.stops = stops
         tracker = RouteTracker(route: route)
         muted = !settings.voice
         avoidHighways = settings.avoidHighways
@@ -88,10 +91,20 @@ final class Navigator: ObservableObject {
         }
         announce(p)
         checkCameras(p)
+        checkStops(p)
         if route.mode == .drive, AppSettings.shared.speedingAlert,
            speeding.update(speedKmh: loc.speed >= 0 ? loc.speed * 3.6 : nil, limitKmh: speedLimitKmh, now: loc.timestamp.timeIntervalSince1970) {
             speak("You're over the speed limit.")
         }
+    }
+
+    /** Says when a stop is reached (within 40 m of it along the route) and drops it. */
+    private func checkStops(_ p: RouteTracker.Progress) {
+        guard let next = stops.first else { return }
+        let at = Geo.project(next.location, on: route.polyline)
+        guard at.offset < 150, p.alongMeters >= at.along - 40 else { return }
+        stops.removeFirst()
+        speak("You've reached \(next.name). Continuing to \(stops.first?.name ?? destination.name).")
     }
 
     /** Cameras and speed limits along the route, from OpenStreetMap, in one query per route. */
@@ -161,7 +174,7 @@ final class Navigator: ObservableObject {
         let hw = avoidHighways, tolls = avoidTolls
         Task {
             let r = await Directions.routes(from: from, to: to, mode: mode, avoidHighways: hw, avoidTolls: tolls,
-                                            useGoogle: !AppSettings.shared.noGoogle)
+                                            useGoogle: !AppSettings.shared.noGoogle, via: self.stops.map(\.location))
             self.rerouting = false
             guard let fresh = r.routes.first else { return }
             self.route = fresh

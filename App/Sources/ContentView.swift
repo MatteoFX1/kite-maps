@@ -33,6 +33,9 @@ struct ContentView: View {
         .fullScreenCover(isPresented: Binding(get: { !settings.welcomed && (!DemoScript.active || DemoScript.step == "welcome") }, set: { _ in })) {
             WelcomeView(settings: settings)
         }
+        .sheet(isPresented: $model.addingStop) {
+            StopPicker(model: model)
+        }
         .sheet(isPresented: $model.showSaved) {
             SavedView(settings: settings) { p in
                 model.showSaved = false
@@ -375,6 +378,7 @@ enum DemoScript {
         await wait(5)
         guard step != "place" else { return }
         model.openDirections(to: first)
+        if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)
         guard step == "nav" else { return }
         model.startNavigation()
