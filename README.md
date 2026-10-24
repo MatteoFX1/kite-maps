@@ -18,9 +18,17 @@ maps app for Android. It's meant for sideloading, not the App Store.
   the speed limit, and it keeps going with the screen off. Like Vela, the turns come from the open
   OSRM router run along Google's route.
 - **Public transit directions** and **live departure boards** at stops and stations, from
-  Transitous (open timetables, no account), with line colors and live delays.
-- **Speed cameras and license plate cameras** (DeFlock) from OpenStreetMap on the map, with a
-  warning card and an optional spoken warning while driving.
+  Transitous (open timetables, no account), with line colors and live delays. Subway, tram and
+  rail lines can be drawn on the map.
+- **Waze-style driving help**: lane arrows, a roundabout picture with the exit to take, road
+  signs in the banner, and camera warnings with a chime, the camera's limit and a countdown bar.
+  UK average speed checks show your average against the limit.
+- **Speed cameras and license plate cameras** (DeFlock) from OpenStreetMap on the map. How many
+  are found depends on what volunteers have mapped in your area.
+- **Tuned for the UK**: miles and yards, British limit signs and road plates, postcode search,
+  and clockwise roundabouts where traffic drives on the left.
+- **Your places**: home, work, parked car, recent places, stops on the way, voice search and
+  Siri shortcuts.
 - **Settings**: theme, units, voice, and "Use Vela without Google" (OpenStreetMap search and the
   FOSSGIS router only).
 
