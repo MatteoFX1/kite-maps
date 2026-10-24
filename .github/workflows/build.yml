@@ -51,6 +51,11 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build | tail -n 200
+      - name: Stamp the build number
+        # AltStore and SideStore spot updates by this number, so each build gets its own.
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" \
+            build/Build/Products/Release-iphoneos/Kite.app/Info.plist
       - name: Ad-hoc sign
         # An app with no signature at all is read as broken by some sideloaders. An ad-hoc
         # signature fixes that; the sideloader still re-signs with your Apple ID.
@@ -82,6 +87,21 @@ jobs:
           body: |
             Unsigned app for sideloading. Download **Kite.ipa** below and install it with AltStore or Sideloadly. Kite Maps is an unofficial iPhone port of [Vela Maps](https://github.com/PimpinPumpkin/Vela).
           files: Kite.ipa
+      - name: Update the AltStore source
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # Writes apps.json to the altstore branch, the link people add in AltStore or SideStore.
+        run: |
+          APP=build/Build/Products/Release-iphoneos/Kite.app
+          codesign -d --entitlements :- "$APP" > ents.plist 2>/dev/null || : > ents.plist
+          mkdir -p source
+          python3 .github/altstore/make_source.py "$APP" Kite.ipa ents.plist \
+            build-${{ github.run_number }} "${{ github.repository }}" source/apps.json
+          cd source
+          git init -q -b altstore
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add apps.json && git commit -qm "AltStore source for build ${{ github.run_number }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" altstore
 
   screens:
     name: Screenshots (simulator)
