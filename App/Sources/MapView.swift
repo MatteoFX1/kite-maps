@@ -203,7 +203,7 @@ struct VelaMapView: UIViewRepresentable {
             style.addSource(railSrc)
             let railCase = line("vela-rail-case", railSrc, UIColor(white: dark ? 0 : 1, alpha: 0.9), width: 5.5)
             let rail = line("vela-rail", railSrc, .gray, width: 3.2)
-            rail.lineColor = NSExpression(mglJSONObject: ["to-color", ["get", "color"]])
+            rail.lineColor = NSExpression(format: "CAST(color, 'UIColor')")
             for l in [railCase, rail] {
                 l.minimumZoomLevel = 10
                 l.isVisible = false

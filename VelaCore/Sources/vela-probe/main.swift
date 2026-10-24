@@ -134,6 +134,7 @@ print("OSRM with a stop: \(viaOSRM?.first.map { "\(Int($0.distanceMeters)) m, \(
 
 // Transit lines layer: lower Manhattan.
 let tl = await Transitous.lines(south: 40.70, west: -74.02, north: 40.74, east: -73.97, zoom: 13)
+if let first = tl?.first { print("Transit line sample: color \(String(format: "%06X", first.color)), \(first.points.count) pts, from \(first.points.first!) to \(first.points.last!)") }
 print("Transit lines: \(tl.map { "\($0.count) stretches, lines \(Set($0.flatMap(\.names)).sorted().prefix(12))" } ?? "failed")")
 
 
