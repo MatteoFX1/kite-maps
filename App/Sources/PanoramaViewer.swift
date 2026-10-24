@@ -86,10 +86,10 @@ struct PanoramaViewer: UIViewRepresentable {
         var fov: CGFloat = 80
         var task: Task<Void, Never>?
 
-        /** SceneKit turns left for a bigger angle; compass headings turn right. The middle of the
-         *  image (the panorama's own heading) sits straight ahead at yaw 0. */
+        /** SceneKit turns left for a bigger angle; compass headings turn right. At yaw 0 the camera
+         *  looks at the image's edge, half a turn from its middle (the panorama's own heading). */
         static func yaw(facing heading: Double, pano: StreetView.Panorama) -> Float {
-            Float(-(heading - pano.heading) * .pi / 180)
+            Float(-(heading - pano.heading + 180) * .pi / 180)
         }
 
         func apply() {
