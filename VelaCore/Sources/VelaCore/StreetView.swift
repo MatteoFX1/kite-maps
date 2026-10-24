@@ -19,7 +19,7 @@ public enum StreetView {
         r.setValue("application/json+protobuf", forHTTPHeaderField: "Content-Type")
         let body = "[[\"apiv3\",null,null,null,\"US\",null,null,null,null,null,[[0]]],"
             + "[[null,null,\(p.lat),\(p.lng)],\(radius)],"
-            + "[null,[\"en\",\"US\"],null,null,null,null,null,null,[2],null,[[[2,true,2],[3,true,2]]]],"
+            + "[null,[\"en\",\"US\"],null,null,null,null,null,null,[2],null,[[[2,true,2]]]],"
             + "[[1,2,3,4,8,6]]]"
         r.httpBody = body.data(using: .utf8)
         return r
