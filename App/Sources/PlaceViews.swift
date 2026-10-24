@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import VelaCore
 
 struct PlaceHeader: View {
@@ -40,6 +41,7 @@ struct PlaceBody: View {
     @State private var tab = 0
     @State private var hoursOpen = false
     @Environment(\.openURL) private var openURL
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         ScrollView {
@@ -86,6 +88,38 @@ struct PlaceBody: View {
                 }
                 if let web = webURL(place.website) {
                     PillButton(title: "Website", icon: "globe") { openURL(web) }
+                }
+                if place.id == model.settings.parking?.id {
+                    PillButton(title: "Clear spot", icon: "xmark.circle") { model.clearParking() }
+                }
+                Menu {
+                    if model.settings.home?.id == place.id {
+                        Button(role: .destructive) { model.setHome(nil) } label: { Label("Remove home", systemImage: "house.slash") }
+                    } else {
+                        Button { model.setHome(place) } label: { Label("Set as home", systemImage: "house") }
+                    }
+                    if model.settings.work?.id == place.id {
+                        Button(role: .destructive) { model.setWork(nil) } label: { Label("Remove work", systemImage: "briefcase") }
+                    } else {
+                        Button { model.setWork(place) } label: { Label("Set as work", systemImage: "briefcase") }
+                    }
+                    Button { UIPasteboard.general.string = String(format: "%.6f, %.6f", place.location.lat, place.location.lng) } label: {
+                        Label("Copy coordinates", systemImage: "doc.on.doc")
+                    }
+                    if let a = place.address {
+                        Button { UIPasteboard.general.string = [place.name, a].joined(separator: ", ") } label: {
+                            Label("Copy address", systemImage: "doc.on.clipboard")
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "ellipsis").font(.system(size: 14, weight: .semibold))
+                        Text("More").font(.subheadline.weight(.semibold))
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(height: 40)
+                    .foregroundColor(Vela.onTonal(scheme))
+                    .background(Capsule().fill(Vela.tonal(scheme)))
                 }
             }
         }

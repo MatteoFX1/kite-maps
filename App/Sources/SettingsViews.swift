@@ -68,8 +68,20 @@ struct SettingsView: View {
                     Toggle("Avoid tolls", isOn: $settings.avoidTolls)
                     Toggle("Avoid highways", isOn: $settings.avoidHighways)
                     Toggle("Say when a camera is ahead", isOn: $settings.cameraWarnings)
+                    Toggle("Say when I'm over the speed limit", isOn: $settings.speedingAlert)
                     Picker("Default travel mode", selection: $settings.defaultMode) {
                         ForEach(TravelMode.allCases) { Text($0.label).tag($0) }
+                    }
+                }
+                Section("My places") {
+                    Toggle("Parking button on the map", isOn: $settings.parkingButton)
+                    if let h = settings.home {
+                        LabeledContent("Home", value: h.name)
+                        Button("Remove home", role: .destructive) { settings.home = nil }
+                    }
+                    if let w = settings.work {
+                        LabeledContent("Work", value: w.name)
+                        Button("Remove work", role: .destructive) { settings.work = nil }
                     }
                 }
                 Section {

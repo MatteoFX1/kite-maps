@@ -39,6 +39,16 @@ final class AppSettings: ObservableObject {
     @Published var plateCameras: Bool { didSet { d.set(plateCameras, forKey: "plateCameras") } }
     /** Say "Speed camera ahead" while navigating. Off by default: some countries restrict it. */
     @Published var cameraWarnings: Bool { didSet { d.set(cameraWarnings, forKey: "cameraWarnings") } }
+    /** Say so when driving over the posted limit. Off by default, like Vela. */
+    @Published var speedingAlert: Bool { didSet { d.set(speedingAlert, forKey: "speedingAlert") } }
+    /** The map's "P" button: save where you parked, and find the way back. */
+    @Published var parkingButton: Bool { didSet { d.set(parkingButton, forKey: "parkingButton") } }
+    @Published var home: Place? { didSet { save(home, "home") } }
+    @Published var work: Place? { didSet { save(work, "work") } }
+    /** Where the car is parked, with when in `statusText`. */
+    @Published var parking: Place? { didSet { save(parking, "parking") } }
+    /** The first-run choice between Google's data and open data only has been made. */
+    @Published var welcomed: Bool { didSet { d.set(welcomed, forKey: "welcomed") } }
     @Published var defaultMode: TravelMode { didSet { d.set(defaultMode.rawValue, forKey: "defaultMode") } }
     @Published var saved: [Place] { didSet { save(saved, "saved") } }
     @Published var recents: [String] { didSet { d.set(recents, forKey: "recents") } }
@@ -55,6 +65,12 @@ final class AppSettings: ObservableObject {
         speedCameras = d.object(forKey: "speedCameras") as? Bool ?? true
         plateCameras = d.object(forKey: "plateCameras") as? Bool ?? true
         cameraWarnings = d.bool(forKey: "cameraWarnings")
+        speedingAlert = d.bool(forKey: "speedingAlert")
+        parkingButton = d.object(forKey: "parkingButton") as? Bool ?? true
+        home = d.data(forKey: "home").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }
+        work = d.data(forKey: "work").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }
+        parking = d.data(forKey: "parking").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }
+        welcomed = d.bool(forKey: "welcomed") || d.object(forKey: "saved") != nil
         defaultMode = TravelMode(rawValue: d.integer(forKey: "defaultMode")) ?? .drive
         saved = (d.data(forKey: "saved")).flatMap { try? JSONDecoder().decode([Place].self, from: $0) } ?? []
         recents = d.stringArray(forKey: "recents") ?? []

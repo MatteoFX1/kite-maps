@@ -12,7 +12,7 @@ struct NavigationOverlay: View {
         ZStack {
             VStack(spacing: 8) {
                 if nav.arrived {
-                    ArrivedCard(name: nav.destination.name) { model.endNavigation() }
+                    ArrivedCard(name: nav.destination.name, onPark: nav.route.mode == .drive ? { model.saveParking() } : nil) { model.endNavigation() }
                 } else {
                     InstructionBanner(nav: nav)
                 }
@@ -210,7 +210,9 @@ struct TripBar: View {
 
 struct ArrivedCard: View {
     let name: String
+    var onPark: (() -> Void)?
     let done: () -> Void
+    @State private var parked = false
 
     var body: some View {
         HStack(spacing: 14) {
@@ -220,6 +222,12 @@ struct ArrivedCard: View {
                 Text(name).font(.subheadline).lineLimit(1)
             }
             Spacer()
+            if let onPark, !parked {
+                Button { onPark(); parked = true } label: { Image(systemName: "parkingsign").font(.headline) }
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Color.white.opacity(0.25)))
+                    .accessibilityLabel("Save parking")
+            }
             Button("Done", action: done)
                 .font(.headline)
                 .padding(.horizontal, 16).frame(height: 40)

@@ -60,6 +60,7 @@ struct VelaMapView: UIViewRepresentable {
         private var originalLabels: [String: (NSExpression?, NSExpression?, NSExpression?)] = [:]
         private var lastResultsKey = ""
         private var lastRouteKey = ""
+        private var lastMineKey = ""
         private var lastPuckKey = ""
         private var lastCameraKey = ""
         /** Cameras fetched so far, and the 0.1° cells already asked for (cameras don't move). */
@@ -83,7 +84,7 @@ struct VelaMapView: UIViewRepresentable {
             addVelaLayers(style)
             styleReady = true
             repaint(mapView)
-            lastResultsKey = ""; lastRouteKey = ""; lastPuckKey = ""; lastCameraKey = ""
+            lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""
             render(mapView)
         }
 
@@ -189,6 +190,22 @@ struct VelaMapView: UIViewRepresentable {
             cams.minimumZoomLevel = 12
             style.addLayer(cams)
 
+            // My places: home, work, the parked car and saved places, under the result pins.
+            let mineSrc = MLNShapeSource(identifier: "vela-mine", shape: nil, options: nil)
+            style.addSource(mineSrc)
+            let mine = MLNSymbolStyleLayer(identifier: "vela-mine", source: mineSrc)
+            mine.iconImageName = NSExpression(forKeyPath: "icon")
+            mine.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            mine.text = NSExpression(forKeyPath: "label")
+            mine.textFontNames = NSExpression(forConstantValue: ["Noto Sans Bold"])
+            mine.textFontSize = NSExpression(forConstantValue: 11)
+            mine.textAnchor = NSExpression(forConstantValue: "top")
+            mine.textOffset = NSExpression(forConstantValue: NSValue(cgVector: CGVector(dx: 0, dy: 1.1)))
+            mine.textOptional = NSExpression(forConstantValue: true)
+            mine.maximumTextWidth = NSExpression(forConstantValue: 8)
+            mine.minimumZoomLevel = 9
+            style.addLayer(mine)
+
             // Result pins with names, the picked place's red pin, the time bubbles and the puck.
             let results = MLNShapeSource(identifier: "vela-results", shape: nil, options: nil)
             style.addSource(results)
@@ -274,6 +291,31 @@ struct VelaMapView: UIViewRepresentable {
             renderRoutes(style)
             renderPuck(style)
             renderCameras(style)
+            renderMine(style)
+        }
+
+        private func renderMine(_ style: MLNStyle) {
+            let s = model.settings
+            let hidden = model.nav != nil || model.directions != nil
+            var items: [(Place, String, String)] = []
+            if !hidden {
+                if let h = s.home { items.append((h, "mine-home", "Home")) }
+                if let w = s.work { items.append((w, "mine-work", "Work")) }
+                if let p = s.parking { items.append((p, "mine-parking", "Parked car")) }
+                for p in s.saved.prefix(200) where !items.contains(where: { $0.0.id == p.id }) { items.append((p, "mine-saved", p.name)) }
+            }
+            let sel = model.selected?.id
+            let key = items.map { $0.0.id + $0.1 }.joined(separator: ",") + "|" + (sel ?? "")
+            guard key != lastMineKey else { return }
+            lastMineKey = key
+            let features: [MLNPointFeature] = items.compactMap { p, icon, label in
+                guard p.id != sel else { return nil }
+                let f = MLNPointFeature()
+                f.coordinate = CLLocationCoordinate2D(latitude: p.location.lat, longitude: p.location.lng)
+                f.attributes = ["id": p.id, "icon": icon, "label": label]
+                return f
+            }
+            (style.source(withIdentifier: "vela-mine") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
         }
 
         private func renderCameras(_ style: MLNStyle) {
@@ -474,6 +516,11 @@ struct VelaMapView: UIViewRepresentable {
                     }
                     return
                 }
+                let mine = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-mine"])
+                if let id = mine.first?.attribute(forKey: "id") as? String, let place = self.model.myPlace(id) {
+                    self.model.select(place)
+                    return
+                }
                 let pins = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-results"])
                 if let id = pins.first?.attribute(forKey: "id") as? String,
                    let place = self.model.results.first(where: { $0.id == id }) {
@@ -516,7 +563,22 @@ struct VelaMapView: UIViewRepresentable {
         }
 
         nonisolated func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) {
-            MainActor.assumeIsolated { loadCameras(mapView) }
+            MainActor.assumeIsolated {
+                loadCameras(mapView)
+                noteHeading(mapView)
+            }
+        }
+
+        nonisolated func mapViewRegionIsChanging(_ mapView: MLNMapView) {
+            MainActor.assumeIsolated { noteHeading(mapView) }
+        }
+
+        /** The compass button shows while the map isn't facing north. */
+        private func noteHeading(_ map: MLNMapView) {
+            let h = map.direction
+            if abs(h - model.mapHeading) > 2 || (h.truncatingRemainder(dividingBy: 360) == 0) != (model.mapHeading == 0) {
+                model.mapHeading = h.truncatingRemainder(dividingBy: 360) == 0 ? 0 : h
+            }
         }
 
         nonisolated func mapView(_ mapView: MLNMapView, didUpdate userLocation: MLNUserLocation?) {

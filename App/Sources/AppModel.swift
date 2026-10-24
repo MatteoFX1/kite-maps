@@ -83,6 +83,8 @@ final class AppModel: ObservableObject {
     @Published var autoStart = false
     /** Bumped when the map should redraw overlays that don't come from a published value. */
     @Published var mapTick = 0
+    /** Which way the map faces, for the compass button. */
+    @Published var mapHeading: Double = 0
 
     weak var map: MLNMapView?
     private var searchTask: Task<Void, Never>?
@@ -248,6 +250,49 @@ final class AppModel: ObservableObject {
                 selected = b
             }
         }
+    }
+
+    // MARK: My places
+
+    /** Home, work, the parked car or a saved place, by id, for a tap on its map icon. */
+    func myPlace(_ id: String) -> Place? {
+        [settings.home, settings.work, settings.parking].compactMap { $0 }.first { $0.id == id }
+            ?? settings.saved.first { $0.id == id }
+    }
+
+    func setHome(_ p: Place?) {
+        settings.home = p.map { var h = $0; h.distanceMeters = nil; return h }
+        if p != nil { notice = "Saved as your home." }
+    }
+
+    func setWork(_ p: Place?) {
+        settings.work = p.map { var w = $0; w.distanceMeters = nil; return w }
+        if p != nil { notice = "Saved as your work." }
+    }
+
+    /** Remember where the car is: here, now, with the street name when one is found. */
+    func saveParking() {
+        guard let me = userLatLng else {
+            notice = "Turn on location to save where you parked."
+            return
+        }
+        var p = Place(id: "parking:\(Int(Date().timeIntervalSince1970))", name: "Parked car", location: me, source: "osm")
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        p.category = "Parked at \(f.string(from: Date()))"
+        settings.parking = p
+        notice = "Parking spot saved. Tap the P button to find your car."
+        let pid = p.id
+        Task {
+            guard let found = await Photon.reverse(me), settings.parking?.id == pid else { return }
+            settings.parking?.address = [found.name, found.address].compactMap { $0 }.joined(separator: ", ")
+        }
+    }
+
+    func clearParking() {
+        if selected?.id == settings.parking?.id { selected = nil }
+        settings.parking = nil
     }
 
     /** Long press: a dropped pin with the address there. */

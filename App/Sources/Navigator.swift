@@ -31,6 +31,7 @@ final class Navigator: ObservableObject {
     private var avoidTolls: Bool
     private var routeCameras: [(camera: RoadCamera, along: Double)] = []
     private var spokenCameras: Set<Int> = []
+    private var speeding = SpeedingAlerts()
 
     init(route: Route, destination: Place, settings: AppSettings) {
         self.route = route
@@ -87,6 +88,10 @@ final class Navigator: ObservableObject {
         }
         announce(p)
         checkCameras(p)
+        if route.mode == .drive, AppSettings.shared.speedingAlert,
+           speeding.update(speedKmh: loc.speed >= 0 ? loc.speed * 3.6 : nil, limitKmh: speedLimitKmh, now: loc.timestamp.timeIntervalSince1970) {
+            speak("You're over the speed limit.")
+        }
     }
 
     /** Cameras and speed limits along the route, from OpenStreetMap, in one query per route. */

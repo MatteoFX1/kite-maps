@@ -30,6 +30,9 @@ struct ContentView: View {
         .sheet(isPresented: $model.showSettings) {
             SettingsView(settings: settings, onChange: { model.reloadRoutes() })
         }
+        .fullScreenCover(isPresented: Binding(get: { !settings.welcomed && (!DemoScript.active || DemoScript.step == "welcome") }, set: { _ in })) {
+            WelcomeView(settings: settings)
+        }
         .sheet(isPresented: $model.showSaved) {
             SavedView(settings: settings) { p in
                 model.showSaved = false
@@ -42,6 +45,8 @@ struct ContentView: View {
 /** The normal map screen: search bar, category chips, map buttons and the results or place sheet. */
 struct BrowseOverlay: View {
     @ObservedObject var model: AppModel
+    @ObservedObject private var settings = AppSettings.shared
+    @StateObject private var voice = VoiceSearch()
     @FocusState private var searchFocused: Bool
     @Environment(\.colorScheme) private var scheme
 
@@ -54,9 +59,28 @@ struct BrowseOverlay: View {
             ZStack(alignment: .top) {
                 // Map buttons on the right: layers up top, location just above the sheet.
                 VStack {
-                    HStack {
+                    HStack(alignment: .top) {
                         Spacer()
-                        MapFab(icon: "square.3.layers.3d", size: 44) { model.showLayers = true }
+                        VStack(spacing: 10) {
+                            MapFab(icon: "square.3.layers.3d", size: 44) { model.showLayers = true }
+                            if settings.parkingButton || settings.parking != nil {
+                                MapFab(icon: "parkingsign", tint: settings.parking != nil ? Vela.routeBlue : .primary, size: 44) {
+                                    if let p = settings.parking { model.select(p) } else { model.saveParking() }
+                                }
+                            }
+                            if model.mapHeading > 1 && model.mapHeading < 359 {
+                                Button { model.map?.setDirection(0, animated: true) } label: {
+                                    CompassNeedle()
+                                        .rotationEffect(.degrees(-model.mapHeading))
+                                        .frame(width: 44, height: 44)
+                                        .background(Circle().fill(Vela.sheet(scheme)))
+                                        .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Face north")
+                                .transition(.scale.combined(with: .opacity))
+                            }
+                        }
                     }
                     .padding(.top, model.results.isEmpty && model.selected == nil ? 118 : 70)
                     Spacer()
@@ -80,7 +104,8 @@ struct BrowseOverlay: View {
                 }
 
                 VStack(spacing: 10) {
-                    SearchBar(model: model, focused: $searchFocused)
+                    SearchBar(model: model, voice: voice, focused: $searchFocused)
+                    if voice.listening { ListeningCard(voice: voice) }
                     if searchFocused {
                         SuggestionsPanel(model: model) { searchFocused = false }
                     } else if model.results.isEmpty && model.selected == nil {
@@ -120,6 +145,7 @@ struct BrowseOverlay: View {
 
 struct SearchBar: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var voice: VoiceSearch
     var focused: FocusState<Bool>.Binding
     @Environment(\.colorScheme) private var scheme
 
@@ -153,6 +179,17 @@ struct SearchBar: View {
                 }
                 .buttonStyle(.plain)
             } else {
+                Button {
+                    focused.wrappedValue = false
+                    voice.start(onDone: { text in
+                        model.query = text
+                        model.search(text)
+                    }, onError: { model.notice = $0 })
+                } label: {
+                    Image(systemName: "mic").font(.system(size: 18))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Search by voice")
                 Button { model.showSaved = true } label: {
                     Image(systemName: "bookmark").font(.system(size: 18))
                 }
@@ -228,6 +265,7 @@ struct SuggestionsPanel: View {
                         row(icon: "magnifyingglass", text: q) { done(); model.search(q) }
                     }
                 } else {
+                    Shortcuts(model: model, done: done)
                     ForEach(Category.all) { c in
                         row(icon: c.icon, text: c.label) { done(); model.search(c.query, title: c.label) }
                     }
@@ -281,6 +319,12 @@ struct NoticeBanner: View {
 
 /** Drives the app into one screen for the build's screenshots: `-demo search|place|directions|nav`. */
 enum DemoScript {
+    static var active: Bool { ProcessInfo.processInfo.arguments.contains("-demo") }
+    static var step: String? {
+        let a = ProcessInfo.processInfo.arguments
+        return a.firstIndex(of: "-demo").flatMap { $0 + 1 < a.count ? a[$0 + 1] : nil }
+    }
+
     @MainActor
     static func run(_ model: AppModel) async {
         let args = ProcessInfo.processInfo.arguments
@@ -295,6 +339,20 @@ enum DemoScript {
             return
         }
         if step == "layers" { model.showLayers = true; return }
+        if step == "welcome" { model.settings.welcomed = false; return }
+        if step == "mine" {
+            // Home, work and a parked car around downtown Davis, as icons on the map.
+            var home = Place(id: "demo-home", name: "Home", location: LatLng(38.5480, -121.7445), source: "demo")
+            home.address = "Home"
+            model.settings.home = home
+            model.settings.work = Place(id: "demo-work", name: "UC Davis", location: LatLng(38.5402, -121.7500), source: "demo")
+            var car = Place(id: "parking:demo", name: "Parked car", location: LatLng(38.5446, -121.7392), source: "osm")
+            car.category = "Parked at 9:41 AM"
+            model.settings.parking = car
+            model.map?.setCenter(CLLocationCoordinate2D(latitude: 38.5445, longitude: -121.7440), zoomLevel: 14.6, animated: false)
+            model.map?.setDirection(35, animated: false)
+            return
+        }
         if step == "board" {
             var station = Place(id: "demo-davis", name: "Davis Station", location: LatLng(38.5435, -121.7377), source: "demo")
             station.category = "Train station"
@@ -320,5 +378,77 @@ enum DemoScript {
         await wait(8)
         guard step == "nav" else { return }
         model.startNavigation()
+    }
+}
+
+/** Home, Work and the parked car, one tap from the search box. */
+struct Shortcuts: View {
+    @ObservedObject var model: AppModel
+    @ObservedObject var settings = AppSettings.shared
+    let done: () -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("house.fill", "Home", settings.home) {
+                    model.notice = "Open any place and tap More, then Set as home."
+                }
+                chip("briefcase.fill", "Work", settings.work) {
+                    model.notice = "Open any place and tap More, then Set as work."
+                }
+                if let p = settings.parking {
+                    chip("parkingsign", "Parked car", p) {}
+                }
+            }
+            .padding(.horizontal, 14)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func chip(_ icon: String, _ title: String, _ place: Place?, unset: @escaping () -> Void) -> some View {
+        Button {
+            done()
+            if let p = place { model.openDirections(to: p) } else { unset() }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: icon).font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(place == nil ? Color.secondary : Vela.routeBlue))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Text(place.flatMap { p in p.distanceMeters ?? model.userLatLng.map { $0.distance(to: p.location) } }.map(Fmt.distance) ?? (place == nil ? "Set" : ""))
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            }
+            .padding(.leading, 6).padding(.trailing, 14)
+            .frame(height: 44)
+            .background(Capsule().stroke(Color.secondary.opacity(0.35)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(.primary)
+    }
+}
+
+/** Red-and-gray needle pointing north, like Vela's compass. */
+struct CompassNeedle: View {
+    var body: some View {
+        ZStack {
+            Triangle().fill(Color(hex: 0xEA4335)).frame(width: 10, height: 14).offset(y: -7)
+            Triangle().fill(Color.secondary).frame(width: 10, height: 14).rotationEffect(.degrees(180)).offset(y: 7)
+        }
+    }
+}
+
+struct Triangle: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.midX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
+        p.closeSubpath()
+        return p
     }
 }
