@@ -38,6 +38,17 @@ comes from open data instead.
    your Apple ID. With a free Apple ID the app needs refreshing every 7 days (AltStore can do
    this for you).
 
+### Get updates automatically (AltStore / SideStore)
+
+Add this source once and Kite updates itself whenever a new build comes out:
+
+```
+https://raw.githubusercontent.com/MatteoFX1/kite-maps/altstore/apps.json
+```
+
+In AltStore or SideStore, open **Sources**, tap **+**, paste the link above, then install
+**Kite Maps** from the source. If you already have Kite installed, it keeps your saved places.
+
 Every change merged into `main` builds a new release automatically on a GitHub Actions Mac.
 Pull requests build too: their `.ipa` is under the run's **Artifacts** in the Actions tab.
 
