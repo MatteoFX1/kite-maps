@@ -95,7 +95,7 @@ struct SettingsView: View {
                     Text("Fixed speed cameras and license plate readers (DeFlock) mapped in OpenStreetMap. Saying a camera is ahead is off by default, because some countries restrict it.")
                 }
                 Section {
-                    Toggle("Use Vela without Google", isOn: $settings.noGoogle)
+                    Toggle("Use Kite without Google", isOn: $settings.noGoogle)
                 } header: {
                     Text("Data source & privacy")
                 } footer: {
@@ -103,8 +103,8 @@ struct SettingsView: View {
                 }
                 Section("About") {
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
-                    Link("Vela for iPhone on GitHub", destination: URL(string: "https://github.com/matteofx1/vela-ios")!)
-                    Link("Vela for Android", destination: URL(string: "https://github.com/PimpinPumpkin/Vela")!)
+                    Link("Kite Maps on GitHub", destination: URL(string: "https://github.com/matteofx1/kite-maps")!)
+                    Link("Based on Vela Maps for Android", destination: URL(string: "https://github.com/PimpinPumpkin/Vela")!)
                     Text("Free software under the GPL-3.0. Map © OpenFreeMap, OpenMapTiles, OpenStreetMap contributors. Routing © FOSSGIS OSRM. Imagery © Esri.")
                         .font(.caption).foregroundColor(.secondary)
                 }

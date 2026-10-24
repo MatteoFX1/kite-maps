@@ -36,7 +36,7 @@ final class AppSettings: ObservableObject {
     @Published var transitLines: Bool { didSet { d.set(transitLines, forKey: "transitLines") } }
     @Published var avoidTolls: Bool { didSet { d.set(avoidTolls, forKey: "avoidTolls") } }
     @Published var avoidHighways: Bool { didSet { d.set(avoidHighways, forKey: "avoidHighways") } }
-    /** "Use Vela without Google": search and routes from open data only. */
+    /** "Use Kite without Google": search and routes from open data only. */
     @Published var noGoogle: Bool { didSet { d.set(noGoogle, forKey: "noGoogle") } }
     /** Fixed speed cameras on the map, and plate readers (DeFlock), from OpenStreetMap. */
     @Published var speedCameras: Bool { didSet { d.set(speedCameras, forKey: "speedCameras") } }

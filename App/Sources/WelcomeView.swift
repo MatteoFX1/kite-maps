@@ -1,6 +1,6 @@
 import SwiftUI
 
-/** First launch: what Vela is, and the one choice that matters (Google's data, or open data only). */
+/** First launch: what Kite is, and the one choice that matters (Google's data, or open data only). */
 struct WelcomeView: View {
     @ObservedObject var settings: AppSettings
     @Environment(\.colorScheme) private var scheme
@@ -9,13 +9,11 @@ struct WelcomeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             Spacer(minLength: 20)
-            Image(systemName: "map.fill")
-                .font(.system(size: 34, weight: .semibold))
-                .foregroundColor(.white)
+            Image("Logo")
+                .resizable()
                 .frame(width: 72, height: 72)
-                .background(RoundedRectangle(cornerRadius: 20).fill(Vela.accent(scheme)))
             VStack(alignment: .leading, spacing: 8) {
-                Text("Welcome to Vela").font(.largeTitle.weight(.bold))
+                Text("Welcome to Kite").font(.largeTitle.weight(.bold))
                 Text("Maps, search and turn-by-turn directions with no account and no tracking.")
                     .font(.title3).foregroundColor(.secondary)
             }

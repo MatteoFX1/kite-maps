@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#1366E6"/>
+      <stop offset="1" stop-color="#21B5C4"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.72" cy="0.12" r="0.7">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#06306E" flood-opacity="0.30"/>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#glow)"/>
+
+  <!-- the tail is a route on the map: dashed line from the kite down to a location pin -->
+  <path d="M478 628 C 440 720, 330 680, 330 760 S 330 820, 318 836"
+        fill="none" stroke="#FFFFFF" stroke-opacity="0.85" stroke-width="22"
+        stroke-linecap="round" stroke-dasharray="1 46"/>
+  <g filter="url(#shadow)">
+    <circle cx="306" cy="846" r="46" fill="#FFFFFF"/>
+    <circle cx="306" cy="846" r="19" fill="#1E8FD6"/>
+  </g>
+
+  <!-- kite, tilted like it's flying -->
+  <g transform="translate(-50 30) rotate(18 600 380)" filter="url(#shadow)" stroke-linejoin="round">
+    <path d="M600 110 L790 330 L600 330 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="26"/>
+    <path d="M600 110 L410 330 L600 330 Z" fill="#E3F2FF" stroke="#E3F2FF" stroke-width="26"/>
+    <path d="M410 330 L600 610 L600 330 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="26"/>
+    <path d="M790 330 L600 610 L600 330 Z" fill="#C9E6FF" stroke="#C9E6FF" stroke-width="26"/>
+  </g>
+</svg>
