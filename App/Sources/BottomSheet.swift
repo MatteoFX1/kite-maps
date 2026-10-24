@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /**
  * Vela's draggable bottom sheet: peek, half and full heights. Drag it from anywhere: below full
@@ -90,6 +91,7 @@ extension BottomSheet {
             abs(Self.height(a, container: containerHeight, peek: peekHeight) - end)
                 < abs(Self.height(b, container: containerHeight, peek: peekHeight) - end)
         } ?? .half
+        if best != detent { UISelectionFeedbackGenerator().selectionChanged() }
         withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) { detent = best }
     }
 }

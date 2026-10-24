@@ -41,6 +41,8 @@ struct PlaceBody: View {
     let place: Place
     @State private var tab = 0
     @State private var hoursOpen = false
+    /** Driving time from here, shown on the Directions button like Google Maps. */
+    @State private var driveSeconds: Double?
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var scheme
 
@@ -64,6 +66,15 @@ struct PlaceBody: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 80)
         }
+        .task(id: place.id) { await loadDriveTime() }
+    }
+
+    private func loadDriveTime() async {
+        driveSeconds = nil
+        guard let from = model.userLatLng, from.distance(to: place.location) > 300,
+              from.distance(to: place.location) < 300_000 else { return }
+        let r = try? await OSRM.route(from: from, to: place.location, mode: .drive)
+        if let s = r?.first?.durationSeconds { withAnimation { driveSeconds = s } }
     }
 
     private var hasAbout: Bool { !place.about.isEmpty }
@@ -78,7 +89,8 @@ struct PlaceBody: View {
     private var actions: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                PillButton(title: "Directions", icon: "arrow.triangle.turn.up.right.diamond.fill", filled: true) {
+                PillButton(title: driveSeconds.map { "Directions · \(Fmt.duration($0))" } ?? "Directions",
+                           icon: "arrow.triangle.turn.up.right.diamond.fill", filled: true) {
                     model.openDirections(to: place)
                 }
                 PillButton(title: "Start", icon: "location.north.fill") {
@@ -111,6 +123,11 @@ struct PlaceBody: View {
                     if let a = place.address {
                         Button { UIPasteboard.general.string = [place.name, a].joined(separator: ", ") } label: {
                             Label("Copy address", systemImage: "doc.on.clipboard")
+                        }
+                    }
+                    Section("Open in") {
+                        ForEach(OtherApp.allCases, id: \.self) { app in
+                            Button { openURL(app.url(for: place)) } label: { Label(app.rawValue, systemImage: app.icon) }
                         }
                     }
                 } label: {
@@ -299,5 +316,30 @@ struct DepartureBoard: View {
         let f = DateFormatter()
         f.timeStyle = .short
         return f.string(from: t)
+    }
+}
+
+/** Other map apps a place can be handed to, by their web links (no app list permission needed). */
+enum OtherApp: String, CaseIterable {
+    case google = "Google Maps"
+    case waze = "Waze"
+    case apple = "Apple Maps"
+
+    var icon: String {
+        switch self {
+        case .google: return "map"
+        case .waze: return "car"
+        case .apple: return "applelogo"
+        }
+    }
+
+    func url(for p: Place) -> URL {
+        let ll = "\(p.location.lat),\(p.location.lng)"
+        let name = p.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        switch self {
+        case .google: return p.shareURL ?? URL(string: "https://www.google.com/maps/search/?api=1&query=\(ll)")!
+        case .waze: return URL(string: "https://waze.com/ul?ll=\(ll)&navigate=yes")!
+        case .apple: return URL(string: "https://maps.apple.com/?ll=\(ll)&q=\(name)")!
+        }
     }
 }

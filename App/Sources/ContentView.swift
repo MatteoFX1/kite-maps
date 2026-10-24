@@ -97,6 +97,17 @@ struct BrowseOverlay: View {
                         HStack {
                             Spacer()
                             MapFab(icon: "location.fill", tint: Vela.routeBlue) { model.centerOnUser() }
+                                .contextMenu {
+                                    if let u = model.userLatLng {
+                                        ShareLink(item: URL(string: "https://maps.google.com/?q=\(u.lat),\(u.lng)")!) {
+                                            Label("Share my location", systemImage: "square.and.arrow.up")
+                                        }
+                                        Button { UIPasteboard.general.string = String(format: "%.6f, %.6f", u.lat, u.lng) } label: {
+                                            Label("Copy my coordinates", systemImage: "doc.on.doc")
+                                        }
+                                    }
+                                    Button { model.saveParking() } label: { Label("I parked here", systemImage: "parkingsign") }
+                                }
                         }
                         .padding(.bottom, max(sheetH - geo.safeAreaInsets.bottom, 0) + 14)
                     }
@@ -304,9 +315,19 @@ struct SuggestionsPanel: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .contextMenu {
+                                Button(role: .destructive) { settings.recentPlaces.removeAll { $0.id == p.id } } label: {
+                                    Label("Remove from recents", systemImage: "trash")
+                                }
+                            }
                         }
                         ForEach(settings.recents.filter { q in !settings.recentPlaces.prefix(5).contains { $0.name == q } }.prefix(6), id: \.self) { q in
                             row(icon: "magnifyingglass", text: q) { done(); model.search(q) }
+                                .contextMenu {
+                                    Button(role: .destructive) { settings.recents.removeAll { $0 == q } } label: {
+                                        Label("Remove from recents", systemImage: "trash")
+                                    }
+                                }
                         }
                     }
                 }
