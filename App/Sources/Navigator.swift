@@ -211,13 +211,11 @@ final class Navigator: ObservableObject {
         let ahead = meters[i] - p.alongMeters
         let limit = cam.kind == .speed ? (cam.maxspeedKmh ?? route.speedLimit(at: meters[i])) : nil
         cameraAhead = CameraAlert(kind: cam.kind, meters: ahead, startMeters: max(ahead, 1), limitKmh: limit)
-        if AppSettings.shared.cameraWarnings {
+        // Spoken for speed cameras only: number plate cameras are everywhere in Britain, and
+        // saying each one would bury the turns. Those get the card alone.
+        if AppSettings.shared.cameraWarnings, cam.kind == .speed {
             chime()
-            if cam.kind == .speed {
-                speak((cam.average ? "Average speed camera ahead" : "Speed camera ahead") + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
-            } else {
-                speak(Fmt.yards ? "Number plate camera ahead." : "License plate camera ahead.")
-            }
+            speak((cam.average ? "Average speed camera ahead" : "Speed camera ahead") + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
         }
     }
 

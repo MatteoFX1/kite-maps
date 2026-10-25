@@ -242,7 +242,7 @@ struct SettingsPage: View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
                 Vela.ground(scheme).ignoresSafeArea()
-                SettingsView(settings: settings, inTab: true, onChange: { model.reloadRoutes() })
+                SettingsView(settings: settings, inTab: true, pick: { model.picking = $0 }, onChange: { model.reloadRoutes() })
                     .safeAreaInset(edge: .bottom) { Color.clear.frame(height: KiteDock.height + 10) }
                 KiteDock(model: model, bottomInset: geo.safeAreaInsets.bottom)
                     .ignoresSafeArea(edges: .bottom)
