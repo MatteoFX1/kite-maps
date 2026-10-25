@@ -63,7 +63,7 @@ struct SettingsView: View {
     let onChange: () -> Void
     @Environment(\.dismiss) private var dismiss
     /** Straight into the Waze screen, for the build's screenshot of it. */
-    @State private var openWaze = DemoScript.step == "wazesettings"
+    @State private var openWaze = false
 
     var body: some View {
         NavigationView {
@@ -130,6 +130,10 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .onAppear {
+                guard DemoScript.step == "wazesettings" else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { openWaze = true }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

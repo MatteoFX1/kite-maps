@@ -32,6 +32,7 @@ struct ContentView: View {
                 }
                 .task(id: info.id) {
                     // Out of the way by itself after a while, like a toast.
+                    guard !DemoScript.active else { return }
                     try? await Task.sleep(nanoseconds: 9_000_000_000)
                     if model.wazeInfo?.id == info.id { withAnimation { model.wazeInfo = nil } }
                 }
@@ -47,7 +48,8 @@ struct ContentView: View {
             if DemoScript.step == "wazemap" {
                 // Screenshot run only: what Waze answered, since the build's computers can't be trusted to get through.
                 TimelineView(.periodic(from: .now, by: 2)) { _ in
-                    Text(Waze.lastStatus.map { "Waze: HTTP \($0.code), \($0.count) reports\($0.viaPage ? " via page" : "")" } ?? "Waze: not asked yet")
+                    Text((Waze.lastStatus.map { "Waze: HTTP \($0.code), \($0.count) reports\($0.viaPage ? " via page" : "")" } ?? "Waze: not asked yet")
+                         + "\n" + WazeWeb.shared.note)
                         .font(.caption.monospaced()).padding(6).background(Color.red).foregroundColor(.white)
                         .padding(.bottom, 40)
                 }
@@ -472,7 +474,12 @@ enum DemoScript {
             return
         }
         if step == "welcome" { model.settings.welcomed = false; return }
-        if step == "wazeintro" { model.settings.wazeAsked = false; model.settings.noGoogle = false; return }
+        if step == "wazeintro" {
+            model.settings.welcomed = true
+            model.settings.noGoogle = false
+            model.settings.wazeAsked = false
+            return
+        }
         if step == "wazemap" {
             // Live Waze reports and the police glow over central London.
             model.settings.waze = true

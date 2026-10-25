@@ -13,6 +13,8 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
     private var web: WKWebView?
     private var ready = false
     private var waiting: [CheckedContinuation<Void, Never>] = []
+    /** What happened last time, for the screenshot run's status line. */
+    private(set) var note = "page: not tried"
 
     static func install() {
         Waze.fallback = { url in await WazeWeb.shared.fetch(url) }
@@ -20,14 +22,24 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
 
     func fetch(_ url: URL) async -> Data? {
         await openPage()
-        guard let web, ready else { return nil }
+        guard let web, ready else { note = "page: didn't load"; return nil }
         let js = """
         const r = await fetch(u, { credentials: 'include', headers: { 'Accept': 'application/json' } });
-        if (!r.ok) { return null; }
+        if (!r.ok) { return 'HTTP ' + r.status; }
         return await r.text();
         """
-        guard let text = try? await web.callAsyncJavaScript(js, arguments: ["u": url.absoluteString], contentWorld: .page) as? String else { return nil }
-        return Data(text.utf8)
+        do {
+            guard let text = try await web.callAsyncJavaScript(js, arguments: ["u": url.absoluteString], contentWorld: .page) as? String else {
+                note = "page: no answer"
+                return nil
+            }
+            if text.hasPrefix("HTTP ") { note = "page: fetch \(text)"; return nil }
+            note = "page: ok, \(text.count) chars"
+            return Data(text.utf8)
+        } catch {
+            note = "page: \(error.localizedDescription)"
+            return nil
+        }
     }
 
     private func openPage() async {

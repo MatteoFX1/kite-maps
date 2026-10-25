@@ -437,7 +437,8 @@ struct RouteWazeSummary: View {
     static var demo: [(WazeAlert.Kind, Int)]?
 
     var body: some View {
-        Group {
+        // A VStack, not a Group: an empty Group has nothing to hang .task on, so it would never ask.
+        VStack(alignment: .leading, spacing: 0) {
             if let counts {
                 if counts.isEmpty {
                     Label("No Waze reports on this route", systemImage: "checkmark.shield.fill")

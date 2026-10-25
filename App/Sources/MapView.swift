@@ -235,9 +235,9 @@ struct VelaMapView: UIViewRepresentable {
             let heatSrc = MLNShapeSource(identifier: "vela-waze-heat", shape: nil, options: nil)
             style.addSource(heatSrc)
             let heat = MLNHeatmapStyleLayer(identifier: "vela-waze-heat", source: heatSrc)
-            heat.heatmapRadius = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 6, 10, 10, 18, 14, 34])
-            heat.heatmapIntensity = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 6, 0.6, 14, 1.6])
-            heat.heatmapOpacity = NSExpression(forConstantValue: 0.75)
+            heat.heatmapRadius = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 6, 14, 10, 26, 14, 48, 17, 70])
+            heat.heatmapIntensity = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 6, 0.8, 14, 2.2])
+            heat.heatmapOpacity = NSExpression(forConstantValue: 0.85)
             heat.heatmapColor = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["heatmap-density"],
                                                              0, "rgba(0,0,0,0)", 0.15, "rgba(66,133,244,0.45)",
                                                              0.4, "rgba(124,77,255,0.65)", 0.7, "rgba(233,30,99,0.8)",
