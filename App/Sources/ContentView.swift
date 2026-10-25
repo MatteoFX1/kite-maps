@@ -95,6 +95,12 @@ struct ContentView: View {
         .sheet(isPresented: $model.addingStop) {
             StopPicker(model: model).kiteType()
         }
+        .sheet(item: $model.picking) { kind in
+            PlacePicker(model: model, kind: kind).kiteType()
+        }
+        .onChange(of: settings.welcomed && !settings.needsWazeChoice) { ready in
+            if ready { model.location.start() }
+        }
     }
 }
 
@@ -197,6 +203,7 @@ struct BrowseOverlay: View {
                     if let n = model.notice, !searchFocused {
                         NoticeBanner(text: n) { model.notice = nil }
                     }
+                    if !searchFocused { StatusCards(location: model.location) }
                 }
                 .padding(.top, 6)
             }
@@ -380,9 +387,6 @@ struct SuggestionsPanel: View {
                         .frame(height: 50)
                     }
                     Shortcuts(model: model, done: done)
-                    ForEach(Category.all) { c in
-                        row(icon: c.icon, text: c.label) { done(); model.search(c.query, title: c.label) }
-                    }
                     if !settings.recentPlaces.isEmpty || !settings.recents.isEmpty {
                         HStack {
                             Text("Recent").font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
@@ -424,6 +428,12 @@ struct SuggestionsPanel: View {
                                 }
                         }
                     }
+                    // Recents first, like every maps app: most searches are for somewhere you've been.
+                    Text("Nearby").font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
+                        .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 4)
+                    ForEach(Category.all) { c in
+                        row(icon: c.icon, text: c.label) { done(); model.search(c.query, title: c.label) }
+                    }
                 }
             }
             .padding(.vertical, 8)
@@ -449,7 +459,7 @@ struct SuggestionsPanel: View {
                 Spacer()
             }
             .padding(.horizontal, 18)
-            .frame(height: 46)
+            .frame(height: 52)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -498,6 +508,7 @@ enum DemoScript {
             return
         }
         if step == "layers" { model.showLayers = true; return }
+        if step == "pickhome" { model.picking = .home; return }
         if step == "rail" {
             // Lower Manhattan with the subway lines and hill shading on.
             model.settings.transitLines = true
@@ -726,11 +737,11 @@ struct Shortcuts: View {
         HStack(spacing: 10) {
             PlaceTile(model: model, icon: "house.fill", color: Vela.routeBlue, title: "Home", place: settings.home) {
                 done()
-                model.notice = "Open any place and tap More, then Set as home."
+                model.picking = .home
             } go: { done() }
             PlaceTile(model: model, icon: "briefcase.fill", color: Color(hex: 0x8B5CF6), title: "Work", place: settings.work) {
                 done()
-                model.notice = "Open any place and tap More, then Set as work."
+                model.picking = .work
             } go: { done() }
         }
         .padding(.horizontal, 14)
@@ -749,13 +760,13 @@ struct QuickTiles: View {
     var body: some View {
         HStack(spacing: 10) {
             PlaceTile(model: model, icon: "house.fill", color: Vela.routeBlue, title: "Home", place: settings.home) {
-                model.notice = "Open any place and tap More, then Set as home."
+                model.picking = .home
             }
             if settings.work == nil, let first = settings.saved.first {
                 PlaceTile(model: model, icon: "bookmark.fill", color: Color(hex: 0xF59E0B), title: first.name, place: first) {}
             } else {
                 PlaceTile(model: model, icon: "briefcase.fill", color: Color(hex: 0x8B5CF6), title: "Work", place: settings.work) {
-                    model.notice = "Open any place and tap More, then Set as work."
+                    model.picking = .work
                 }
             }
         }
@@ -784,7 +795,7 @@ struct PlaceTile: View {
                     .background(Circle().fill(place == nil ? Color.gray : color))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title).font(.system(size: 19, weight: .bold)).lineLimit(1)
-                    Text(place.flatMap { p in model.userLatLng.map { $0.distance(to: p.location) } }.map(Fmt.distance) ?? (place == nil ? "Tap to set" : " "))
+                    Text(place.flatMap { p in model.userLatLng.map { $0.distance(to: p.location) } }.map(Fmt.distance) ?? (place == nil ? "Tap to set" : "Tap to go"))
                         .font(.system(size: 15, weight: .medium)).foregroundColor(Vela.muted(scheme)).lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -796,6 +807,11 @@ struct PlaceTile: View {
         }
         .buttonStyle(.plain)
         .foregroundColor(.primary)
+        .contextMenu {
+            if place != nil, title == "Home" || title == "Work" {
+                Button { model.picking = title == "Home" ? .home : .work } label: { Label("Change \(title.lowercased())", systemImage: "pencil") }
+            }
+        }
         .accessibilityLabel(place == nil ? "\(title), not set" : "Go to \(title)")
     }
 }
@@ -818,5 +834,45 @@ struct Triangle: Shape {
         p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
         p.closeSubpath()
         return p
+    }
+}
+
+/** Why the map can't do its job right now: location turned off, or no internet. */
+struct StatusCards: View {
+    @ObservedObject var location: LocationService
+    @ObservedObject private var net = Connectivity.shared
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        if location.denied || DemoScript.step == "locationoff" {
+            card(icon: "location.slash.fill", color: Vela.closed, title: "Location is off",
+                 detail: "Kite needs it to show where you are and to guide you.", button: "Turn on") { LocationService.openSettings() }
+        } else if !net.online {
+            card(icon: "wifi.slash", color: Color(hex: 0xF59E0B), title: "No internet connection",
+                 detail: "Search, routes and live traffic need one. The map you've already seen still works.", button: nil) {}
+        }
+    }
+
+    private func card(icon: String, color: Color, title: String, detail: String, button: String?, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon).font(.system(size: 20, weight: .bold)).foregroundColor(.white)
+                .frame(width: 44, height: 44).background(Circle().fill(color))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 18, weight: .bold))
+                Text(detail).font(.system(size: 15)).foregroundColor(Vela.muted(scheme)).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            if let button {
+                Button(action: action) {
+                    Text(button).font(.system(size: 17, weight: .bold)).foregroundColor(Vela.onAccent(scheme))
+                        .padding(.horizontal, 16).frame(height: 44).background(Capsule().fill(Vela.accent(scheme)))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .glass(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
     }
 }

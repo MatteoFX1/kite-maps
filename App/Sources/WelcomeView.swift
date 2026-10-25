@@ -24,7 +24,8 @@ struct WelcomeView: View {
                 option(title: "Open data only", detail: "Nothing is sent to Google. Search from OpenStreetMap and routes from open servers.",
                        icon: "lock.shield", picked: openOnly) { openOnly = true }
             }
-            Text("You can change this any time in Settings.").font(.footnote).foregroundColor(.secondary)
+            Text("You can change this any time in Settings. Next, Kite asks to use your location, so it can show where you are and guide you.")
+                .font(.footnote).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button {
                 settings.noGoogle = openOnly

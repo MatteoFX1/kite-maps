@@ -11,6 +11,12 @@ enum AppTab: Equatable {
     case map, saved, settings
 }
 
+/** Which of your places the "pick a place" sheet is choosing. */
+enum PickKind: String, Identifiable {
+    case home, work
+    var id: String { rawValue }
+}
+
 enum SheetDetent: Equatable {
     case peek, half, full
 }
@@ -114,6 +120,8 @@ final class AppModel: ObservableObject {
     /** The "Add stop" search sheet. */
     @Published var addingStop = false
     @Published var showSaved = false
+    /** The sheet for choosing home or work by searching for it. */
+    @Published var picking: PickKind?
     @Published var showSteps = false
     /** "Start" on a place: begin the drive as soon as its route arrives. */
     @Published var autoStart = false
@@ -193,7 +201,7 @@ final class AppModel: ObservableObject {
             resultsTitle = title ?? q
             results = r.places
             if r.places.isEmpty {
-                notice = "No results for \"\(q)\" here."
+                notice = Connectivity.explain("No results for \"\(q)\" here. Try another word, or move the map.")
             } else if r.googleError != nil && useGoogle {
                 notice = "Google didn't answer, so these results are from OpenStreetMap."
             }
@@ -260,7 +268,7 @@ final class AppModel: ObservableObject {
                 search(q)
             case nil:
                 query = ""
-                notice = "Couldn't find a location in that link."
+                notice = Connectivity.explain("Couldn't find a location in that link.")
             }
         }
     }
@@ -332,6 +340,8 @@ final class AppModel: ObservableObject {
         }
     }
 
+    static let locationOffText = "Location is off for Kite. Turn it on in Settings to get directions from where you are."
+
     // MARK: My places
 
     /** A Siri or Shortcuts request: directions home or to work, or back to the car. */
@@ -346,8 +356,8 @@ final class AppModel: ObservableObject {
         case .car: target = settings.parking
         }
         guard let target else {
-            notice = kind == .car ? "No parking spot saved yet. Tap P on the map when you park."
-                : "Set your \(kind == .home ? "home" : "work") first: open a place, tap More, then Set as \(kind == .home ? "home" : "work")."
+            if kind == .car { notice = "No parking spot saved yet. Tap P on the map when you park." }
+            else { picking = kind == .home ? .home : .work }
             return
         }
         openDirections(to: target)
@@ -373,7 +383,7 @@ final class AppModel: ObservableObject {
     /** Remember where the car is: here, now, with the street name when one is found. */
     func saveParking() {
         guard let me = userLatLng else {
-            notice = "Turn on location to save where you parked."
+            notice = location.denied ? "Location is off for Kite. Turn it on in Settings to save where you parked." : "Still finding your location. Try again in a moment."
             return
         }
         var p = Place(id: "parking:\(Int(Date().timeIntervalSince1970))", name: "Parked car", location: me, source: "osm")
@@ -486,7 +496,19 @@ final class AppModel: ObservableObject {
     private func loadAllModes() {
         guard let d = directions else { return }
         guard let me = userLatLng else {
-            notice = "Turn on location to get directions from where you are."
+            // Say so on the trip card itself, not just in passing.
+            let why = location.denied ? Self.locationOffText : "Waiting for your location…"
+            for m in TravelMode.allCases { directions?.errors[m] = why }
+            directions?.tripsError = why
+            directions?.trips = []
+            if !location.denied {
+                // GPS is on but hasn't answered yet: try again once it does.
+                location.start()
+                Task {
+                    for _ in 0..<40 where userLatLng == nil { try? await Task.sleep(nanoseconds: 250_000_000) }
+                    if userLatLng != nil, directions?.destination.id == d.destination.id, directions?.routes.isEmpty == true { reloadRoutes() }
+                }
+            }
             return
         }
         let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
@@ -501,7 +523,9 @@ final class AppModel: ObservableObject {
                 guard directions?.destination.id == d.destination.id, routesRequest == req else { return }
                 directions?.loading.remove(m)
                 directions?.routes[m] = r.routes
-                if r.routes.isEmpty { directions?.errors[m] = r.error ?? "No route" }
+                if r.routes.isEmpty {
+                    directions?.errors[m] = Connectivity.explain(r.error == "No route found." ? "No route found." : "Couldn't get a route just now. Try again in a moment.")
+                }
                 if m == directions?.mode {
                     frameRoute()
                     if autoStart, !r.routes.isEmpty {
@@ -534,7 +558,7 @@ final class AppModel: ObservableObject {
             } catch {
                 guard directions?.destination.id == destId, transitRequest == req else { return }
                 directions?.trips = []
-                directions?.tripsError = "Couldn't reach the transit planner."
+                directions?.tripsError = Connectivity.explain("Couldn't reach the transit planner.")
             }
             if directions?.transit == true { frameRoute() }
         }
@@ -624,7 +648,7 @@ final class AppModel: ObservableObject {
 
     func centerOnUser() {
         guard let map, let loc = location.last ?? map.userLocation?.location else {
-            location.start()
+            if location.denied { LocationService.openSettings() } else { location.start() }
             return
         }
         let cam = MLNMapCamera(lookingAtCenter: loc.coordinate, acrossDistance: 1200, pitch: 0, heading: 0)

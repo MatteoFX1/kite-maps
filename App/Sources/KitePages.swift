@@ -117,7 +117,7 @@ struct SavedPage: View {
                                 }
                             }
                             .background(card)
-                            Text("Hold a place to rename or remove it.").font(.subheadline).foregroundColor(Vela.muted(scheme))
+                            Text("Hold a place to rename, change or remove it.").font(.subheadline).foregroundColor(Vela.muted(scheme))
                                 .padding(.horizontal, 4)
                         }
                     }
@@ -151,8 +151,7 @@ struct SavedPage: View {
     private func mineTile(_ icon: String, _ color: Color, _ title: String, _ place: Place?) -> some View {
         Button {
             if let p = place { go(p) } else {
-                model.tab = .map
-                model.notice = "Open any place and tap More, then Set as \(title.lowercased())."
+                model.picking = title == "Home" ? .home : .work
             }
         } label: {
             VStack(alignment: .leading) {
@@ -174,6 +173,11 @@ struct SavedPage: View {
         }
         .buttonStyle(.plain)
         .foregroundColor(.primary)
+        .contextMenu {
+            if place != nil {
+                Button { model.picking = title == "Home" ? .home : .work } label: { Label("Change \(title.lowercased())", systemImage: "pencil") }
+            }
+        }
         .accessibilityLabel(place == nil ? "\(title), not set" : "Go \(title)")
     }
 
@@ -244,6 +248,134 @@ struct SettingsPage: View {
                     .ignoresSafeArea(edges: .bottom)
                     .offset(y: geo.safeAreaInsets.bottom)
             }
+        }
+    }
+}
+
+/** Choosing home or work: type an address or postcode, or use where you are now. */
+struct PlacePicker: View {
+    @ObservedObject var model: AppModel
+    let kind: PickKind
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var query = ""
+    @State private var found: [Place] = []
+    @State private var searching = false
+    @State private var task: Task<Void, Never>?
+    @State private var locating = false
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+
+    private var title: String { kind == .home ? "Home" : "Work" }
+    private var current: Place? { kind == .home ? settings.home : settings.work }
+
+    var body: some View {
+        NavigationView {
+            List {
+                if query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Section {
+                        Button { useHere() } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: "location.fill").font(.system(size: 18, weight: .bold))
+                                    .foregroundColor(.white).frame(width: 40, height: 40)
+                                    .background(Circle().fill(Vela.routeBlue))
+                                Text("Use where I am now").font(.system(size: 19, weight: .semibold)).foregroundColor(.primary)
+                                Spacer()
+                                if locating { ProgressView() }
+                            }
+                        }
+                        .disabled(model.userLatLng == nil || locating)
+                    } footer: {
+                        Text(model.location.denied ? "Location is off for Kite, so type the address instead."
+                             : "Or type the address or postcode above.")
+                    }
+                    if let p = current {
+                        Section("Now set to") {
+                            row(p)
+                            Button(role: .destructive) {
+                                if kind == .home { model.setHome(nil) } else { model.setWork(nil) }
+                                dismiss()
+                            } label: { Label("Remove \(title.lowercased())", systemImage: "trash") }
+                        }
+                    }
+                } else if !found.isEmpty {
+                    Section { ForEach(found) { row($0) } }
+                } else if searching {
+                    HStack(spacing: 10) { ProgressView(); Text("Searching…").foregroundColor(.secondary) }
+                } else {
+                    Text(Connectivity.explain("Nothing found yet. Keep typing, or try the postcode."))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Address or postcode")
+            .onChange(of: query) { q in lookUp(q, full: false) }
+            .onSubmit(of: .search) { lookUp(query, full: true) }
+            .kiteList()
+            .navigationTitle("Set \(title.lowercased())")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+    }
+
+    private func row(_ p: Place) -> some View {
+        Button { pick(p) } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "mappin.circle.fill").font(.system(size: 26)).foregroundColor(Vela.closed)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(p.name).font(.system(size: 18, weight: .semibold)).foregroundColor(.primary).lineLimit(2)
+                    if let a = p.address, a != p.name {
+                        Text(a).font(.system(size: 15)).foregroundColor(.secondary).lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 0)
+                if let d = model.userLatLng?.distance(to: p.location) {
+                    Text(Fmt.distance(d)).font(.system(size: 15)).foregroundColor(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func pick(_ p: Place) {
+        if kind == .home { model.setHome(p) } else { model.setWork(p) }
+        dismiss()
+    }
+
+    private func useHere() {
+        guard let me = model.userLatLng else { return }
+        locating = true
+        Task {
+            let near = await Photon.reverse(me)
+            var p = Place(id: "\(kind.rawValue):\(me.lat),\(me.lng)", name: near?.name ?? title, location: me, source: "osm")
+            p.address = near?.address
+            locating = false
+            pick(p)
+        }
+    }
+
+    /** As you type: quick suggestions. On Search: a full search, postcodes included. */
+    private func lookUp(_ text: String, full: Bool) {
+        task?.cancel()
+        let q = text.trimmingCharacters(in: .whitespaces)
+        guard q.count >= 2 else { found = []; searching = false; return }
+        searching = true
+        let center = model.userLatLng ?? model.viewport.center
+        let useGoogle = !settings.noGoogle
+        task = Task {
+            if !full { try? await Task.sleep(nanoseconds: 300_000_000) }
+            guard !Task.isCancelled else { return }
+            var places: [Place] = []
+            if full {
+                places = await PlaceSearch.search(q, center: center, spanMeters: 50_000, useGoogle: useGoogle).places
+            } else {
+                if let pc = await Postcodes.lookup(q) { places = [pc] }
+                if places.isEmpty, useGoogle {
+                    places = (try? await GoogleClient.shared.suggest(q, near: center, spanMeters: 50_000))?.places ?? []
+                }
+                if places.isEmpty { places = (try? await Photon.search(q, near: center, limit: 10)) ?? [] }
+            }
+            guard !Task.isCancelled else { return }
+            found = Array(places.prefix(20))
+            searching = false
         }
     }
 }

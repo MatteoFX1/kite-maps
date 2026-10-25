@@ -39,7 +39,8 @@ struct VelaMapView: UIViewRepresentable {
 
         c.dark = dark
         model.map = map
-        model.location.start()
+        // On a first launch, location is asked for after the welcome, not on top of it.
+        if (settings.welcomed && !settings.needsWazeChoice) || DemoScript.active { model.location.start() }
         return map
     }
 

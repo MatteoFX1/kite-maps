@@ -1,11 +1,14 @@
 import CoreLocation
 import Foundation
+import UIKit
 
 /** GPS for search bias and navigation. The map draws its own blue dot; this feeds the app. */
 @MainActor
 final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published private(set) var last: CLLocation?
     @Published private(set) var authorized = false
+    /** Location is off for Kite (or for the whole phone): only Settings can turn it back on. */
+    @Published private(set) var denied = false
     var onUpdate: (@MainActor (CLLocation) -> Void)?
     private let manager = CLLocationManager()
 
@@ -44,9 +47,15 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         let s = manager.authorizationStatus
         Task { @MainActor in
             self.authorized = s == .authorizedWhenInUse || s == .authorizedAlways
+            self.denied = s == .denied || s == .restricted
             if self.authorized { self.manager.startUpdatingLocation() }
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
+
+    /** Kite's page in the Settings app, where location can be turned back on. */
+    static func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+    }
 }

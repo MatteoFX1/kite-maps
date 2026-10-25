@@ -132,8 +132,17 @@ struct TripHeader: View {
                         HStack(spacing: 10) { ProgressView(); Text("Finding routes…").font(.system(size: 19, weight: .semibold)) }
                             .frame(height: 52)
                     } else {
-                        Text(d.errors[d.mode] ?? "No route found.").font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(Vela.muted(scheme)).frame(minHeight: 52)
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(d.errors[d.mode] ?? "No route found.").font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(Vela.muted(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
+                            if model.location.denied {
+                                PillButton(title: "Open Settings", icon: "location.fill", filled: true) { LocationService.openSettings() }
+                            } else if d.errors[d.mode] != nil {
+                                PillButton(title: "Try again", icon: "arrow.clockwise") { model.reloadRoutes() }
+                            }
+                        }
+                        .frame(minHeight: 52)
                     }
                     Spacer(minLength: 8)
                     if !d.transit {

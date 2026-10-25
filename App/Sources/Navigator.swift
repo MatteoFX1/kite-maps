@@ -38,6 +38,9 @@ final class Navigator: ObservableObject {
     @Published private(set) var stops: [Place]
     private var tracker: RouteTracker
     private let speech = AVSpeechSynthesizer()
+    private let speechDone = SpeechDone()
+    private var rerouteSpokenAt = Date.distantPast
+    private var toldNoSignal = false
     private var spokenStage: [Int: Int] = [:]
     private var lastReroute = Date.distantPast
     private var avoidHighways: Bool
@@ -70,6 +73,7 @@ final class Navigator: ObservableObject {
         avoidTolls = settings.avoidTolls
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
         UIApplication.shared.isIdleTimerDisabled = true
+        speech.delegate = speechDone
         let first = route.maneuvers.first { $0.type != .depart } ?? route.maneuvers.first
         loadCameras()
         loadWaze()
@@ -395,7 +399,8 @@ final class Navigator: ObservableObject {
         let far = drive ? max(1000, speedMps * 40) : 250
         if d <= now && stage < 3 {
             spokenStage[i] = 3
-            speak(m.instruction)
+            // The turn itself matters more than whatever is still being said.
+            speak(m.instruction, urgent: true)
         } else if d <= near && d > now + 30 && stage < 2 {
             spokenStage[i] = 2
             // Which lane, like the banner shows, so it's known without looking.
@@ -413,7 +418,16 @@ final class Navigator: ObservableObject {
     private func reroute(from loc: CLLocation, quiet: Bool = false) {
         rerouting = true
         lastReroute = Date()
-        if !quiet { speak("Rerouting.") }
+        if !Connectivity.shared.online {
+            // Without signal there's no new route to get: say so once, not every few seconds.
+            if !quiet && !toldNoSignal {
+                toldNoSignal = true
+                speak("No signal. Keep going, and Kite will find a new route when it's back.")
+            }
+        } else if !quiet && Date().timeIntervalSince(rerouteSpokenAt) > 45 {
+            rerouteSpokenAt = Date()
+            speak("Rerouting.")
+        }
         let from = LatLng(loc.coordinate.latitude, loc.coordinate.longitude)
         let mode = route.mode
         let to = destination.location
@@ -423,6 +437,7 @@ final class Navigator: ObservableObject {
                                             useGoogle: !AppSettings.shared.noGoogle, via: self.stops.map(\.location))
             self.rerouting = false
             guard let fresh = r.routes.first else { return }
+            self.toldNoSignal = false
             self.route = fresh
             self.tracker = RouteTracker(route: fresh)
             self.spokenStage = [:]
@@ -436,14 +451,36 @@ final class Navigator: ObservableObject {
         }
     }
 
-    private func speak(_ text: String) {
+    private func speak(_ text: String, urgent: Bool = false) {
         guard !muted else { return }
+        if urgent && speech.isSpeaking { speech.stopSpeaking(at: .word) }
         try? AVAudioSession.sharedInstance().setActive(true)
         let u = AVSpeechUtterance(string: text)
-        u.voice = AVSpeechSynthesisVoice(language: Locale.preferredLanguages.first?.hasPrefix("en") == true
-                                         ? Locale.preferredLanguages.first : "en-US")
+        u.voice = Self.voice
         u.rate = AVSpeechUtteranceDefaultSpeechRate * 0.95
         speech.speak(u)
+    }
+
+    /** The phone's English voice for its region, the better-sounding download when there is one. */
+    static let voice: AVSpeechSynthesisVoice? = {
+        let lang = Locale.preferredLanguages.first.flatMap { $0.hasPrefix("en") ? $0 : nil } ?? (Fmt.yards ? "en-GB" : "en-US")
+        let better = AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language == lang && $0.quality != .default }
+            .max { $0.quality.rawValue < $1.quality.rawValue }
+        return better ?? AVSpeechSynthesisVoice(language: lang)
+    }()
+}
+
+/** Hands the sound back once Kite stops talking, so music comes back up between instructions. */
+final class SpeechDone: NSObject, AVSpeechSynthesizerDelegate {
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) { release(synthesizer) }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) { release(synthesizer) }
+
+    private func release(_ synthesizer: AVSpeechSynthesizer) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            guard !synthesizer.isSpeaking else { return }
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 }
 

@@ -14,6 +14,7 @@ struct PlaceHeader: View {
                 Text(place.name)
                     .font(.system(size: 26, weight: .heavy))
                     .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                     .copyable(place.name, below: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 CircleIconButton(icon: settings.isSaved(place) ? "bookmark.fill" : "bookmark") { settings.toggleSaved(place) }
