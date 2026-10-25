@@ -223,6 +223,7 @@ struct TripBody: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 80)
             }
+            .sheetScroll()
         }
     }
 

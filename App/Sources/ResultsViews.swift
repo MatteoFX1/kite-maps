@@ -72,16 +72,26 @@ struct ResultsList: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        ScrollView {
-            SheetTopMarker()
-            LazyVStack(alignment: .leading, spacing: 0) {
-                Divider()
-                ForEach(model.visibleResults) { p in
-                    ResultRow(model: model, place: p)
+        ScrollViewReader { proxy in
+            ScrollView {
+                SheetTopMarker()
+                LazyVStack(alignment: .leading, spacing: 0) {
                     Divider()
+                    ForEach(model.visibleResults) { p in
+                        ResultRow(model: model, place: p)
+                            .id(p.id)
+                        Divider()
+                    }
+                }
+                .padding(.bottom, 60)
+            }
+            .sheetScroll()
+            .onReceive(NotificationCenter.default.publisher(for: DemoScript.scrollResults)) { _ in
+                // Screenshot check only: scroll part way down the list.
+                if let p = model.visibleResults.dropFirst(3).first {
+                    withAnimation { proxy.scrollTo(p.id, anchor: .top) }
                 }
             }
-            .padding(.bottom, 60)
         }
     }
 }

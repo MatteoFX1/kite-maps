@@ -66,7 +66,21 @@ struct BottomSheet<Header: View, Content: View>: View {
                 // Below full height the list doesn't scroll: a drag anywhere moves the sheet.
                 .scrollDisabled(detent != .full)
                 .coordinateSpace(name: SheetTopMarker.space)
-                .onPreferenceChange(SheetTopKey.self) { contentAtTop = $0 >= -2 }
+                // iOS 18 and later: the list reports its scroll position itself (`.sheetScroll()`).
+                // The older marker's position stops updating while the list scrolls on newer iOS,
+                // so the sheet thought the list was always at its top and pulled down with it.
+                .environment(\.sheetListAtTop, { contentAtTop = $0 })
+                .onPreferenceChange(SheetTopKey.self) { y in
+                    if #unavailable(iOS 18) { contentAtTop = y >= -2 }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if DemoScript.step == "listscroll" {
+                        Text(contentAtTop ? "list at top" : "list scrolled")
+                            .font(.caption.bold()).padding(6)
+                            .background(Capsule().fill(Color.red)).foregroundColor(.white)
+                            .padding(.trailing, 16).padding(.bottom, 80)
+                    }
+                }
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 12, coordinateSpace: .global)
                         .onChanged { v in
@@ -132,7 +146,41 @@ extension BottomSheet {
     }
 }
 
-/** Put at the top of a sheet's scrolling list, so the sheet knows when the list is at its top. */
+private struct SheetListAtTopKey: EnvironmentKey {
+    static let defaultValue: ((Bool) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    /** Set by a bottom sheet; its list calls it whenever the list reaches or leaves its top. */
+    var sheetListAtTop: ((Bool) -> Void)? {
+        get { self[SheetListAtTopKey.self] }
+        set { self[SheetListAtTopKey.self] = newValue }
+    }
+}
+
+extension View {
+    /** Put on a sheet's scrolling list, so the sheet knows when the list is at its top. */
+    func sheetScroll() -> some View { modifier(SheetScrollReporter()) }
+}
+
+private struct SheetScrollReporter: ViewModifier {
+    @Environment(\.sheetListAtTop) private var report
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.onScrollGeometryChange(for: Bool.self) { g in
+                g.contentOffset.y + g.contentInsets.top <= 2
+            } action: { _, atTop in
+                report?(atTop)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/** Put at the top of a sheet's scrolling list, so the sheet knows when the list is at its top
+ *  (used before iOS 18; later versions use `.sheetScroll()`). */
 struct SheetTopMarker: View {
     static let space = "sheet-content"
 
