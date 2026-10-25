@@ -23,13 +23,15 @@ jobs:
       - name: Unit tests
         working-directory: VelaCore
         run: swift test
+      - name: Live roundabout check
+        continue-on-error: true
+        timeout-minutes: 4
+        run: python3 .github/probe/roundabouts.py
       - name: Live Google search check
         working-directory: VelaCore
         continue-on-error: true
+        timeout-minutes: 6
         run: swift run vela-probe "pizza" 40.7484 -73.9857
-      - name: Live roundabout check
-        continue-on-error: true
-        run: python3 .github/probe/roundabouts.py
 
   ipa:
     name: Build Kite.ipa

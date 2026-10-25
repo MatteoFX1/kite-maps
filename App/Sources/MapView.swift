@@ -483,6 +483,8 @@ struct VelaMapView: UIViewRepresentable {
                 self.wazeBox = box
                 self.wazeAt = Date()
                 WazeHistory.shared.record(found)
+                self.model.wazeLiveCount = found.filter { self.model.settings.shows($0) }.count
+                self.model.updateAreaRisk(live: found)
                 if let map { self.render(map) }
             }
         }
@@ -491,6 +493,8 @@ struct VelaMapView: UIViewRepresentable {
         func showDemoWaze(_ list: [WazeAlert], map: MLNMapView) {
             wazeAlerts = list
             wazeAt = Date()
+            model.wazeLiveCount = list.count
+            model.updateAreaRisk(live: list)
             render(map)
         }
 

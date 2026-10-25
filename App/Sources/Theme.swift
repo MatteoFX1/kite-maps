@@ -2,25 +2,55 @@ import SwiftUI
 import UIKit
 import VelaCore
 
-/** Vela's colors (from the Android app's theme). */
+/**
+ * Kite's colors: a deep navy night look with one bright teal for "go" (the Android app's
+ * names are kept so older code reads the same). Sized and colored for a phone in a car holder.
+ */
 enum Vela {
-    static let teal = Color(hex: 0x14857A)
-    static let tealLight = Color(hex: 0x4FB3A6)
-    static let routeBlue = Color(hex: 0x1F6FEB)
-    static let navGreen = Color(hex: 0x0F7A5C)
-    static let open = Color(hex: 0x1E8E3E)
-    static let openDark = Color(hex: 0x81C995)
-    static let closed = Color(hex: 0xD93025)
-    static let closedDark = Color(hex: 0xF28B82)
+    static let teal = Color(hex: 0x0F766E)
+    static let tealLight = Color(hex: 0x2DD4BF)
+    static let routeBlue = Color(hex: 0x2F7BFF)
+    /** The driving banner: deep teal, with a darker band for the lanes. */
+    static let navGreen = Color(hex: 0x0F766E)
+    static let navBand = Color(hex: 0x0B4F49)
+    static let open = Color(hex: 0x16A34A)
+    static let openDark = Color(hex: 0x4ADE80)
+    static let closed = Color(hex: 0xDC2626)
+    static let closedDark = Color(hex: 0xF87171)
     static let star = Color(hex: 0xF9AB00)
+    /** Speed cameras: loud orange, so a glance is enough. */
+    static let camera = Color(hex: 0xFF8A00)
+    static let police = Color(hex: 0x2F7BFF)
 
-    /** The filled "Directions" button: teal by day, light teal with dark text at night. */
-    static func accent(_ scheme: ColorScheme) -> Color { scheme == .dark ? tealLight : teal }
-    static func onAccent(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(hex: 0x003730) : .white }
-    static func sheet(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(hex: 0x1E1F20) : .white }
-    static func chip(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(hex: 0x282A2C) : Color(hex: 0xF1F3F4) }
-    static func tonal(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(hex: 0x1F4A44) : Color(hex: 0xCDE9E3) }
-    static func onTonal(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(hex: 0xCDE9E3) : Color(hex: 0x06201C) }
+    /** The filled "Go" color: bright teal with dark text, day and night. */
+    static func accent(_ scheme: ColorScheme) -> Color { scheme == .dark ? tealLight : Color(hex: 0x14B8A6) }
+    static func onAccent(_ scheme: ColorScheme) -> Color { Color(hex: 0x04241F) }
+    /** Teal for text and icons on the page (darker by day so it reads on white). */
+    static func accentText(_ scheme: ColorScheme) -> Color { scheme == .dark ? tealLight : teal }
+    static func sheet(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(hex: 0x151F30) : .white }
+    /** Cards, buttons and tiles floating on the map. */
+    static func surface(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(hex: 0x1A2638) : .white }
+    /** Behind whole pages (Saved, Settings). */
+    static func ground(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(hex: 0x0E1726) : Color(hex: 0xF2F5F9) }
+    static func chip(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(hex: 0x243349) : Color(hex: 0xEDF1F6) }
+    static func tonal(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(hex: 0x12403C) : Color(hex: 0xCCFBF1) }
+    static func onTonal(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(hex: 0x99F6E4) : Color(hex: 0x134E4A) }
+    static func muted(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(hex: 0x94A3B8) : Color(hex: 0x64748B) }
+}
+
+/** Kite's type: rounded, and never smaller than a size that reads from a phone holder. */
+struct KiteType: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.1, *) {
+            content.fontDesign(.rounded).dynamicTypeSize(.xLarge...)
+        } else {
+            content.dynamicTypeSize(.xLarge...)
+        }
+    }
+}
+
+extension View {
+    func kiteType() -> some View { modifier(KiteType()) }
 }
 
 extension Color {
@@ -224,9 +254,9 @@ struct Glass<S: Shape>: ViewModifier {
         content
             .background(
                 shape.fill(.ultraThinMaterial)
-                    .overlay(shape.fill(Vela.sheet(scheme).opacity(scheme == .dark ? 0.45 : 0.55)))
-                    .overlay(shape.stroke(Color.white.opacity(scheme == .dark ? 0.14 : 0.6), lineWidth: 0.75))
-                    .shadow(color: .black.opacity(scheme == .dark ? 0.35 : 0.14), radius: 10, y: 4)
+                    .overlay(shape.fill(Vela.surface(scheme).opacity(scheme == .dark ? 0.86 : 0.88)))
+                    .overlay(shape.stroke(Color.white.opacity(scheme == .dark ? 0.08 : 0.5), lineWidth: 0.75))
+                    .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.16), radius: 12, y: 5)
             )
     }
 }
@@ -239,7 +269,7 @@ extension View {
 struct MapFab: View {
     let icon: String
     var tint: Color = .primary
-    var size: CGFloat = 48
+    var size: CGFloat = 56
     let action: () -> Void
     @Environment(\.colorScheme) private var scheme
 
@@ -266,11 +296,11 @@ struct PillButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 14, weight: .semibold))
-                Text(title).font(.subheadline.weight(.semibold))
+                Image(systemName: icon).font(.system(size: 17, weight: .bold))
+                Text(title).font(.body.weight(.bold))
             }
-            .padding(.horizontal, 16)
-            .frame(height: 40)
+            .padding(.horizontal, 20)
+            .frame(height: 52)
             .foregroundColor(filled ? Vela.onAccent(scheme) : Vela.onTonal(scheme))
             .background(Capsule().fill(filled ? Vela.accent(scheme) : Vela.tonal(scheme)))
         }
@@ -286,9 +316,9 @@ struct CircleIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 17, weight: .bold))
                 .foregroundColor(.primary)
-                .frame(width: 34, height: 34)
+                .frame(width: 44, height: 44)
                 .background(Circle().fill(Vela.chip(scheme)))
         }
         .buttonStyle(.plain)

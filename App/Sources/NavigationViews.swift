@@ -28,7 +28,7 @@ struct NavigationOverlay: View {
 
     var body: some View {
         ZStack {
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 if nav.arrived {
                     ArrivedCard(name: nav.destination.name, onPark: nav.route.mode == .drive ? { model.saveParking() } : nil,
                                 note: nav.wazeWarned > 0 ? "Waze drivers warned you about \(nav.wazeWarned) report\(nav.wazeWarned == 1 ? "" : "s") on the way" : nil) { model.endNavigation() }
@@ -37,11 +37,13 @@ struct NavigationOverlay: View {
                 }
                 if let cam = nav.cameraAhead, !nav.arrived {
                     CameraCard(alert: cam, speedKmh: nav.speedMps * 3.6)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
                 if let w = nav.wazeAhead, !nav.arrived {
                     WazeCard(ahead: w)
                         .onTapGesture { withAnimation { nav.dismissWaze() } }
                         .accessibilityHint("Tap to hide")
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
                 if let air = nav.aircraftNear, !nav.arrived, !aircraftAsChip {
                     AircraftCard(aircraft: air.aircraft, meters: air.meters)
@@ -51,14 +53,16 @@ struct NavigationOverlay: View {
                 }
                 if nav.rerouting {
                     Label("Rerouting…", systemImage: "arrow.triangle.2.circlepath")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 14).frame(height: 34)
+                        .font(.system(size: 18, weight: .bold))
+                        .padding(.horizontal, 18).frame(height: 44)
                         .glass(Capsule())
                 }
                 Spacer()
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 12)
             .padding(.top, 4)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: nav.cameraAhead?.startMeters)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: nav.wazeAhead?.alert.id)
 
             VStack(spacing: 12) {
                 Spacer()
@@ -68,44 +72,29 @@ struct NavigationOverlay: View {
                             AircraftChip(aircraft: air.aircraft, meters: air.meters)
                         }
                         if let risk = nav.policeRisk, !nav.arrived { PoliceRiskChip(score: risk) }
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
-                            if let limit = nav.speedLimitKmh { SpeedLimitSign(kmh: limit) }
-                        }
-                        if !nav.following {
-                            Button { model.recenterNav() } label: {
-                                Label("Re-center", systemImage: "location.north.line.fill")
-                                    .font(.subheadline.weight(.semibold))
-                                    .padding(.horizontal, 16).frame(height: 42)
-                                    .foregroundColor(Vela.onAccent(scheme))
-                                    .background(Capsule().fill(Vela.accent(scheme)))
-                            }
-                            .buttonStyle(.plain)
+                            if let limit = nav.speedLimitKmh { SpeedLimitSign(kmh: limit, size: 70) }
                         }
                     }
                     Spacer()
                     VStack(spacing: 12) {
-                        // With three warning cards up there's no room: the cards matter more
-                        // than search and share, which come back once a card goes.
-                        if mainCards < 3 {
-                            MapFab(icon: "magnifyingglass", size: 48) { showAlong = true }
-                                .accessibilityLabel("Search along the route")
-                            ShareLink(item: etaText) {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 19, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                    .frame(width: 48, height: 48)
-                                    .glass(Circle())
-                                    .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
-                            }
-                            .accessibilityLabel("Share arrival time")
-                        }
-                        MapFab(icon: "arrow.up.left.and.arrow.down.right", size: 48) { model.overviewNav() }
-                        MapFab(icon: nav.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 48) { nav.muted.toggle() }
-                        MapFab(icon: "square.3.layers.3d", size: 48) { model.showLayers = true }
+                        MapFab(icon: nav.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 64) { nav.muted.toggle() }
+                            .accessibilityLabel(nav.muted ? "Turn voice on" : "Mute voice")
                     }
                 }
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 16)
+                if !nav.following {
+                    Button { model.recenterNav() } label: {
+                        Label("Re-centre", systemImage: "location.north.line.fill")
+                            .font(.system(size: 20, weight: .bold))
+                            .padding(.horizontal, 26).frame(height: 60)
+                            .foregroundColor(Vela.onAccent(scheme))
+                            .background(Capsule().fill(Vela.accent(scheme)))
+                            .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
+                    }
+                    .buttonStyle(.plain)
+                }
                 TripBar(nav: nav, onEnd: { if nav.arrived { model.endNavigation() } else { confirmEnd = true } }, onSteps: { showSteps = true })
                     .confirmationDialog("End this trip?", isPresented: $confirmEnd, titleVisibility: .visible) {
                         Button("End trip", role: .destructive) { model.endNavigation() }
@@ -114,72 +103,171 @@ struct NavigationOverlay: View {
             }
         }
         .sheet(isPresented: $showAlong) {
-            AlongRouteSheet(nav: nav)
+            AlongRouteSheet(nav: nav).kiteType()
         }
         .sheet(isPresented: $showSteps) {
             NavigationView {
-                ScrollView { StepsList(route: nav.route).padding(.horizontal, 16) }
-                    .navigationTitle("Steps")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showSteps = false } } }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // The things that used to be buttons on the map, out of the way until wanted.
+                        HStack(spacing: 10) {
+                            tripAction("magnifyingglass", "Find on route") {
+                                showSteps = false
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { showAlong = true }
+                            }
+                            ShareLink(item: etaText) { tripActionLabel("square.and.arrow.up", "Share ETA") }
+                                .buttonStyle(.plain)
+                            tripAction("arrow.up.left.and.arrow.down.right", "Overview") {
+                                showSteps = false
+                                model.overviewNav()
+                            }
+                        }
+                        StepsList(route: nav.route)
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .navigationTitle("Your trip")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showSteps = false } } }
             }
+            .kiteType()
         }
+    }
+
+    private func tripAction(_ icon: String, _ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { tripActionLabel(icon, title) }.buttonStyle(.plain)
+    }
+
+    private func tripActionLabel(_ icon: String, _ title: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 22, weight: .bold))
+            Text(title).font(.system(size: 15, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .foregroundColor(.primary)
+        .frame(maxWidth: .infinity, minHeight: 78)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Vela.chip(scheme)))
     }
 }
 
+/**
+ * The next turn, as big as it can be: the real roundabout drawn with every exit and yours lit,
+ * the distance, the road, and below it which lane to be in.
+ */
 struct InstructionBanner: View {
     @ObservedObject var nav: Navigator
 
     var body: some View {
         let m = nav.nextManeuver
+        let leftTraffic = Geo.drivesOnLeft(m?.location ?? LatLng(0, 0))
+        let refs = RoadRefs.find(m?.instruction ?? "")
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 14) {
-                if m?.type == .roundabout, let exit = m?.exit {
-                    RoundaboutGlyph(exit: exit, rightHand: !Geo.drivesOnLeft(m?.location ?? LatLng(0, 0)))
+            HStack(alignment: .center, spacing: 16) {
+                if m?.type == .roundabout {
+                    RoundaboutDiagram(shape: m?.roundabout, exit: m?.exit ?? 1, clockwise: leftTraffic)
+                        .frame(width: 100, height: 100)
                 } else {
                     Image(systemName: maneuverSymbol(m?.type ?? .straight))
-                        .font(.system(size: 40, weight: .bold))
-                        .frame(width: 56)
+                        .font(.system(size: 62, weight: .heavy))
+                        .frame(width: 100, height: 100)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     if let p = nav.progress {
-                        Text(Fmt.distance(p.distanceToNext)).font(.system(size: 30, weight: .bold))
+                        Text(Fmt.distance(p.distanceToNext))
+                            .font(.system(size: 46, weight: .heavy))
+                            .monospacedDigit()
+                            .lineLimit(1).minimumScaleFactor(0.6)
                     }
-                    let refs = RoadRefs.find(m?.instruction ?? "")
+                    Text(Self.headline(m))
+                        .font(.system(size: 23, weight: .bold))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.75)
                     if !refs.isEmpty {
                         HStack(spacing: 6) { ForEach(refs, id: \.self) { RoadShield(ref: $0) } }
-                    }
-                    Text(m?.instruction ?? "Follow the route")
-                        .font(.system(size: 19, weight: .medium))
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.8)
-                    if let lane = m?.laneHint {
-                        Text(lane).font(.footnote).opacity(0.85)
+                            .padding(.top, 2)
+                    } else if m?.type == .roundabout, let road = m?.road {
+                        Text("onto \(road)").font(.system(size: 18, weight: .semibold)).opacity(0.9).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            if let m, m.lanes.count > 1, let p = nav.progress, p.distanceToNext < 1_500 {
-                LaneStrip(lanes: m.lanes, turn: m.type)
-                    .padding(.bottom, 12)
-            }
-            if let then = nav.thenManeuver {
-                HStack(spacing: 8) {
-                    Text("Then").font(.subheadline.weight(.semibold))
-                    Image(systemName: maneuverSymbol(then.type)).font(.system(size: 16, weight: .bold))
-                    Spacer()
+            if let m, let p = nav.progress, p.distanceToNext < 1_500, let lanes = LaneGuide.lanes(for: m, leftTraffic: leftTraffic) {
+                HStack(spacing: 14) {
+                    LaneStrip(lanes: lanes.lanes, turn: m.type, exitAngle: m.roundabout.map { $0.exits[$0.taken] })
+                    Text(lanes.words).font(.system(size: 19, weight: .bold)).lineLimit(2).minimumScaleFactor(0.8)
+                    Spacer(minLength: 0)
+                    thenView
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.black.opacity(0.18))
+                .padding(.vertical, 10)
+                .background(Vela.navBand)
+            } else if nav.thenManeuver != nil {
+                HStack { Spacer(); thenView }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Vela.navBand)
             }
         }
         .foregroundColor(.white)
-        .background(RoundedRectangle(cornerRadius: 18).fill(Vela.navGreen))
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Vela.navGreen))
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: .black.opacity(0.4), radius: 12, y: 5)
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var thenView: some View {
+        if let then = nav.thenManeuver {
+            HStack(spacing: 6) {
+                Text("Then").font(.system(size: 16, weight: .bold)).opacity(0.85)
+                Image(systemName: maneuverSymbol(then.type)).font(.system(size: 20, weight: .heavy))
+            }
+        }
+    }
+
+    /** "6th exit" for a roundabout (the picture says the rest), else the instruction. */
+    static func headline(_ m: Maneuver?) -> String {
+        guard let m else { return "Follow the route" }
+        if m.type == .roundabout, let n = m.exit { return "\(ordinal(n)) exit" }
+        return m.instruction
+    }
+
+    static func ordinal(_ n: Int) -> String {
+        switch n % 100 {
+        case 11, 12, 13: return "\(n)th"
+        default: break
+        }
+        switch n % 10 {
+        case 1: return "\(n)st"
+        case 2: return "\(n)nd"
+        case 3: return "\(n)rd"
+        default: return "\(n)th"
+        }
+    }
+}
+
+/** Which lanes to show under the turn: the mapped ones, or at a roundabout with none mapped, the Highway Code's. */
+enum LaneGuide {
+    static func lanes(for m: Maneuver, leftTraffic: Bool) -> (lanes: [Lane], words: String)? {
+        if m.lanes.count > 1 {
+            let valid = m.lanes.enumerated().filter(\.element.valid).map(\.offset)
+            guard let first = valid.first, let last = valid.last else { return nil }
+            let n = m.lanes.count
+            let words: String
+            if valid.count == n { return nil }
+            if last < n / 2 || (last == 0) { words = valid.count == 1 && n > 2 && first > 0 ? "Lane \(first + 1) from left" : (valid.count > 1 ? "Left lanes" : "Left lane") }
+            else if first >= (n + 1) / 2 { words = valid.count > 1 ? "Right lanes" : "Right lane" }
+            else { words = valid.count > 1 ? "Middle lanes" : "Middle lane" }
+            return (m.lanes, words)
+        }
+        guard m.type == .roundabout, let shape = m.roundabout else { return nil }
+        // Two lanes, the near-side one for left and straight on, the far one for right.
+        let farSide = shape.ruleLane == 1
+        let rightLane = leftTraffic ? farSide : !farSide
+        let lanes = [Lane(indications: rightLane ? ["left", "straight"] : ["left"], valid: !rightLane),
+                     Lane(indications: ["right"], valid: rightLane)]
+        return (lanes, rightLane ? "Right lane" : "Left lane")
     }
 }
 
@@ -194,44 +282,50 @@ struct SpeedBadge: View {
         // Red once more than a little over the limit.
         let over = limitKmh.map { mps * 3.6 > $0 + 5 } ?? false
         VStack(spacing: -2) {
-            Text("\(v)").font(.system(size: 24, weight: .bold)).foregroundColor(over ? Vela.closed : .primary)
-            Text(metric ? "km/h" : "mph").font(.system(size: 10, weight: .medium)).foregroundColor(.secondary)
+            Text("\(v)").font(.system(size: 36, weight: .heavy)).monospacedDigit()
+                .foregroundColor(over ? .white : .primary)
+            Text(metric ? "km/h" : "mph").font(.system(size: 14, weight: .semibold))
+                .foregroundColor(over ? .white.opacity(0.85) : Vela.muted(scheme))
         }
-        .frame(width: 64, height: 64)
+        .frame(width: 84, height: 84)
+        .background(Circle().fill(over ? Vela.closed : Color.clear))
         .glass(Circle())
+        .animation(.easeOut(duration: 0.25), value: over)
     }
 }
 
 /** The posted limit: a US-style white sign in miles, a round red-ringed one in kilometers. */
 struct SpeedLimitSign: View {
     let kmh: Double
+    var size: CGFloat = 56
 
     var body: some View {
         if Fmt.metric || Fmt.yards {
             // Round red ring: kilometers on the Continent, miles in Britain.
             Text("\(Fmt.metric ? Int(kmh.rounded()) : Int((kmh / 1.609344 / 5).rounded()) * 5)")
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: size * 0.4, weight: .heavy))
                 .foregroundColor(.black)
-                .frame(width: 56, height: 56)
+                .frame(width: size, height: size)
                 .background(Circle().fill(.white))
-                .overlay(Circle().inset(by: 3).stroke(Color(hex: 0xD93025), lineWidth: 6))
-                .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+                .overlay(Circle().inset(by: size * 0.055).stroke(Color(hex: 0xD93025), lineWidth: size * 0.11))
+                .shadow(color: .black.opacity(0.3), radius: 5, y: 2)
         } else {
             // OSM limits in the US are mapped in mph; round back to the posted number.
             let mph = Int((kmh / 1.609344 / 5).rounded()) * 5
             VStack(spacing: 0) {
-                Text("SPEED\nLIMIT").font(.system(size: 8, weight: .bold)).multilineTextAlignment(.center)
-                Text("\(mph)").font(.system(size: 22, weight: .bold))
+                Text("SPEED\nLIMIT").font(.system(size: size * 0.14, weight: .bold)).multilineTextAlignment(.center)
+                Text("\(mph)").font(.system(size: size * 0.4, weight: .heavy))
             }
             .foregroundColor(.black)
-            .frame(width: 48, height: 60)
+            .frame(width: size * 0.86, height: size * 1.07)
             .background(RoundedRectangle(cornerRadius: 6).fill(.white))
             .overlay(RoundedRectangle(cornerRadius: 6).inset(by: 2).stroke(.black, lineWidth: 2))
-            .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+            .shadow(color: .black.opacity(0.3), radius: 5, y: 2)
         }
     }
 }
 
+/** The bottom card while driving: end, time left (big), and the trip menu. */
 struct TripBar: View {
     @ObservedObject var nav: Navigator
     let onEnd: () -> Void
@@ -241,39 +335,40 @@ struct TripBar: View {
     var body: some View {
         let remaining = nav.progress?.remainingSeconds ?? nav.route.durationSeconds
         let meters = nav.progress?.remainingMeters ?? nav.route.distanceMeters
-        HStack {
+        HStack(spacing: 12) {
             Button(action: onEnd) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 18, weight: .bold))
-                    .frame(width: 50, height: 50)
-                    .overlay(Circle().stroke(Color.secondary.opacity(0.5), lineWidth: 1.5))
+                    .font(.system(size: 24, weight: .heavy))
+                    .foregroundColor(scheme == .dark ? Color(hex: 0xFCA5A5) : Vela.closed)
+                    .frame(width: 64, height: 64)
+                    .background(Circle().fill(scheme == .dark ? Color(hex: 0x3B1820) : Color(hex: 0xFEE2E2)))
             }
             .buttonStyle(.plain)
-            Spacer()
-            VStack(spacing: 2) {
-                Text(Fmt.duration(remaining)).font(.system(size: 26, weight: .bold))
-                    .foregroundColor(scheme == .dark ? Vela.openDark : Vela.open)
-                Text("\(Fmt.distance(meters)) · \(Fmt.arrival(remaining))").font(.subheadline).foregroundColor(.secondary)
+            .accessibilityLabel("End trip")
+            VStack(spacing: 1) {
+                Text(Fmt.duration(remaining)).font(.system(size: 36, weight: .heavy))
+                    .foregroundColor(Vela.accentText(scheme))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Text("\(Fmt.distance(meters)) · \(Fmt.arrival(remaining))").font(.system(size: 17, weight: .medium))
+                    .foregroundColor(Vela.muted(scheme))
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
-            Spacer()
+            .frame(maxWidth: .infinity)
             Button(action: onSteps) {
                 Image(systemName: "list.bullet")
-                    .font(.system(size: 18, weight: .bold))
-                    .frame(width: 50, height: 50)
-                    .overlay(Circle().stroke(Color.secondary.opacity(0.5), lineWidth: 1.5))
+                    .font(.system(size: 24, weight: .bold))
+                    .frame(width: 64, height: 64)
+                    .background(Circle().fill(Vela.chip(scheme)))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Trip and steps")
         }
         .foregroundColor(.primary)
-        .padding(.horizontal, 18)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
-        .background(
-            UnevenTopRounded(radius: 22)
-                .fill(Vela.sheet(scheme))
-                .shadow(color: .black.opacity(0.25), radius: 8, y: -2)
-                .ignoresSafeArea(edges: .bottom)
-        )
+        .padding(.horizontal, 16)
+        .frame(height: 100)
+        .glass(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 4)
     }
 }
 
@@ -286,105 +381,122 @@ struct ArrivedCard: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: "flag.checkered").font(.system(size: 30, weight: .bold))
+            Image(systemName: "flag.checkered").font(.system(size: 38, weight: .bold))
             VStack(alignment: .leading, spacing: 2) {
-                Text("You have arrived").font(.title3.weight(.bold))
-                Text(name).font(.subheadline).lineLimit(1)
-                if let note { Text(note).font(.caption).opacity(0.85).lineLimit(2) }
+                Text("You've arrived").font(.system(size: 26, weight: .heavy))
+                Text(name).font(.system(size: 18, weight: .semibold)).lineLimit(1)
+                if let note { Text(note).font(.subheadline).opacity(0.85).lineLimit(2) }
             }
             Spacer()
             if let onPark, !parked {
-                Button { onPark(); parked = true } label: { Image(systemName: "parkingsign").font(.headline) }
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(Color.white.opacity(0.25)))
-                    .accessibilityLabel("Save parking")
+                Button { onPark(); parked = true } label: {
+                    Image(systemName: "parkingsign").font(.system(size: 22, weight: .bold))
+                        .frame(width: 56, height: 56)
+                        .background(Circle().fill(Color.white.opacity(0.22)))
+                }
+                .accessibilityLabel("Save parking")
             }
-            Button("Done", action: done)
-                .font(.headline)
-                .padding(.horizontal, 16).frame(height: 40)
-                .background(Capsule().fill(Color.white.opacity(0.25)))
+            Button(action: done) {
+                Text("Done").font(.system(size: 20, weight: .bold))
+                    .padding(.horizontal, 20).frame(height: 56)
+                    .background(Capsule().fill(Color.white.opacity(0.22)))
+            }
         }
         .foregroundColor(.white)
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 18).fill(Vela.navGreen))
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Vela.navGreen))
+        .shadow(color: .black.opacity(0.4), radius: 12, y: 5)
     }
 }
 
 /**
- * The Waze-style camera warning: the camera, how far, a bar that empties as it gets close, and
- * the limit it checks. Turns red while the user is over that limit.
+ * The camera warning, loud on purpose: bright orange, a big camera, the distance in huge
+ * numbers and the limit it checks. It pulses as it appears, and turns red while you're over.
  */
 struct CameraCard: View {
     let alert: CameraAlert
     let speedKmh: Double
-    @Environment(\.colorScheme) private var scheme
+    @State private var pulse = false
 
     var body: some View {
         let over = alert.limitKmh.map { speedKmh > $0 + 3 } ?? false
         let left = min(max(alert.meters / alert.startMeters, 0), 1)
-        let tint: Color = alert.kind == .speed ? Color(hex: 0xF9AB00) : Color(hex: 0x8E44AD)
-        VStack(spacing: 8) {
-            HStack(spacing: 12) {
-                CameraBadge(kind: alert.kind, size: 40)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(Fmt.distance(alert.meters)).font(.system(size: 24, weight: .bold)).monospacedDigit()
-                    Text(alert.kind == .speed ? "Speed camera" : (Fmt.yards ? "Number plate camera" : "License plate camera"))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(over ? .white.opacity(0.9) : .secondary)
+        let fill: Color = over ? Vela.closed : (alert.kind == .speed ? Vela.camera : Color(hex: 0x8E44AD))
+        VStack(spacing: 10) {
+            HStack(spacing: 14) {
+                CameraBadge(kind: alert.kind, size: 64)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(Fmt.distance(alert.meters)).font(.system(size: 40, weight: .heavy)).monospacedDigit()
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    Text(over ? "Slow down" : alert.kind == .speed ? "Speed camera" : (Fmt.yards ? "Number plate camera" : "License plate camera"))
+                        .font(.system(size: 20, weight: .bold))
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 4)
-                if let limit = alert.limitKmh { SpeedLimitSign(kmh: limit) }
+                if let limit = alert.limitKmh { SpeedLimitSign(kmh: limit, size: 70) }
             }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.secondary.opacity(0.25))
-                    Capsule().fill(over ? Color.white : tint).frame(width: g.size.width * left)
+                    Capsule().fill(Color.white.opacity(0.3))
+                    Capsule().fill(Color.white).frame(width: g.size.width * left)
                 }
             }
-            .frame(height: 6)
+            .frame(height: 8)
         }
-        .foregroundColor(over ? .white : .primary)
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 18).fill(over ? Vela.closed : Vela.sheet(scheme))
-            .shadow(color: .black.opacity(0.25), radius: 4, y: 2))
+        .foregroundColor(.white)
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(fill))
+        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Color.white.opacity(pulse ? 0.9 : 0), lineWidth: 4))
+        .shadow(color: fill.opacity(0.55), radius: pulse ? 22 : 10, y: 4)
+        .scaleEffect(pulse ? 1.03 : 1)
         .animation(.easeOut(duration: 0.3), value: over)
         .accessibilityElement(children: .combine)
+        .task(id: alert.startMeters) {
+            // Two quick pulses when it first shows, so it catches the eye.
+            for _ in 0..<2 {
+                withAnimation(.easeOut(duration: 0.25)) { pulse = true }
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                withAnimation(.easeIn(duration: 0.3)) { pulse = false }
+                try? await Task.sleep(nanoseconds: 300_000_000)
+            }
+        }
     }
 }
 
-/** A Waze report on the road ahead, styled like the camera card: what, how far, how fresh. */
+/** A Waze report on the road ahead, as loud as the camera card, in the report's own color. */
 struct WazeCard: View {
     let ahead: WazeAhead
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let a = ahead.alert
         let left = min(max(ahead.meters / ahead.startMeters, 0), 1)
         let detail = [a.reportedText, a.thumbsUp > 0 ? "\(a.thumbsUp) 👍" : nil, a.street].compactMap { $0 }.joined(separator: " · ")
-        VStack(spacing: 8) {
-            HStack(spacing: 12) {
-                WazeBadge(kind: a.kind, size: 40)
+        let fill = Color(uiColor: MapIcons.wazeColor(a.kind))
+        VStack(spacing: 10) {
+            HStack(spacing: 14) {
+                WazeBadge(kind: a.kind, size: 58)
                 VStack(alignment: .leading, spacing: 1) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(Fmt.distance(ahead.meters)).font(.system(size: 24, weight: .bold)).monospacedDigit()
-                        Text(a.title).font(.headline)
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(Fmt.distance(ahead.meters)).font(.system(size: 36, weight: .heavy)).monospacedDigit()
+                        Text(a.title).font(.system(size: 21, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
                     }
-                    Text(detail).font(.subheadline).foregroundColor(.secondary).lineLimit(1)
+                    Text(detail).font(.system(size: 15, weight: .medium)).opacity(0.9).lineLimit(1)
                 }
                 Spacer(minLength: 4)
-                Text("Waze").font(.caption2.weight(.bold)).foregroundColor(.secondary)
+                Text("Waze").font(.system(size: 13, weight: .heavy)).opacity(0.8)
             }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.secondary.opacity(0.25))
-                    Capsule().fill(Color(uiColor: MapIcons.wazeColor(a.kind))).frame(width: g.size.width * left)
+                    Capsule().fill(Color.white.opacity(0.3))
+                    Capsule().fill(Color.white).frame(width: g.size.width * left)
                 }
             }
-            .frame(height: 6)
+            .frame(height: 8)
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 18).fill(Vela.sheet(scheme))
-            .shadow(color: .black.opacity(0.25), radius: 4, y: 2))
+        .foregroundColor(.white)
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(fill))
+        .shadow(color: fill.opacity(0.5), radius: 12, y: 4)
         .accessibilityElement(children: .combine)
     }
 }
@@ -458,14 +570,18 @@ struct RouteWazeSummary: View {
             if let counts {
                 if counts.isEmpty {
                     Label("No Waze reports on this route", systemImage: "checkmark.shield.fill")
-                        .font(.subheadline).foregroundColor(Color(hex: 0x188038))
+                        .font(.system(size: 16, weight: .semibold)).foregroundColor(Vela.open)
                 } else {
-                    HStack(spacing: 10) {
+                    WrapLayout(spacing: 8, lineSpacing: 8) {
                         ForEach(counts, id: \.0) { item in
-                            HStack(spacing: 4) {
-                                WazeBadge(kind: item.0, size: 20)
-                                Text("\(item.1) \(Self.label(item.0, item.1))").font(.subheadline.weight(.medium))
+                            let tint = Color(uiColor: MapIcons.wazeColor(item.0))
+                            HStack(spacing: 6) {
+                                WazeBadge(kind: item.0, size: 24)
+                                Text("\(item.1) \(Self.label(item.0, item.1))").font(.system(size: 16, weight: .bold))
                             }
+                            .padding(.leading, 6).padding(.trailing, 12)
+                            .frame(height: 38)
+                            .background(Capsule().fill(tint.opacity(0.18)))
                         }
                     }
                     .accessibilityElement(children: .combine)
@@ -518,17 +634,25 @@ struct HeatLegend: View {
 struct PoliceRiskChip: View {
     let score: Int
 
+    static func color(_ level: PoliceRisk.Level) -> Color {
+        switch level {
+        case .high: return Color(hex: 0xDC2626)
+        case .medium: return Color(hex: 0xF59E0B)
+        case .low: return Color(hex: 0x16A34A)
+        }
+    }
+
     var body: some View {
         let level = PoliceRisk.level(score)
-        let color: Color = level == .high ? Color(hex: 0xD93025) : level == .medium ? Color(hex: 0xF29900) : Color(hex: 0x188038)
-        HStack(spacing: 6) {
-            Image(systemName: "shield.lefthalf.filled").font(.system(size: 13, weight: .bold))
-            Text("Police risk: \(level.rawValue.capitalized)").font(.caption.weight(.semibold))
+        let color = Self.color(level)
+        HStack(spacing: 8) {
+            Image(systemName: "shield.lefthalf.filled").font(.system(size: 17, weight: .bold))
+            Text("Police risk: \(level.rawValue.capitalized)").font(.system(size: 17, weight: .bold))
         }
-        .foregroundColor(.white)
-        .padding(.horizontal, 10).frame(height: 28)
+        .foregroundColor(level == .medium ? Color(hex: 0x1F1300) : .white)
+        .padding(.horizontal, 14).frame(height: 42)
         .background(Capsule().fill(color))
-        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+        .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
         .accessibilityLabel("Police risk \(level.rawValue), \(score) out of 100")
     }
 }
@@ -539,12 +663,12 @@ struct AircraftChip: View {
     let meters: Double
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: aircraft.helicopter ? "fanblades.fill" : "airplane").font(.system(size: 13, weight: .bold))
-            Text("\(aircraft.title) · \(Fmt.distance(meters))").font(.caption.weight(.semibold)).lineLimit(1)
+        HStack(spacing: 8) {
+            Image(systemName: aircraft.helicopter ? "fanblades.fill" : "airplane").font(.system(size: 17, weight: .bold))
+            Text("\(aircraft.title) · \(Fmt.distance(meters))").font(.system(size: 16, weight: .bold)).lineLimit(1)
         }
         .foregroundColor(.white)
-        .padding(.horizontal, 10).frame(height: 28)
+        .padding(.horizontal, 14).frame(height: 40)
         .background(Capsule().fill(Color(hex: 0x1E88E5)))
         .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
         .accessibilityElement(children: .combine)
@@ -827,23 +951,23 @@ struct InterstateShape: InsettableShape {
     }
 }
 
-/** Which lanes to be in, the way Waze and Google draw it: the right ones bright, the rest dim. */
+/** Which lanes to be in, the way Waze and Google draw it: the right ones lit up, the rest dim. */
 struct LaneStrip: View {
     let lanes: [Lane]
     let turn: ManeuverType
+    /** At a roundabout: where the exit is (degrees clockwise from straight ahead). */
+    var exitAngle: Double?
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(lanes.enumerated()), id: \.offset) { i, lane in
-                if i > 0 { Rectangle().fill(Color.white.opacity(0.35)).frame(width: 1, height: 26) }
+        HStack(spacing: 5) {
+            ForEach(Array(lanes.prefix(6).enumerated()), id: \.offset) { _, lane in
                 Image(systemName: Self.symbol(pick(lane)))
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(lane.valid ? .white : .white.opacity(0.32))
-                    .frame(width: 38, height: 36)
+                    .font(.system(size: 26, weight: .heavy))
+                    .foregroundColor(lane.valid ? Vela.navBand : .white.opacity(0.4))
+                    .frame(width: 48, height: 48)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(lane.valid ? Color.white : Color.white.opacity(0.1)))
             }
         }
-        .padding(.horizontal, 6)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.22)))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Use the highlighted lanes")
     }
@@ -852,7 +976,11 @@ struct LaneStrip: View {
     private func pick(_ lane: Lane) -> String {
         guard lane.valid, lane.indications.count > 1 else { return lane.indications.first ?? "straight" }
         let want: [String]
-        switch turn {
+        var t = turn
+        if t == .roundabout, let a = exitAngle {
+            t = a > 200 && a < 340 ? .turnLeft : (a > 20 && a < 160 ? .turnRight : .straight)
+        }
+        switch t {
         case .turnLeft, .sharpLeft, .rampLeft: want = ["left", "sharp left", "slight left"]
         case .slightLeft, .forkLeft, .keepLeft: want = ["slight left", "left"]
         case .turnRight, .sharpRight, .rampRight: want = ["right", "sharp right", "slight right"]
@@ -877,26 +1005,74 @@ struct LaneStrip: View {
     }
 }
 
-/** A roundabout with the exit to take drawn as the way out, and its number. */
-struct RoundaboutGlyph: View {
+/**
+ * The roundabout as it really is: the way in at the bottom, every road around the circle, and
+ * only your way round and out lit up. Without the real layout, the exits are spread evenly.
+ */
+struct RoundaboutDiagram: View {
+    let shape: RoundaboutShape?
     let exit: Int
-    /** Drives on the right: traffic goes round counterclockwise. */
-    var rightHand = true
+    /** Traffic goes round clockwise (keep-left countries). */
+    let clockwise: Bool
+
+    private var layout: RoundaboutShape {
+        if let shape, shape.exits.indices.contains(shape.taken) { return shape }
+        // Evenly spread up to yours, a little short of the full circle.
+        let n = max(exit, 1)
+        let step = min(90, 300 / Double(n + 1))
+        let exits = (1...n).map { k in clockwise ? 180 + Double(k) * step : 180 - Double(k) * step }
+            .map { ($0 + 360).truncatingRemainder(dividingBy: 360) }
+        return RoundaboutShape(exits: exits, taken: n - 1, clockwise: clockwise, complete: false)
+    }
 
     var body: some View {
-        ZStack {
-            Circle().stroke(Color.white.opacity(0.45), lineWidth: 5).frame(width: 26, height: 26)
-            // Entry from the bottom, around to the exit, one exit about every 90 degrees.
-            let turn = Double(min(max(exit, 1), 6)) * 90
-            Circle()
-                .trim(from: 0, to: min(turn, 330) / 360)
-                .stroke(Color.white, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                .frame(width: 26, height: 26)
-                .rotationEffect(.degrees(90))
-                .scaleEffect(x: rightHand ? -1 : 1, y: 1)
-            Rectangle().fill(Color.white).frame(width: 5, height: 12).offset(y: 19)
-            Text("\(exit)").font(.system(size: 13, weight: .heavy)).foregroundColor(.white)
+        Canvas { ctx, size in
+            let l = layout
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let ring = size.width * 0.2
+            let edge = size.width * 0.47
+            func pt(_ deg: Double, _ r: CGFloat) -> CGPoint {
+                let a = deg * .pi / 180
+                return CGPoint(x: c.x + CGFloat(sin(a)) * r, y: c.y - CGFloat(cos(a)) * r)
+            }
+            let faint = GraphicsContext.Shading.color(.white.opacity(0.32))
+            let road = StrokeStyle(lineWidth: size.width * 0.075, lineCap: .round)
+            // Every road and the circle, dim.
+            for a in l.exits + l.entriesOnly + [180] {
+                var p = Path()
+                p.move(to: pt(a, ring))
+                p.addLine(to: pt(a, l.entriesOnly.contains(a) ? edge * 0.85 : edge))
+                ctx.stroke(p, with: faint, style: road)
+            }
+            ctx.stroke(Path(ellipseIn: CGRect(x: c.x - ring, y: c.y - ring, width: ring * 2, height: ring * 2)), with: faint, style: road)
+            // Yours: in from the bottom, round the way traffic goes, and out.
+            let out = l.exits[l.taken]
+            var sweep = l.turn(l.taken)
+            if sweep < 8 { sweep += 360 }
+            var path = Path()
+            path.move(to: pt(180, edge))
+            path.addLine(to: pt(180, ring))
+            let steps = max(Int(sweep / 6), 2)
+            for i in 1...steps {
+                let a = 180 + (l.clockwise ? 1 : -1) * sweep * Double(i) / Double(steps)
+                path.addLine(to: pt(a, ring))
+            }
+            let tip = pt(out, edge - size.width * 0.07)
+            path.addLine(to: tip)
+            ctx.stroke(path, with: .color(.white), style: StrokeStyle(lineWidth: size.width * 0.1, lineCap: .round, lineJoin: .round))
+            // The arrowhead on the way out.
+            let a = out * .pi / 180
+            let dir = CGPoint(x: CGFloat(sin(a)), y: CGFloat(-cos(a)))
+            let side = CGPoint(x: -dir.y, y: dir.x)
+            let w = size.width * 0.12, len = size.width * 0.14
+            let base = CGPoint(x: tip.x - dir.x * 2, y: tip.y - dir.y * 2)
+            var head = Path()
+            head.move(to: CGPoint(x: base.x + dir.x * len, y: base.y + dir.y * len))
+            head.addLine(to: CGPoint(x: base.x + side.x * w, y: base.y + side.y * w))
+            head.addLine(to: CGPoint(x: base.x - side.x * w, y: base.y - side.y * w))
+            head.closeSubpath()
+            ctx.fill(head, with: .color(.white))
         }
-        .frame(width: 56, height: 56)
+        .accessibilityLabel("Roundabout, take exit \(exit)")
     }
 }

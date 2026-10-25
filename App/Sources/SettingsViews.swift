@@ -60,12 +60,15 @@ struct LayersSheet: View {
 
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
+    /** A page of the dock rather than a sheet: no Done button. */
+    var inTab = false
     let onChange: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
     var body: some View {
         if DemoScript.step == "wazesettings" {
             // Straight into the Waze screen, for the build's screenshot of it.
-            NavigationView { WazeSettingsView(settings: settings) }
+            NavigationView { WazeSettingsView(settings: settings) }.navigationViewStyle(.stack)
         } else {
             main
         }
@@ -135,17 +138,24 @@ struct SettingsView: View {
                         .font(.caption).foregroundColor(.secondary)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Vela.ground(scheme))
+            .environment(\.defaultMinListRowHeight, 56)
+            .tint(Vela.accentText(scheme))
             .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(inTab ? .large : .inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        onChange()
-                        dismiss()
+                    if !inTab {
+                        Button("Done") {
+                            onChange()
+                            dismiss()
+                        }
                     }
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 }
 
