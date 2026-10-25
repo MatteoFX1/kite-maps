@@ -701,23 +701,12 @@ struct VelaMapView: UIViewRepresentable {
             bubbleSrc?.shape = MLNShapeCollectionFeature(shapes: bubbles)
         }
 
+        /** While navigating, NavGlide draws the arrow every frame; this only clears it afterwards. */
         private func renderPuck(_ style: MLNStyle) {
-            let src = style.source(withIdentifier: "vela-puck") as? MLNShapeSource
-            guard let n = model.nav, let fix = n.lastFix else {
-                if lastPuckKey != "" { src?.shape = nil; lastPuckKey = "" }
-                return
-            }
-            let p = n.progress
-            let onRoute = p.map { !$0.offRoute && $0.offsetMeters < 40 } ?? false
-            let at = onRoute ? CLLocationCoordinate2D(latitude: p!.snapped.lat, longitude: p!.snapped.lng) : fix.coordinate
-            let bearing = fix.course >= 0 && fix.speed > 1 ? fix.course : (p?.routeBearing ?? 0)
-            let key = "\(at.latitude),\(at.longitude),\(Int(bearing))"
-            guard key != lastPuckKey else { return }
-            lastPuckKey = key
-            let f = MLNPointFeature()
-            f.coordinate = at
-            f.attributes = ["bearing": bearing]
-            src?.shape = f
+            if model.nav != nil { lastPuckKey = "nav"; return }
+            guard lastPuckKey != "" else { return }
+            (style.source(withIdentifier: "vela-puck") as? MLNShapeSource)?.shape = nil
+            lastPuckKey = ""
         }
 
         // MARK: Gestures

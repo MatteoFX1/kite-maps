@@ -130,7 +130,9 @@ final class AppModel: ObservableObject {
     /** Which way the map faces, for the compass button. */
     @Published var mapHeading: Double = 0
 
-    weak var map: MLNMapView?
+    weak var map: MLNMapView? { didSet { glide.map = map } }
+    /** Moves the nav arrow and camera every frame between GPS fixes. */
+    let glide = NavGlide()
     /** Bumped on every new route or transit request, so answers to an older one (before a
      *  reverse, a new stop or another time) are dropped instead of replacing the new ones. */
     private var routesRequest = 0
@@ -598,6 +600,7 @@ final class AppModel: ObservableObject {
 
     func endNavigation() {
         nav?.stop()
+        glide.stop()
         nav = nil
         navSub = nil
         location.setNavigating(false)
@@ -624,24 +627,17 @@ final class AppModel: ObservableObject {
     private func locationChanged(_ loc: CLLocation) {
         guard let n = nav else { return }
         n.handle(loc)
-        if n.following { followCamera(n, loc, animated: true) }
+        followCamera(n, loc, animated: true)
         mapTick += 1
     }
 
     private func followCamera(_ n: Navigator, _ loc: CLLocation, animated: Bool) {
-        guard let map else { return }
         let p = n.progress
-        let onRoute = p.map { !$0.offRoute && $0.offsetMeters < 40 } ?? false
-        let center = onRoute ? CLLocationCoordinate2D(latitude: p!.snapped.lat, longitude: p!.snapped.lng) : loc.coordinate
-        let heading = loc.course >= 0 && loc.speed > 2 ? loc.course : (p?.routeBearing ?? map.direction)
         let speed = max(0, loc.speed)
         var across = n.route.mode == .drive ? min(1400, max(450, 300 + speed * 30)) : 300
         // Close to a roundabout, zoom in so the whole of it and its exits fill the view.
         if n.nextManeuver?.type == .roundabout, let d = p?.distanceToNext, d < 350 { across = min(across, 380) }
-        let cam = MLNMapCamera(lookingAtCenter: center, acrossDistance: across, pitch: 50, heading: heading)
-        let pad = UIEdgeInsets(top: map.bounds.height * 0.45, left: 0, bottom: 120, right: 0)
-        map.setCamera(cam, withDuration: animated ? 1.0 : 0, animationTimingFunction: CAMediaTimingFunction(name: .linear),
-                      edgePadding: pad, completionHandler: nil)
+        glide.fix(n, loc, across: across, jump: !animated)
     }
 
     // MARK: Map
