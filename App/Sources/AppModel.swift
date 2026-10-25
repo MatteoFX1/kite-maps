@@ -112,6 +112,10 @@ final class AppModel: ObservableObject {
     @Published var mapHeading: Double = 0
 
     weak var map: MLNMapView?
+    /** Bumped on every new route or transit request, so answers to an older one (before a
+     *  reverse, a new stop or another time) are dropped instead of replacing the new ones. */
+    private var routesRequest = 0
+    private var transitRequest = 0
     private var searchTask: Task<Void, Never>?
     private var navSub: AnyCancellable?
 
@@ -476,13 +480,14 @@ final class AppModel: ObservableObject {
         }
         let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
         let via = (d.reversed ? d.stops.reversed() : d.stops).map(\.location)
-        let destId = d.destination.id
+        routesRequest += 1
+        let req = routesRequest
         let hw = settings.avoidHighways, tolls = settings.avoidTolls, google = !settings.noGoogle
         for m in TravelMode.allCases {
             directions?.loading.insert(m)
             Task {
                 let r = await Directions.routes(from: from, to: to, mode: m, avoidHighways: hw, avoidTolls: tolls, useGoogle: google, via: via)
-                guard directions?.destination.id == destId else { return }
+                guard directions?.destination.id == d.destination.id, routesRequest == req else { return }
                 directions?.loading.remove(m)
                 directions?.routes[m] = r.routes
                 if r.routes.isEmpty { directions?.errors[m] = r.error ?? "No route" }
@@ -504,17 +509,19 @@ final class AppModel: ObservableObject {
         let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
         let destId = d.destination.id
         let time = d.transitTime, arriveBy = d.arriveBy
+        transitRequest += 1
+        let req = transitRequest
         directions?.trips = nil
         directions?.tripsError = nil
         directions?.trip = 0
         Task {
             do {
                 let trips = try await Transitous.plan(from: from, to: to, time: time, arriveBy: arriveBy)
-                guard directions?.destination.id == destId, directions?.transitTime == time, directions?.arriveBy == arriveBy else { return }
+                guard directions?.destination.id == destId, transitRequest == req else { return }
                 directions?.trips = trips
                 if trips.isEmpty { directions?.tripsError = "No transit trips found here." }
             } catch {
-                guard directions?.destination.id == destId else { return }
+                guard directions?.destination.id == destId, transitRequest == req else { return }
                 directions?.trips = []
                 directions?.tripsError = "Couldn't reach the transit planner."
             }
