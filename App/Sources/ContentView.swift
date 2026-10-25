@@ -38,12 +38,6 @@ struct ContentView: View {
                 }
             }
         }
-        .overlay(alignment: .topLeading) {
-            if settings.wazeOn, settings.wazeHeatmap, model.nav == nil, model.directions == nil,
-               model.results.isEmpty, model.selected == nil, model.wazeInfo == nil {
-                HeatLegend().padding(.top, 118).padding(.leading, 14)
-            }
-        }
         .overlay(alignment: .bottom) {
             if DemoScript.step == "wazemap" {
                 // Screenshot run only: what Waze answered, since the build's computers can't be trusted to get through.
@@ -178,10 +172,23 @@ struct BrowseOverlay: View {
                     if let n = model.notice, !searchFocused {
                         NoticeBanner(text: n) { model.notice = nil }
                     }
+                    // Under the chips, in line with everything else up top, so it never sits on
+                    // the search panel (it used to float at a fixed spot over Home and Work).
+                    if settings.wazeOn, settings.wazeHeatmap, !searchFocused, !voice.listening, !hasSheet, model.wazeInfo == nil {
+                        HeatLegend()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                    }
                 }
                 .padding(.top, 6)
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.85), value: hasSheet)
+        }
+        .task {
+            // Screenshot run only: the search box open, to check nothing sits on its panel.
+            guard DemoScript.step == "searchfocus" else { return }
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            searchFocused = true
         }
     }
 
@@ -527,6 +534,26 @@ enum DemoScript {
                 picked.reportedAt = Date().addingTimeInterval(-18 * 60)
                 model.wazeInfo = picked
             }
+            return
+        }
+        if step == "searchfocus" {
+            // The search box open with home set and the police heat map on: the legend must hide.
+            model.settings.waze = true
+            model.settings.wazeHeatmap = true
+            var home = Place(id: "demo-home", name: "Home", location: LatLng(38.5480, -121.7445), source: "demo")
+            home.address = "Home"
+            model.settings.home = home
+            return
+        }
+        if step == "transituk" {
+            // A long trip with many changes (the build sets the phone in Reading): a real
+            // Transitous plan to central London, whose rows used to push the screen off its right edge.
+            let to = Place(id: "demo-london", name: "London", location: LatLng(51.5072, -0.1276), source: "demo")
+            model.select(to)
+            await wait(2)
+            model.openDirections(to: to)
+            model.showTransit()
+            model.detent = .full
             return
         }
         if step == "wazelink" {

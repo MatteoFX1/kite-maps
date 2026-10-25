@@ -24,6 +24,9 @@ struct DirectionsOverlay: View {
                         .padding(.top, 6)
                 }
             }
+            // Never wider than the screen, whatever a row inside asks for: a long trip's row once
+            // pushed the whole screen, from/to box included, off the right edge.
+            .frame(width: geo.size.width)
         }
     }
 }
@@ -148,6 +151,11 @@ struct ModeTabs: View {
                 .onChange(of: state.transit) { on in
                     withAnimation { proxy.scrollTo(on ? "transit" : "drive", anchor: on ? .trailing : .leading) }
                 }
+                .onChange(of: state.trips?.count) { _ in
+                    // The tab grows when its time arrives; keep it in view.
+                    guard state.transit else { return }
+                    withAnimation { proxy.scrollTo("transit", anchor: .trailing) }
+                }
         }
     }
 
@@ -161,7 +169,7 @@ struct ModeTabs: View {
                         if state.loading.contains(m) {
                             ProgressView().scaleEffect(0.7)
                         } else if let r = state.routes[m]?.first {
-                            Text(Fmt.duration(r.durationSeconds)).font(.subheadline.weight(.medium))
+                            Text(Fmt.shortDuration(r.durationSeconds)).font(.subheadline.weight(.medium))
                         } else {
                             Text("–").font(.subheadline)
                         }
@@ -178,7 +186,7 @@ struct ModeTabs: View {
                 HStack(spacing: 6) {
                     Image(systemName: "tram.fill").font(.system(size: 13))
                     if let t = state.trips {
-                        Text(t.map(\.durationSeconds).min().map(Fmt.duration) ?? "–").font(.subheadline.weight(.medium))
+                        Text(t.map(\.durationSeconds).min().map(Fmt.shortDuration) ?? "–").font(.subheadline.weight(.medium))
                     } else {
                         ProgressView().scaleEffect(0.7)
                     }
@@ -401,17 +409,20 @@ struct TripRow: View {
                 Spacer()
                 Text(Fmt.duration(trip.durationSeconds)).font(.headline)
             }
-            HStack(spacing: 4) {
+            // Wraps onto more lines for trips with many changes, like Google Maps does.
+            WrapLayout(spacing: 4, lineSpacing: 6) {
                 ForEach(Array(trip.legs.enumerated()), id: \.offset) { i, leg in
-                    if i > 0 { Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundColor(.secondary) }
-                    if leg.isWalk {
-                        HStack(spacing: 1) {
-                            Image(systemName: "figure.walk").font(.system(size: 13))
-                            if leg.durationSeconds >= 60 { Text("\(Int((leg.durationSeconds / 60).rounded()))").font(.caption2) }
+                    HStack(spacing: 4) {
+                        if i > 0 { Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundColor(.secondary) }
+                        if leg.isWalk {
+                            HStack(spacing: 1) {
+                                Image(systemName: "figure.walk").font(.system(size: 13))
+                                if leg.durationSeconds >= 60 { Text("\(Int((leg.durationSeconds / 60).rounded()))").font(.caption2) }
+                            }
+                            .foregroundColor(.secondary)
+                        } else {
+                            LineChip(leg: leg)
                         }
-                        .foregroundColor(.secondary)
-                    } else {
-                        LineChip(leg: leg)
                     }
                 }
             }
@@ -429,8 +440,55 @@ struct TripRow: View {
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12).fill(picked ? Color.secondary.opacity(0.14) : Color.clear))
         .contentShape(Rectangle())
+    }
+}
+
+/** Lays its views out left to right, starting a new line when the next one doesn't fit. */
+struct WrapLayout: Layout {
+    var spacing: CGFloat = 4
+    var lineSpacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        let rows = arrange(subviews, width: width)
+        let used = rows.map { $0.width }.max() ?? 0
+        let height = rows.map { $0.height }.reduce(0, +) + lineSpacing * CGFloat(max(rows.count - 1, 0))
+        return CGSize(width: min(used, width), height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(subviews, width: bounds.width) {
+            var x = bounds.minX
+            for i in row.items {
+                let size = subviews[i].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+                subviews[i].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                                  proposal: ProposedViewSize(width: min(size.width, bounds.width), height: size.height))
+                x += min(size.width, bounds.width) + spacing
+            }
+            y += row.height + lineSpacing
+        }
+    }
+
+    private func arrange(_ subviews: Subviews, width: CGFloat) -> [(items: [Int], width: CGFloat, height: CGFloat)] {
+        var rows: [(items: [Int], width: CGFloat, height: CGFloat)] = []
+        var items: [Int] = [], x: CGFloat = 0, h: CGFloat = 0
+        for (i, v) in subviews.enumerated() {
+            let size = v.sizeThatFits(ProposedViewSize(width: width, height: nil))
+            let w = min(size.width, width)
+            if !items.isEmpty && x + spacing + w > width {
+                rows.append((items, x, h))
+                items = []; x = 0; h = 0
+            }
+            x += (items.isEmpty ? 0 : spacing) + w
+            h = max(h, size.height)
+            items.append(i)
+        }
+        if !items.isEmpty { rows.append((items, x, h)) }
+        return rows
     }
 }
 
