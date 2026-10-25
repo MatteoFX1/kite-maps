@@ -1,10 +1,14 @@
 import Foundation
+import UIKit
 import VelaCore
 import WebKit
 
 /**
- * When Waze turns Kite's plain requests away, ask from inside the real live map page instead: a
- * hidden web view opens waze.com/live-map once, then fetches the feed from there, like the page does.
+ * When Waze turns Kite's plain requests away, ask from inside the real live map page instead.
+ * Since 2026 Waze guards its feed with Google reCAPTCHA: the live map page runs a check in the
+ * background and gets a pass (the "recaptcha-ca-t" cookie), and only requests carrying it get
+ * reports. So a web view, tucked out of sight behind the map, opens waze.com/live-map, waits for
+ * the pass, and fetches the feed from there, copying any extra headers the page itself sends.
  */
 @MainActor
 final class WazeWeb: NSObject, WKNavigationDelegate {
@@ -20,43 +24,135 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
         Waze.fallback = { url in await WazeWeb.shared.fetch(url) }
     }
 
+    /**
+     * Watches the page's own requests for the feed: which headers it adds and how Waze answered,
+     * so Kite can ask the same way.
+     */
+    private static let watcher = """
+    (function () {
+      var k = window.__kite = { seen: 0, status: 0, headers: null };
+      var isFeed = function (u) { return String(u || '').indexOf('/api/georss') >= 0; };
+      var of = window.fetch;
+      window.fetch = function (input, init) {
+        var u = typeof input === 'string' ? input : (input && input.url);
+        var p = of.apply(this, arguments);
+        if (isFeed(u) && !(init && init.__kite)) {
+          try {
+            var h = {}, src = (init && init.headers) || (input && input.headers);
+            if (src) { if (src.forEach) { src.forEach(function (v, n) { h[n] = v; }); } else { for (var n in src) { h[n] = src[n]; } } }
+            k.headers = h; k.seen++;
+          } catch (e) {}
+          p.then(function (r) { k.status = r.status; }, function () {});
+        }
+        return p;
+      };
+      var X = XMLHttpRequest.prototype, oo = X.open, os = X.setRequestHeader, sd = X.send;
+      X.open = function (m, u) { this.__feed = isFeed(u); this.__h = {}; return oo.apply(this, arguments); };
+      X.setRequestHeader = function (n, v) { if (this.__feed) { this.__h[n] = v; } return os.apply(this, arguments); };
+      X.send = function () {
+        if (this.__feed) {
+          var x = this; k.headers = this.__h; k.seen++;
+          this.addEventListener('loadend', function () { k.status = x.status; });
+        }
+        return sd.apply(this, arguments);
+      };
+    })();
+    """
+
     func fetch(_ url: URL) async -> Data? {
         await openPage()
         guard let web, ready else { note = "page: didn't load"; return nil }
         let js = """
-        const r = await fetch(u, { credentials: 'include', headers: { 'Accept': 'application/json' } });
+        var h = { 'Accept': 'application/json, text/plain, */*' };
+        var seen = (window.__kite && window.__kite.headers) || {};
+        for (var n in seen) { h[n] = seen[n]; }
+        var r = await fetch(u, { credentials: 'include', headers: h, __kite: true });
         if (!r.ok) { return 'HTTP ' + r.status; }
         return await r.text();
         """
-        do {
-            guard let text = try await web.callAsyncJavaScript(js, arguments: ["u": url.absoluteString], contentWorld: .page) as? String else {
-                note = "page: no answer"
-                return nil
+        // A second try a few seconds on: the page's pass may only just be on its way.
+        for attempt in 0..<2 {
+            if attempt == 1 { try? await Task.sleep(nanoseconds: 4_000_000_000) }
+            do {
+                guard let text = try await web.callAsyncJavaScript(js, arguments: ["u": url.absoluteString], contentWorld: .page) as? String else {
+                    note = "page: no answer"
+                    continue
+                }
+                if text.hasPrefix("HTTP ") {
+                    let state = await pageState()
+                    note = "page: fetch \(text) · \(state)"
+                    continue
+                }
+                note = "page: ok, \(text.count) chars"
+                return Data(text.utf8)
+            } catch {
+                note = "page: \(error.localizedDescription)"
             }
-            if text.hasPrefix("HTTP ") { note = "page: fetch \(text)"; return nil }
-            note = "page: ok, \(text.count) chars"
-            return Data(text.utf8)
-        } catch {
-            note = "page: \(error.localizedDescription)"
-            return nil
         }
+        // Still turned away: open the page afresh next time, for a new pass.
+        reset()
+        return nil
+    }
+
+    /** "pass yes, page asked 2× (200)": for the status line. */
+    private func pageState() async -> String {
+        let pass = await hasPass()
+        let js = "var k = window.__kite; return k ? 'page asked ' + k.seen + '× (' + k.status + ')' + (k.headers ? ' ' + Object.keys(k.headers).join('+') : '') : 'no watcher';"
+        let page = (try? await web?.callAsyncJavaScript(js, arguments: [:], contentWorld: .page)) as? String ?? "?"
+        return "pass \(pass ? "yes" : "no"), \(page)"
+    }
+
+    private func hasPass() async -> Bool {
+        guard let store = web?.configuration.websiteDataStore.httpCookieStore else { return false }
+        let cookies = await store.allCookies()
+        return cookies.contains { $0.name.hasPrefix("recaptcha-ca") && $0.domain.contains("waze.com") }
+    }
+
+    private func reset() {
+        web?.removeFromSuperview()
+        web = nil
+        ready = false
     }
 
     private func openPage() async {
         if ready { return }
         if web == nil {
-            let w = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+            let config = WKWebViewConfiguration()
+            config.userContentController.addUserScript(WKUserScript(source: Self.watcher, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+            let w = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: config)
             w.navigationDelegate = self
             w.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+            // In a window, behind everything, so the page runs like a real one (reCAPTCHA's check
+            // needs its scripts to keep running) without ever being seen or touched.
+            w.isUserInteractionEnabled = false
+            w.alpha = 0.01
+            if let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+                .flatMap(\.windows).first(where: \.isKeyWindow) ?? UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene }).flatMap(\.windows).first {
+                w.frame = window.bounds
+                window.insertSubview(w, at: 0)
+            }
             web = w
             w.load(URLRequest(url: Waze.pageURL))
-            // Give up waiting after 20 seconds, so a stuck page never holds the map back.
+            // Give up waiting after 25 seconds, so a stuck page never holds the map back.
             Task {
-                try? await Task.sleep(nanoseconds: 20_000_000_000)
+                try? await Task.sleep(nanoseconds: 25_000_000_000)
                 if !self.ready, self.web === w { self.finish(ok: false) }
             }
         }
         await withCheckedContinuation { waiting.append($0) }
+    }
+
+    /** Once the page has loaded, wait (up to 12 seconds) for reCAPTCHA's pass before saying it's ready. */
+    private func pageLoaded(_ w: WKWebView) {
+        Task {
+            for _ in 0..<24 {
+                if await hasPass() { break }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                guard self.web === w else { return }
+            }
+            if self.web === w { self.finish(ok: true) }
+        }
     }
 
     private func finish(ok: Bool) {
@@ -64,12 +160,12 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
         let w = waiting
         waiting = []
         for c in w { c.resume() }
-        if !ok && !ready { web = nil }
+        if !ok && !ready { reset() }
     }
 
     // WebKit calls these on the main thread; a late call from a page already given up on is ignored.
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        MainActor.assumeIsolated { if webView === web { finish(ok: true) } }
+        MainActor.assumeIsolated { if webView === web, !ready { pageLoaded(webView) } }
     }
 
     nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
