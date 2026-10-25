@@ -536,6 +536,28 @@ enum DemoScript {
             }
             return
         }
+        if step == "settings" { model.showSettings = true; return }
+        if step == "saved" {
+            // A few saved places, one with a long name, in the bookmarks list.
+            var pub = Place(id: "demo-pub", name: "The Old Bell Traditional Pub, Restaurant and Rooms by the River", location: LatLng(38.5460, -121.7420), source: "demo")
+            pub.address = "123 Long Address Road, Somewhere Quite Far Away, Davis, CA 95616"
+            pub.category = "Pub"
+            let cafe = Place(id: "demo-cafe", name: "Temple Coffee", location: LatLng(38.5440, -121.7400), source: "demo")
+            model.settings.saved = [pub, cafe]
+            model.showSaved = true
+            return
+        }
+        if step == "longname" || step == "longdir" {
+            // A place with a very long name, its sheet and then directions to it.
+            var pub = Place(id: "demo-pub", name: "The Old Bell Traditional Pub, Restaurant and Rooms by the River", location: LatLng(38.5460, -121.7420), source: "demo")
+            pub.address = "123 Long Address Road, Somewhere Quite Far Away, Davis, CA 95616"
+            pub.category = "Traditional British pub and restaurant"
+            model.select(pub)
+            guard step == "longdir" else { return }
+            await wait(2)
+            model.openDirections(to: pub)
+            return
+        }
         if step == "searchfocus" {
             // The search box open with home set and the police heat map on: the legend must hide.
             model.settings.waze = true
@@ -632,7 +654,8 @@ enum DemoScript {
         model.openDirections(to: first)
         if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)
-        guard ["nav", "camalert", "wazealert"].contains(step) else { return }
+        if step == "addstop" { model.addingStop = true; return }
+        guard ["nav", "camalert", "wazealert", "allalerts"].contains(step) else { return }
         model.startNavigation()
         if step == "camalert" {
             await wait(4)
@@ -640,6 +663,12 @@ enum DemoScript {
         }
         if step == "wazealert" {
             await wait(4)
+            model.nav?.showDemoWaze()
+        }
+        if step == "allalerts" {
+            // Everything at once: camera, Waze police, helicopter and an average speed check.
+            await wait(4)
+            model.nav?.showDemoAlerts()
             model.nav?.showDemoWaze()
         }
     }

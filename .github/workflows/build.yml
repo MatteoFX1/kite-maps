@@ -131,9 +131,9 @@ jobs:
           xcrun simctl install "$DEV" simbuild/Build/Products/Debug-iphonesimulator/Kite.app
           xcrun simctl privacy "$DEV" grant location app.vela.ios || true
           mkdir -p shots
-          for step in browse search place directions nav cameras layers transit board mine stops rail welcome camalert streetview svtest svtest90 lookaround copy wazelink googlelink listscroll wazealert wazedemo wazetap wazeroute wazesettings wazemap wazeintro searchfocus; do
+          for step in browse search place directions nav cameras layers transit board mine stops rail welcome camalert streetview svtest svtest90 lookaround copy wazelink googlelink listscroll wazealert wazedemo wazetap wazeroute wazesettings wazemap wazeintro searchfocus settings saved longname longdir addstop allalerts; do
             xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo "$step"
-            case $step in browse) t=16;; search) t=24;; place) t=28;; directions) t=38;; nav) t=44;; cameras) t=110;; layers) t=12;; transit) t=40;; board) t=24;; mine) t=14;; stops) t=40;; rail) t=30;; welcome) t=10;; camalert) t=52;; streetview) t=40;; svtest) t=12;; svtest90) t=12;; lookaround) t=40;; copy) t=34;; wazelink) t=16;; googlelink) t=24;; listscroll) t=30;; wazealert) t=44;; wazedemo) t=16;; wazemap) t=55;; wazeintro) t=10;; wazetap) t=18;; wazeroute) t=40;; wazesettings) t=12;; searchfocus) t=14;; esac
+            case $step in browse) t=16;; search) t=24;; place) t=28;; directions) t=38;; nav) t=44;; cameras) t=110;; layers) t=12;; transit) t=40;; board) t=24;; mine) t=14;; stops) t=40;; rail) t=30;; welcome) t=10;; camalert) t=52;; streetview) t=40;; svtest) t=12;; svtest90) t=12;; lookaround) t=40;; copy) t=34;; wazelink) t=16;; googlelink) t=24;; listscroll) t=30;; wazealert) t=44;; wazedemo) t=16;; wazemap) t=55;; wazeintro) t=10;; wazetap) t=18;; wazeroute) t=40;; wazesettings) t=12;; searchfocus) t=14;; settings) t=10;; saved) t=10;; longname) t=20;; longdir) t=32;; addstop) t=34;; allalerts) t=48;; esac
             sleep $t
             xcrun simctl io "$DEV" screenshot "shots/$step.png"
           done
@@ -141,6 +141,22 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo place
           sleep 28
           xcrun simctl io "$DEV" screenshot shots/place-light.png
+          for step in browse directions transit nav searchfocus; do
+            xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo "$step"
+            case $step in browse) t=16;; directions) t=38;; transit) t=40;; nav) t=44;; searchfocus) t=14;; esac
+            sleep $t
+            xcrun simctl io "$DEV" screenshot "shots/light-$step.png"
+          done
+          # Bigger text (the largest size short of the accessibility ones), back in dark mode.
+          xcrun simctl ui "$DEV" appearance dark
+          xcrun simctl ui "$DEV" content_size extra-extra-extra-large
+          for step in browse place directions transit nav searchfocus settings allalerts longdir; do
+            xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo "$step"
+            case $step in browse) t=16;; place) t=28;; directions) t=38;; transit) t=40;; nav) t=44;; searchfocus) t=14;; settings) t=10;; allalerts) t=48;; longdir) t=32;; esac
+            sleep $t
+            xcrun simctl io "$DEV" screenshot "shots/big-$step.png"
+          done
+          xcrun simctl ui "$DEV" content_size large
           xcrun simctl location "$DEV" set 56.4120,-3.4700
           xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo uk
           sleep 50
