@@ -147,6 +147,8 @@ public struct Route: Identifiable, Hashable, Sendable {
     public var speedLimits: [SpeedLimit] = []
     /** "google" or "osm". */
     public var source: String
+    /** False when Google left steps out (it folds long motorway stretches away), so the turns can't be placed. */
+    public var stepsComplete = true
 
     public var durationSeconds: Double { trafficSeconds ?? typicalSeconds }
 

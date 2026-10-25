@@ -120,4 +120,20 @@ final class RoutingTests: XCTestCase {
         let allValid: [String: Any] = ["intersections": [["lanes": [["indications": ["straight"], "valid": true], ["indications": ["straight"], "valid": true]]]]]
         XCTAssertTrue(OSRM.lanes(allValid).isEmpty, "every lane fine says nothing")
     }
+
+    func testSlipRoadWording() {
+        let off = OSRM.instruction(type: "off ramp", modifier: "slight left", road: "M27", exit: nil, mode: .drive,
+                                   signs: .init(destinations: "A335: Eastleigh, Southampton", exits: "5", from: "M27"))
+        XCTAssertEqual(off, "Take exit 5 toward Eastleigh and Southampton")
+        let bare = OSRM.instruction(type: "off ramp", modifier: "slight left", road: "M27", exit: nil, mode: .drive,
+                                    signs: .init(destinations: nil, exits: nil, from: "M27"))
+        XCTAssertEqual(bare, "Take the exit", "no 'toward M27' while leaving the M27")
+        let on = OSRM.instruction(type: "on ramp", modifier: "slight left", road: "M27", exit: nil, mode: .drive,
+                                  signs: .init(destinations: nil, exits: nil, from: "A27"))
+        XCTAssertEqual(on, "Take the slip road onto M27")
+        XCTAssertEqual(OSRM.instruction(type: "continue", modifier: "right", road: "A3222", exit: nil, mode: .drive),
+                       "Turn right to stay on A3222")
+        XCTAssertEqual(OSRM.instruction(type: "continue", modifier: "uturn", road: "Bridge Road", exit: nil, mode: .drive),
+                       "Make a U-turn on Bridge Road")
+    }
 }

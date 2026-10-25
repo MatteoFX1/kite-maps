@@ -89,8 +89,10 @@ public enum OSRM {
                     if let n = name ?? ref { roads[n, default: 0] += dist }
                     let loc = (m["location"] as? [Double]).map { LatLng($0[1], $0[0]) } ?? Geo.point(along: line, meters: along, cumulative: cum)
                     let mt = maneuverType(type, modifier)
+                    let signs = Signs(destinations: step["destinations"] as? String, exits: step["exits"] as? String,
+                                      from: maneuvers.last?.road)
                     var man = Maneuver(type: mt, instruction: instruction(type: type, modifier: modifier, road: name ?? ref,
-                                                                         exit: m["exit"] as? Int, mode: mode),
+                                                                         exit: m["exit"] as? Int, mode: mode, signs: signs),
                                        location: loc, alongMeters: min(along, cum.last ?? along),
                                        distanceMeters: dist, road: name ?? ref, laneHint: nil)
                     man.lanes = lanes(step)
@@ -249,9 +251,38 @@ public enum OSRM {
         }
     }
 
-    static func instruction(type: String, modifier: String?, road: String?, exit: Int?, mode: TravelMode) -> String {
+    /** What the road signs at a junction say, and the road being left, for slip road wording. */
+    struct Signs {
+        var destinations: String?
+        var exits: String?
+        /** The road before this step, so leaving the M27 isn't read out as "toward M27". */
+        var from: String?
+
+        /** "Eastleigh and Southampton" from "A335: Eastleigh, Southampton"; the road numbers if that's all there is. */
+        var toward: String? {
+            guard let d = destinations?.trimmingCharacters(in: .whitespaces), !d.isEmpty else { return nil }
+            let parts = d.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            let names = (parts.count == 2 ? parts[1] : parts[0]).split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            let refs = parts.count == 2 ? parts[0].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } : []
+            var pick = Array(names.prefix(2))
+            if pick.isEmpty { pick = Array(refs.prefix(2)) }
+            guard !pick.isEmpty else { return nil }
+            return pick.count == 2 ? "\(pick[0]) and \(pick[1])" : pick[0]
+        }
+
+        /** Junction number from the sign, like "5" or "9A". */
+        var number: String? {
+            exits?.split(separator: ";").first.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
+        }
+    }
+
+    static func instruction(type: String, modifier: String?, road: String?, exit: Int?, mode: TravelMode,
+                            signs: Signs = Signs()) -> String {
         let onto = road.map { " onto \($0)" } ?? ""
         let dir = modifier ?? "straight"
+        // A slip road often carries the motorway's name: don't say "onto M27" while leaving the M27.
+        let newRoad = road.flatMap { $0 == signs.from ? nil : $0 }
         switch type {
         case "depart":
             let verb = mode == .drive ? "Drive" : (mode == .bike ? "Ride" : "Walk")
@@ -262,12 +293,23 @@ public enum OSRM {
             return "At the roundabout, \(n)" + onto
         case "exit roundabout", "exit rotary": return "Exit the roundabout" + onto
         case "merge": return "Merge" + onto
-        case "on ramp": return "Take the ramp" + (road.map { " to \($0)" } ?? "")
-        case "off ramp": return "Take the exit" + (road.map { " toward \($0)" } ?? "")
+        case "on ramp":
+            if let r = newRoad { return "Take the slip road onto \(r)" }
+            return "Take the slip road" + (signs.toward.map { " toward \($0)" } ?? "")
+        case "off ramp":
+            let base = signs.number.map { "Take exit \($0)" } ?? "Take the exit"
+            if let t = signs.toward { return base + " toward \(t)" }
+            return base + (newRoad.map { " onto \($0)" } ?? "")
         case "fork": return "Keep \(dir.contains("left") ? "left" : "right") at the fork" + onto
         case "end of road": return "At the end of the road, turn \(dir.replacingOccurrences(of: "slight ", with: ""))" + onto
         case "continue", "new name":
-            if dir.contains("slight") { return "Keep \(dir.contains("left") ? "left" : "right")" + onto }
+            let stay = road.map { " to stay on \($0)" } ?? ""
+            if dir == "uturn" { return "Make a U-turn" + (road.map { " on \($0)" } ?? "") }
+            if dir.contains("slight") { return "Keep \(dir.contains("left") ? "left" : "right")" + (type == "continue" ? stay : onto) }
+            if dir.contains("left") || dir.contains("right") {
+                let turn = "Turn \(dir)"
+                return turn + (type == "continue" ? stay : onto)
+            }
             return "Continue" + (road.map { " on \($0)" } ?? "")
         default:
             switch dir {
@@ -316,9 +358,17 @@ public enum Directions {
                     if let r = try? await OSRM.routeVia(g[i].polyline, mode: mode) { vias[i] = r }
                 }
                 let plain = (try? await osrmTask.value) ?? []
+                var spare = plain
                 for i in g.indices {
                     if let steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
                         g[i].maneuvers = steps
+                        g[i].stepsComplete = true
+                    } else if !g[i].stepsComplete, !spare.isEmpty {
+                        // Google's own steps have a gap, so its turns would be called in the wrong places:
+                        // drive the open router's route instead, keeping Google's traffic estimate.
+                        var o = spare.removeFirst()
+                        if let t = g[i].trafficSeconds, g[i].typicalSeconds > 0 { o.trafficSeconds = o.typicalSeconds * t / g[i].typicalSeconds }
+                        g[i] = o
                     }
                 }
                 return Result(routes: g)

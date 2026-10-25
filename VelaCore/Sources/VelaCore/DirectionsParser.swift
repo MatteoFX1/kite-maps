@@ -74,9 +74,12 @@ enum DirectionsParser {
         }.sorted { $0.startMeters < $1.startMeters }
         var steps: [Maneuver] = []
         collectSteps(route, into: &steps)
-        return Route(mode: mode, polyline: line, distanceMeters: distance, typicalSeconds: typical,
-                     trafficSeconds: traffic, summary: str(at(summary, 1)),
-                     maneuvers: place(steps, on: line), trafficSpans: spans, source: "google")
+        var r = Route(mode: mode, polyline: line, distanceMeters: distance, typicalSeconds: typical,
+                      trafficSeconds: traffic, summary: str(at(summary, 1)),
+                      maneuvers: place(steps, on: line), trafficSpans: spans, source: "google")
+        let stepTotal = steps.reduce(0) { $0 + ($1.type == .arrive ? 0 : $1.distanceMeters) }
+        r.stepsComplete = stepTotal >= Geo.length(line) * 0.85
+        return r
     }
 
     private static func coord(_ n: Any?) -> LatLng? {
