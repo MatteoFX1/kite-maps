@@ -58,7 +58,7 @@ for name, a, b in drives:
 if spots:
     around = "".join("way[junction~\"^(roundabout|circular)$\"](around:40,%f,%f);" % (s[1], s[0]) for s in spots)
     q = ("[out:json][timeout:25];(%s)->.r;.r out geom;node(w.r)->.n;"
-         "way(bn.n)[highway][highway!~\"^(footway|cycleway|path|pedestrian|steps|bridleway)$\"];out geom tags;" % around)
+         "way(bn.n)[highway][highway!~\"^(footway|cycleway|path|pedestrian|steps|bridleway)$\"];out geom;" % around)
     for host in ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]:
         try:
             o = get(host, data=urllib.parse.urlencode({"data": q}).encode())
@@ -68,15 +68,10 @@ if spots:
         print("=== Overpass %s: %d elements" % (host, len(o["elements"])))
         for e in o["elements"]:
             t = e.get("tags", {})
-            g = e.get("geometry", [])
-            print("way %s %s junction=%s oneway=%s name=%r ref=%r nodes=%d first=%s last=%s" % (
-                e["id"], t.get("highway"), t.get("junction"), t.get("oneway"), t.get("name"), t.get("ref"),
-                len(e.get("nodes", [])), e["nodes"][:1] + [ (g[0]["lat"], g[0]["lon"]) if g else None ],
-                e["nodes"][-1:] + [ (g[-1]["lat"], g[-1]["lon"]) if g else None ]))
-            if t.get("junction"):
-                print("   ring", [(n, round(p["lat"], 6), round(p["lon"], 6)) for n, p in zip(e["nodes"], g)])
-            if t.get("turn:lanes") or t.get("turn:lanes:forward"):
-                print("   turn:lanes", t.get("turn:lanes") or t.get("turn:lanes:forward"), "lanes", t.get("lanes"))
+            if t.get("junction") or t.get("turn:lanes"):
+                print("way %s %s junction=%s oneway=%s ref=%r nodes=%d turn:lanes=%s" % (
+                    e["id"], t.get("highway"), t.get("junction"), t.get("oneway"), t.get("ref"),
+                    len(e.get("nodes", [])), t.get("turn:lanes")))
         break
 
 # Everything, packed, for building test fixtures from.
