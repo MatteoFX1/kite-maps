@@ -62,10 +62,16 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     let onChange: () -> Void
     @Environment(\.dismiss) private var dismiss
-    /** Straight into the Waze screen, for the build's screenshot of it. */
-    @State private var openWaze = false
-
     var body: some View {
+        if DemoScript.step == "wazesettings" {
+            // Straight into the Waze screen, for the build's screenshot of it.
+            NavigationView { WazeSettingsView(settings: settings) }
+        } else {
+            main
+        }
+    }
+
+    private var main: some View {
         NavigationView {
             Form {
                 Section("Appearance") {
@@ -106,7 +112,7 @@ struct SettingsView: View {
                     Text("Fixed speed cameras and license plate readers (DeFlock) mapped in OpenStreetMap. Saying a camera is ahead is off by default, because some countries restrict it.")
                 }
                 Section {
-                    NavigationLink(isActive: $openWaze) {
+                    NavigationLink {
                         WazeSettingsView(settings: settings)
                     } label: {
                         LabeledContent("Waze integration (beta)", value: settings.wazeOn ? "On" : "Off")
@@ -130,10 +136,6 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .onAppear {
-                guard DemoScript.step == "wazesettings" else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { openWaze = true }
-            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

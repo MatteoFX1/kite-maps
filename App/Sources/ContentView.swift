@@ -40,7 +40,7 @@ struct ContentView: View {
         }
         .overlay(alignment: .topLeading) {
             if settings.wazeOn, settings.wazeHeatmap, model.nav == nil, model.directions == nil,
-               model.results.isEmpty, model.selected == nil {
+               model.results.isEmpty, model.selected == nil, model.wazeInfo == nil {
                 HeatLegend().padding(.top, 118).padding(.leading, 14)
             }
         }

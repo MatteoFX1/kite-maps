@@ -266,8 +266,10 @@ final class Navigator: ObservableObject {
         let score = PoliceRisk.score(ahead: ahead, past: riskPast ?? [], live: live)
         let was = policeRisk.map(PoliceRisk.level) ?? .low
         policeRisk = score
-        // Like Highway Radar's hot zone sound: once when it turns high, at most every 10 minutes.
-        if PoliceRisk.level(score) == .high, was != .high, s.wazeVoice, Date().timeIntervalSince(riskSpokenAt) > 600 {
+        // Like Highway Radar's hot zone sound: once when it turns high, at most every 10 minutes. Only
+        // for a place police keep being seen; a live report already has its own warning.
+        if PoliceRisk.level(score) == .high, was != .high, s.wazeVoice, Date().timeIntervalSince(riskSpokenAt) > 600,
+           live == 0 || PoliceRisk.level(PoliceRisk.score(ahead: ahead, past: riskPast ?? [], live: 0)) == .high {
             riskSpokenAt = Date()
             speak("Police hotspot ahead.")
         }

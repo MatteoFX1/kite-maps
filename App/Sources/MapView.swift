@@ -77,6 +77,8 @@ struct VelaMapView: UIViewRepresentable {
         private var wazeBox: (s: Double, w: Double, n: Double, e: Double)?
         private var wazeAt = Date.distantPast
         private var wazeFetch: Task<Void, Never>?
+        /** When Waze last didn't answer: wait a minute before asking again, rather than on every pan. */
+        private var wazeFailedAt = Date.distantPast
         private var lastWazeKey = ""
         /** The box the drawn rail lines cover, so panning inside it asks nothing. */
         private var railBox: (s: Double, w: Double, n: Double, e: Double, z: Int)?
@@ -464,7 +466,8 @@ struct VelaMapView: UIViewRepresentable {
                 if let w = s.work { places.append(w.location) }
                 WazeHistory.shared.sweepIfDue(places)
             }
-            guard s.wazeOn, s.wazeOnMap || s.wazeHeatmap, map.zoomLevel >= 10, wazeFetch == nil, !DemoScript.fakeWaze else { return }
+            guard s.wazeOn, s.wazeOnMap || s.wazeHeatmap, map.zoomLevel >= 10, wazeFetch == nil, !DemoScript.fakeWaze,
+                  Date().timeIntervalSince(wazeFailedAt) > 60 else { return }
             let b = map.visibleCoordinateBounds
             if let r = wazeBox, b.sw.latitude >= r.s, b.sw.longitude >= r.w, b.ne.latitude <= r.n, b.ne.longitude <= r.e,
                Date().timeIntervalSince(wazeAt) < 120 { return }
@@ -475,7 +478,7 @@ struct VelaMapView: UIViewRepresentable {
                 let found = await Waze.alerts(south: box.s, west: box.w, north: box.n, east: box.e)
                 guard let self else { return }
                 self.wazeFetch = nil
-                guard let found else { return }
+                guard let found else { self.wazeFailedAt = Date(); return }
                 self.wazeAlerts = found
                 self.wazeBox = box
                 self.wazeAt = Date()
