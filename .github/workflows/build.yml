@@ -166,6 +166,14 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo uk
           sleep 50
           xcrun simctl io "$DEV" screenshot shots/uk.png
+          xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo roundabout
+          sleep 50
+          xcrun simctl io "$DEV" screenshot shots/roundabout.png
+          xcrun simctl ui "$DEV" appearance light
+          xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo roundabout
+          sleep 50
+          xcrun simctl io "$DEV" screenshot shots/light-roundabout.png
+          xcrun simctl ui "$DEV" appearance dark
           # A long transit trip in England, from Reading into London, planned live by Transitous.
           xcrun simctl location "$DEV" set 51.4545,-0.9781
           xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo transituk

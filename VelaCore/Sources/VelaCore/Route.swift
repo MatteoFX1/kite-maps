@@ -73,11 +73,12 @@ public struct RoundaboutShape: Hashable, Sendable {
         self.complete = complete
     }
 
-    /** The exit's angle measured the way traffic goes round from the way in: 0 to 360. */
+    /** How far round the exit is, the way traffic goes, from the way in: 15 to 375 (back out the same road is a full lap). */
     public func turn(_ i: Int) -> Double {
         let a = exits[i]
         let d = clockwise ? a - 180 : 180 - a
-        return (d.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
+        let t = (d.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
+        return t < 15 ? t + 360 : t
     }
 
     /**

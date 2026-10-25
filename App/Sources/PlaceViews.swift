@@ -6,12 +6,13 @@ struct PlaceHeader: View {
     @ObservedObject var model: AppModel
     let place: Place
     @ObservedObject private var settings = AppSettings.shared
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top, spacing: 8) {
                 Text(place.name)
-                    .font(.title2.weight(.semibold))
+                    .font(.system(size: 26, weight: .heavy))
                     .lineLimit(2)
                     .copyable(place.name, below: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -19,9 +20,9 @@ struct PlaceHeader: View {
                 if let url = place.shareURL {
                     ShareLink(item: url) {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 17, weight: .bold))
                             .foregroundColor(.primary)
-                            .frame(width: 34, height: 34)
+                            .frame(width: 44, height: 44)
                             .background(Circle().fill(Color.secondary.opacity(0.18)))
                     }
                     .buttonStyle(.plain)
@@ -30,6 +31,35 @@ struct PlaceHeader: View {
             }
             PlaceMetaLine(place: place)
             StatusText(place: place).font(.subheadline)
+            // The one thing most people want, in reach even with the sheet down.
+            HStack(spacing: 10) {
+                Button { model.openDirections(to: place) } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.triangle.turn.up.right.diamond.fill").font(.system(size: 20, weight: .bold))
+                        Text("Directions").font(.system(size: 20, weight: .heavy))
+                    }
+                    .foregroundColor(Vela.onAccent(scheme))
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .background(Capsule().fill(Vela.accent(scheme)))
+                }
+                .buttonStyle(.plain)
+                Button {
+                    model.openDirections(to: place)
+                    model.autoStart = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "location.north.fill").font(.system(size: 18, weight: .bold))
+                        Text("Go").font(.system(size: 20, weight: .heavy))
+                    }
+                    .foregroundColor(Vela.onTonal(scheme))
+                    .padding(.horizontal, 24)
+                    .frame(minHeight: 56)
+                    .background(Capsule().fill(Vela.tonal(scheme)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Start driving now")
+            }
+            .padding(.top, 8)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
@@ -90,13 +120,11 @@ struct PlaceBody: View {
     private var actions: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                PillButton(title: driveSeconds.map { "Directions · \(Fmt.duration($0))" } ?? "Directions",
-                           icon: "arrow.triangle.turn.up.right.diamond.fill", filled: true) {
-                    model.openDirections(to: place)
-                }
-                PillButton(title: "Start", icon: "location.north.fill") {
-                    model.openDirections(to: place)
-                    model.autoStart = true
+                if let s = driveSeconds {
+                    Label("\(Fmt.duration(s)) drive", systemImage: "car.fill")
+                        .font(.body.weight(.bold))
+                        .padding(.horizontal, 16).frame(height: 52)
+                        .background(Capsule().stroke(Color.secondary.opacity(0.35)))
                 }
                 if let tel = telURL(place.phone) {
                     PillButton(title: "Call", icon: "phone.fill") { openURL(tel) }

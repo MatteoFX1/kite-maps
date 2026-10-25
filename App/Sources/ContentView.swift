@@ -113,7 +113,7 @@ struct BrowseOverlay: View {
     var body: some View {
         GeometryReader { geo in
             let full = geo.size.height + geo.safeAreaInsets.bottom
-            let sheetH = hasSheet ? BottomSheet<EmptyView, EmptyView>.height(model.detent, container: full, peek: 170) : 0
+            let sheetH = hasSheet ? BottomSheet<EmptyView, EmptyView>.height(model.detent, container: full, peek: 230) : 0
             // Room the dock takes at the bottom, from the screen's edge.
             let dockTop = KiteDock.height + KiteDock.bottomGap(geo.safeAreaInsets.bottom)
             ZStack(alignment: .top) {
@@ -214,14 +214,14 @@ struct BrowseOverlay: View {
     @ViewBuilder
     private func sheet(full: CGFloat) -> some View {
         if let place = model.selected {
-            BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: 170) {
+            BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: 230) {
                 PlaceHeader(model: model, place: place)
             } content: {
                 PlaceBody(model: model, place: place)
             }
             .id(place.id)
         } else {
-            BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: 170) {
+            BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: 230) {
                 ResultsHeader(model: model)
             } content: {
                 ResultsList(model: model)
@@ -632,6 +632,20 @@ enum DemoScript {
             var station = Place(id: "demo-davis", name: "Davis Station", location: LatLng(38.5435, -121.7377), source: "demo")
             station.category = "Train station"
             model.select(station)
+            return
+        }
+        if step == "roundabout" {
+            // Matteo's M27 roundabout drawn in the banner, in miles and yards, with the camera alert.
+            model.settings.units = .yards
+            let to = Place(id: "demo-pitlochry", name: "Pitlochry", location: LatLng(56.7030, -3.7340), source: "demo")
+            model.select(to)
+            await wait(2)
+            model.openDirections(to: to)
+            await wait(10)
+            model.startNavigation()
+            await wait(5)
+            model.nav?.showDemoRoundabout()
+            model.nav?.showDemoAlerts()
             return
         }
         if step == "uk" {

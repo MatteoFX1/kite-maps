@@ -126,10 +126,10 @@ enum MapIcons {
         }
     }
 
-    /** A 46-unit badge drawn at 23 points: white rim, colored field, then the glyph. */
+    /** A 46-unit badge drawn at 34 points (sharp when the map scales it up): white rim, colored field, then the glyph. */
     private static func badge(_ color: UIColor, glyph: (UIColor) -> Void) -> UIImage {
-        UIGraphicsImageRenderer(size: CGSize(width: 23, height: 23)).image { ctx in
-            ctx.cgContext.scaleBy(x: 0.5, y: 0.5)
+        UIGraphicsImageRenderer(size: CGSize(width: 34.5, height: 34.5)).image { ctx in
+            ctx.cgContext.scaleBy(x: 0.75, y: 0.75)
             UIColor.white.setFill()
             UIBezierPath(roundedRect: CGRect(x: 2, y: 2, width: 42, height: 42), cornerRadius: 11).fill()
             color.setFill()

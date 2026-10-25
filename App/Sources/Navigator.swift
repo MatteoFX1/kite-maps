@@ -73,6 +73,7 @@ final class Navigator: ObservableObject {
         let first = route.maneuvers.first { $0.type != .depart } ?? route.maneuvers.first
         loadCameras()
         loadWaze()
+        loadRoundabouts()
         speak("Starting route to \(destination.name). " + (first.map { "\($0.instruction)." } ?? ""))
     }
 
@@ -88,6 +89,7 @@ final class Navigator: ObservableObject {
     }
 
     var nextManeuver: Maneuver? {
+        if let demoManeuver { return demoManeuver }
         guard let i = progress?.nextIndex, i < route.maneuvers.count else { return route.maneuvers.first }
         return route.maneuvers[i]
     }
@@ -145,6 +147,19 @@ final class Navigator: ObservableObject {
     }
 
     /** Cameras and speed limits along the route, from OpenStreetMap, in one query per route. */
+    /** The real shape of each roundabout ahead, for the picture in the banner. */
+    private func loadRoundabouts() {
+        guard route.mode != .walk, route.maneuvers.contains(where: { $0.type == .roundabout }) else { return }
+        let r = route
+        Task {
+            guard let drawn = await Roundabouts.apply(to: r), self.route.id == r.id else { return }
+            // Only the roundabout layouts change; the line and steps are the same.
+            for i in self.route.maneuvers.indices where i < drawn.maneuvers.count {
+                self.route.maneuvers[i].roundabout = drawn.maneuvers[i].roundabout
+            }
+        }
+    }
+
     private func loadCameras() {
         routeCameras = []
         spokenCameras = []
@@ -327,6 +342,20 @@ final class Navigator: ObservableObject {
     }
 
     /** For the build's screenshots: a camera coming up and an average speed check. */
+    /** For the build's screenshots: the next turn swapped for a made-up one. */
+    private(set) var demoManeuver: Maneuver?
+
+    /** For the build's screenshots: the M27 roundabout at Park Gate, 6th exit, with its seven roads. */
+    func showDemoRoundabout() {
+        var m = Maneuver(type: .roundabout, instruction: "At the roundabout, take the 6th exit onto M27",
+                         location: LatLng(50.87, -1.27), alongMeters: 0, distanceMeters: 400, road: "M27", laneHint: nil)
+        m.exit = 6
+        m.roundabout = RoundaboutShape(exits: [262, 300, 338, 20, 62, 108], taken: 5, entriesOnly: [150],
+                                       clockwise: true, complete: true)
+        demoManeuver = m
+        objectWillChange.send()
+    }
+
     func showDemoAlerts() {
         demoAlerts = true
         cameraAhead = CameraAlert(kind: .speed, meters: 180, startMeters: 400, limitKmh: 48.3)
@@ -391,6 +420,7 @@ final class Navigator: ObservableObject {
             self.tracker = RouteTracker(route: fresh)
             self.spokenStage = [:]
             self.loadCameras()
+            self.loadRoundabouts()
             self.wazeAt = .distantPast
             self.routeWaze = []
             self.wazeAhead = nil

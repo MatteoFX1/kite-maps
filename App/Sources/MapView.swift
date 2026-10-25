@@ -230,7 +230,14 @@ struct VelaMapView: UIViewRepresentable {
             let cams = MLNSymbolStyleLayer(identifier: "vela-cameras", source: camSrc)
             cams.iconImageName = NSExpression(forKeyPath: "icon")
             cams.iconAllowsOverlap = NSExpression(forConstantValue: true)
-            cams.minimumZoomLevel = 12
+            // Big enough to notice at a glance, and bigger again for the ones on your route.
+            // (Zoom has to be the outermost part of the expression, so the "on route" size goes inside each stop.)
+            let big: [Any] = ["==", ["get", "big"], 1]
+            cams.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"],
+                                                          11, ["case", big, 1.0, 0.7],
+                                                          14, ["case", big, 1.33, 0.92],
+                                                          17, ["case", big, 1.65, 1.15]])
+            cams.minimumZoomLevel = 11
             style.addLayer(cams)
 
             // Waze: a glow where police get reported (under), and live reports as badges (over).
@@ -252,7 +259,7 @@ struct VelaMapView: UIViewRepresentable {
             waze.iconImageName = NSExpression(forKeyPath: "icon")
             waze.iconAllowsOverlap = NSExpression(forConstantValue: true)
             // Smaller when zoomed out, so a busy city doesn't drown in badges.
-            waze.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 11, 0.75, 15, 1.15])
+            waze.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 11, 0.62, 15, 0.95])
             waze.iconOpacity = NSExpression(forKeyPath: "op")
             waze.minimumZoomLevel = 11
             style.addLayer(waze)
@@ -410,14 +417,17 @@ struct VelaMapView: UIViewRepresentable {
 
         private func renderCameras(_ style: MLNStyle) {
             let s = model.settings
-            let key = "\(s.speedCameras)\(s.plateCameras)\(cameras.count)"
+            let line = model.nav?.route.polyline ?? model.directions?.route?.polyline ?? []
+            let key = "\(s.speedCameras)\(s.plateCameras)\(cameras.count)\(line.count)\(line.first?.lat ?? 0)"
             guard key != lastCameraKey else { return }
             lastCameraKey = key
             let shown = cameras.values.filter { $0.kind == .speed ? s.speedCameras : s.plateCameras }
+            let cum = line.count >= 2 ? Geo.cumulative(line) : []
             let features: [MLNPointFeature] = shown.map { c in
                 let f = MLNPointFeature()
                 f.coordinate = CLLocationCoordinate2D(latitude: c.location.lat, longitude: c.location.lng)
-                f.attributes = ["icon": c.kind == .speed ? "cam-speed" : "cam-plate"]
+                let onRoute = !cum.isEmpty && Geo.project(c.location, on: line, cumulative: cum).offset < 40
+                f.attributes = ["icon": c.kind == .speed ? "cam-speed" : "cam-plate", "big": onRoute ? 1 : 0]
                 return f
             }
             (style.source(withIdentifier: "vela-cameras") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)

@@ -1020,8 +1020,12 @@ struct RoundaboutDiagram: View {
         // Evenly spread up to yours, a little short of the full circle.
         let n = max(exit, 1)
         let step = min(90, 300 / Double(n + 1))
-        let exits = (1...n).map { k in clockwise ? 180 + Double(k) * step : 180 - Double(k) * step }
-            .map { ($0 + 360).truncatingRemainder(dividingBy: 360) }
+        let sign: Double = clockwise ? 1 : -1
+        var exits: [Double] = []
+        for k in 1...n {
+            let a: Double = 180 + sign * Double(k) * step
+            exits.append((a + 360).truncatingRemainder(dividingBy: 360))
+        }
         return RoundaboutShape(exits: exits, taken: n - 1, clockwise: clockwise, complete: false)
     }
 
@@ -1032,8 +1036,10 @@ struct RoundaboutDiagram: View {
             let ring = size.width * 0.2
             let edge = size.width * 0.47
             func pt(_ deg: Double, _ r: CGFloat) -> CGPoint {
-                let a = deg * .pi / 180
-                return CGPoint(x: c.x + CGFloat(sin(a)) * r, y: c.y - CGFloat(cos(a)) * r)
+                let a: Double = deg * .pi / 180
+                let dx = CGFloat(sin(a)) * r
+                let dy = CGFloat(cos(a)) * r
+                return CGPoint(x: c.x + dx, y: c.y - dy)
             }
             let faint = GraphicsContext.Shading.color(.white.opacity(0.32))
             let road = StrokeStyle(lineWidth: size.width * 0.075, lineCap: .round)
@@ -1047,14 +1053,15 @@ struct RoundaboutDiagram: View {
             ctx.stroke(Path(ellipseIn: CGRect(x: c.x - ring, y: c.y - ring, width: ring * 2, height: ring * 2)), with: faint, style: road)
             // Yours: in from the bottom, round the way traffic goes, and out.
             let out = l.exits[l.taken]
-            var sweep = l.turn(l.taken)
-            if sweep < 8 { sweep += 360 }
+            let sweep = l.turn(l.taken)
             var path = Path()
             path.move(to: pt(180, edge))
             path.addLine(to: pt(180, ring))
             let steps = max(Int(sweep / 6), 2)
+            let sign: Double = l.clockwise ? 1 : -1
             for i in 1...steps {
-                let a = 180 + (l.clockwise ? 1 : -1) * sweep * Double(i) / Double(steps)
+                let f = Double(i) / Double(steps)
+                let a: Double = 180 + sign * sweep * f
                 path.addLine(to: pt(a, ring))
             }
             let tip = pt(out, edge - size.width * 0.07)
@@ -1066,10 +1073,13 @@ struct RoundaboutDiagram: View {
             let side = CGPoint(x: -dir.y, y: dir.x)
             let w = size.width * 0.12, len = size.width * 0.14
             let base = CGPoint(x: tip.x - dir.x * 2, y: tip.y - dir.y * 2)
+            let nose = CGPoint(x: base.x + dir.x * len, y: base.y + dir.y * len)
+            let left = CGPoint(x: base.x + side.x * w, y: base.y + side.y * w)
+            let right = CGPoint(x: base.x - side.x * w, y: base.y - side.y * w)
             var head = Path()
-            head.move(to: CGPoint(x: base.x + dir.x * len, y: base.y + dir.y * len))
-            head.addLine(to: CGPoint(x: base.x + side.x * w, y: base.y + side.y * w))
-            head.addLine(to: CGPoint(x: base.x - side.x * w, y: base.y - side.y * w))
+            head.move(to: nose)
+            head.addLine(to: left)
+            head.addLine(to: right)
             head.closeSubpath()
             ctx.fill(head, with: .color(.white))
         }
