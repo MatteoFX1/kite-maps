@@ -198,6 +198,11 @@ struct WazeSettingsView: View {
                     }
                 } header: {
                     Text("Connection")
+                } footer: {
+                    if let s = Waze.lastStatus, s.code != 200 {
+                        // What the hidden live map page saw, to send to whoever looks into it.
+                        Text("Details: " + WazeWeb.shared.note).font(.caption2.monospaced())
+                    }
                 }
                 Section("Show and warn about") {
                     ForEach(kinds, id: \.0) { item in
