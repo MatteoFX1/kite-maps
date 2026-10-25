@@ -21,16 +21,16 @@ enum MapStyler {
     }
 
     static let dark = Palette(
-        land: UIColor(hex: 0x162640), water: UIColor(hex: 0x000D2A), park: UIColor(hex: 0x0D3847),
-        pitch: UIColor(hex: 0x0D4956), landuse: UIColor(hex: 0x2A3546), landuseOpacity: 0.5,
-        building: UIColor(hex: 0x1C3B69), buildingOutline: UIColor(hex: 0x2E3D6D),
-        minor: UIColor(hex: 0x3D5A77), major: UIColor(hex: 0x476789), motorway: UIColor(hex: 0x476789),
-        service: UIColor(hex: 0x2A4056), path: UIColor(hex: 0x2A4056),
-        casing: UIColor(hex: 0x07090E), motorwayCasing: UIColor(hex: 0x07090E),
-        rail: UIColor(hex: 0x3A4A68),
-        airport: UIColor(hex: 0x1C2638), runway: UIColor(hex: 0x2A4056),
-        label: UIColor(hex: 0xC3CAD6), halo: UIColor(hex: 0x1A2230),
-        roadLabel: UIColor(hex: 0xC3CAD6), roadHalo: UIColor(hex: 0x162640),
+        land: UIColor(hex: 0x111D30), water: UIColor(hex: 0x07122A), park: UIColor(hex: 0x0F3140),
+        pitch: UIColor(hex: 0x0F4150), landuse: UIColor(hex: 0x24304A), landuseOpacity: 0.5,
+        building: UIColor(hex: 0x1B2D4A), buildingOutline: UIColor(hex: 0x26395A),
+        minor: UIColor(hex: 0x34506E), major: UIColor(hex: 0x46668C), motorway: UIColor(hex: 0x5A7CA6),
+        service: UIColor(hex: 0x263A52), path: UIColor(hex: 0x263A52),
+        casing: UIColor(hex: 0x070B14), motorwayCasing: UIColor(hex: 0x070B14),
+        rail: UIColor(hex: 0x384868),
+        airport: UIColor(hex: 0x1A2436), runway: UIColor(hex: 0x263A52),
+        label: UIColor(hex: 0xC8D1DE), halo: UIColor(hex: 0x111D30),
+        roadLabel: UIColor(hex: 0xD3DAE5), roadHalo: UIColor(hex: 0x111D30),
         border: UIColor(hex: 0x8C95A3))
 
     static let light = Palette(

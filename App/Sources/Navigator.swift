@@ -396,7 +396,12 @@ final class Navigator: ObservableObject {
             speak(m.instruction)
         } else if d <= near && d > now + 30 && stage < 2 {
             spokenStage[i] = 2
-            speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
+            // Which lane, like the banner shows, so it's known without looking.
+            let lane = LaneGuide.lanes(for: m, leftTraffic: Geo.drivesOnLeft(m.location)).map { g -> String in
+                g.words.hasPrefix("Lane") ? ". Use " + g.words.lowercased().replacingOccurrences(of: "from left", with: "from the left")
+                    : ". Use the \(g.words.lowercased())"
+            } ?? ""
+            speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)\(lane)")
         } else if d <= far && d > near + 150 && stage < 1 && m.type != .arrive {
             spokenStage[i] = 1
             speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")

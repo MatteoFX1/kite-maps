@@ -47,6 +47,21 @@ public struct Maneuver: Hashable, Sendable {
     public var exit: Int?
     /** The roundabout's real layout, for drawing it: where every road leaves, and which is yours. */
     public var roundabout: RoundaboutShape?
+
+    public init(type: ManeuverType, instruction: String, location: LatLng, alongMeters: Double, distanceMeters: Double,
+                road: String? = nil, laneHint: String? = nil, lanes: [Lane] = [], exit: Int? = nil,
+                roundabout: RoundaboutShape? = nil) {
+        self.type = type
+        self.instruction = instruction
+        self.location = location
+        self.alongMeters = alongMeters
+        self.distanceMeters = distanceMeters
+        self.road = road
+        self.laneHint = laneHint
+        self.lanes = lanes
+        self.exit = exit
+        self.roundabout = roundabout
+    }
 }
 
 /**

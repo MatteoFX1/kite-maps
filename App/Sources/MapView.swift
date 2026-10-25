@@ -191,8 +191,8 @@ struct VelaMapView: UIViewRepresentable {
 
             let altEdge = line("vela-route-alt-edge", altSrc, UIColor(hex: 0x3566C4), width: 11)
             let altFill = line("vela-route-alt", altSrc, UIColor(hex: 0xA9C4F5), width: 7)
-            let edge = line("vela-route-edge", routeSrc, UIColor(hex: 0x0B4FB8), width: 12)
-            let fill = line("vela-route-line", routeSrc, UIColor(hex: 0x1F6FEB), width: 8)
+            let edge = line("vela-route-edge", routeSrc, UIColor(hex: 0x0B3D91), width: 15)
+            let fill = line("vela-route-line", routeSrc, UIColor(hex: 0x2F7BFF), width: 10)
             [altEdge, altFill, edge, fill].forEach(insert)
             // A transit trip: each ride in its line's color, walks dotted.
             let transitSrc = MLNShapeSource(identifier: "vela-transit", shape: nil, options: nil)
@@ -207,7 +207,7 @@ struct VelaMapView: UIViewRepresentable {
             ride.lineColor = NSExpression(mglJSONObject: ["to-color", ["get", "color"]])
             [walk, rideEdge, ride].forEach(insert)
             for (level, color) in [(1, 0xF2A65A), (2, 0xE8453C), (3, 0x9E1C1C)] {
-                let l = line("vela-route-traffic-\(level)", spanSrc, UIColor(hex: UInt32(color)), width: 8)
+                let l = line("vela-route-traffic-\(level)", spanSrc, UIColor(hex: UInt32(color)), width: 10)
                 l.predicate = NSPredicate(format: "level == %d", level)
                 insert(l)
             }

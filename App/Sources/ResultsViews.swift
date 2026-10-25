@@ -9,7 +9,7 @@ struct ResultsHeader: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(model.resultsTitle.capitalizedFirst).font(.title3.weight(.semibold))
+                    Text(model.resultsTitle.capitalizedFirst).font(.system(size: 24, weight: .heavy))
                     Text("\(model.visibleResults.count) results").font(.subheadline).foregroundColor(.secondary)
                 }
                 Spacer()
@@ -57,11 +57,11 @@ struct FilterChipLabel: View {
     var body: some View {
         HStack(spacing: 4) {
             if on && !menu { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)) }
-            Text(title).font(.subheadline)
-            if menu { Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)) }
+            Text(title).font(.body.weight(.semibold))
+            if menu { Image(systemName: "chevron.down").font(.system(size: 12, weight: .bold)) }
         }
-        .padding(.horizontal, 14)
-        .frame(height: 34)
+        .padding(.horizontal, 16)
+        .frame(height: 44)
         .foregroundColor(on ? Vela.onTonal(scheme) : .primary)
         .background(Capsule().fill(on ? Vela.tonal(scheme) : Color.clear))
         .overlay(Capsule().stroke(Color.secondary.opacity(on ? 0 : 0.5), lineWidth: 1))
@@ -103,7 +103,7 @@ struct ResultRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(place.name).font(.headline).foregroundColor(.primary)
+            Text(place.name).font(.system(size: 20, weight: .bold)).foregroundColor(.primary)
             PlaceMetaLine(place: place)
             StatusText(place: place).font(.subheadline)
             if place.rating == nil, let a = place.address {
