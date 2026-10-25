@@ -249,7 +249,8 @@ struct VelaMapView: UIViewRepresentable {
             let waze = MLNSymbolStyleLayer(identifier: "vela-waze", source: wazeSrc)
             waze.iconImageName = NSExpression(forKeyPath: "icon")
             waze.iconAllowsOverlap = NSExpression(forConstantValue: true)
-            waze.iconScale = NSExpression(forConstantValue: 1.15)
+            // Smaller when zoomed out, so a busy city doesn't drown in badges.
+            waze.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 11, 0.75, 15, 1.15])
             waze.iconOpacity = NSExpression(forKeyPath: "op")
             waze.minimumZoomLevel = 11
             style.addLayer(waze)
@@ -433,7 +434,7 @@ struct VelaMapView: UIViewRepresentable {
                 f.coordinate = CLLocationCoordinate2D(latitude: a.location.lat, longitude: a.location.lng)
                 // Fresh reports solid, fading to half over two hours, like Highway Radar's.
                 let age = Date().timeIntervalSince(a.reportedAt)
-                f.attributes = ["icon": "waze-\(a.kind.rawValue)", "op": max(0.5, 1 - age / 14_400)]
+                f.attributes = ["id": a.id, "icon": "waze-\(a.kind.rawValue)", "op": max(0.5, 1 - age / 14_400)]
                 return f
             }
             (style.source(withIdentifier: "vela-waze") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
@@ -725,6 +726,13 @@ struct VelaMapView: UIViewRepresentable {
                             self.model.selectRoute(i)
                         }
                     }
+                    return
+                }
+                let reports = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-waze"])
+                if let id = reports.first?.attribute(forKey: "id") as? String,
+                   let a = self.wazeAlerts.first(where: { $0.id == id }) {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    self.model.wazeInfo = a
                     return
                 }
                 let mine = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-mine"])

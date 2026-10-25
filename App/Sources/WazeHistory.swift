@@ -54,6 +54,13 @@ final class WazeHistory {
         return true
     }
 
+    /** Forget every remembered report (Settings › Waze integration). */
+    func clear() {
+        sightings = []
+        ids = []
+        save()
+    }
+
     private var sweptAt = Date.distantPast
     private var sweeping = false
 

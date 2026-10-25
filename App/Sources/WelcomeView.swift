@@ -1,4 +1,5 @@
 import SwiftUI
+import VelaCore
 
 /** First launch: what Kite is, and the one choice that matters (Google's data, or open data only). */
 struct WelcomeView: View {

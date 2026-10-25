@@ -204,8 +204,11 @@ final class Navigator: ObservableObject {
         wazeLoading = true
         wazeAt = Date()
         let line = route.polyline, id = route.id
+        // Only the next 60 km: on a long drive the rest will have changed by the time you get there.
+        let at = progress?.alongMeters ?? 0
+        let window = Geo.slice(line, from: max(at - 200, 0), to: at + 60_000)
         Task {
-            let found = await Waze.alongRoute(line)
+            let found = await Waze.alongRoute(window.count >= 2 ? window : line)
             self.wazeLoading = false
             guard let found, self.route.id == id else { return }
             WazeHistory.shared.record(found)
@@ -238,6 +241,7 @@ final class Navigator: ObservableObject {
         for w in routeWaze where abs(w.along - next.along) < 60 { spokenWaze.insert(w.alert.id) }
         let ahead = next.along - p.alongMeters
         wazeAhead = WazeAhead(alert: next.alert, meters: ahead, startMeters: max(ahead, 1))
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
         if s.wazeVoice {
             chime()
             speak(next.alert.spoken)
@@ -283,6 +287,7 @@ final class Navigator: ObservableObject {
             self.aircraftNear = nearest.map { (aircraft: $0.0, meters: $0.1) }
             if let a = nearest?.0, !self.spokenAircraft.contains(a.id) {
                 self.spokenAircraft.insert(a.id)
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 self.chime()
                 self.speak("\(a.title) nearby.")
             }

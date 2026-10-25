@@ -23,7 +23,21 @@ struct ContentView: View {
             } else {
                 BrowseOverlay(model: model)
             }
+            if let info = model.wazeInfo, model.nav == nil {
+                VStack {
+                    WazeInfoCard(alert: info) { withAnimation { model.wazeInfo = nil } }
+                        .padding(.top, 64)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    Spacer()
+                }
+                .task(id: info.id) {
+                    // Out of the way by itself after a while, like a toast.
+                    try? await Task.sleep(nanoseconds: 9_000_000_000)
+                    if model.wazeInfo?.id == info.id { withAnimation { model.wazeInfo = nil } }
+                }
+            }
         }
+        .animation(.easeOut(duration: 0.25), value: model.wazeInfo?.id)
         .preferredColorScheme(settings.colorScheme)
         .task { await DemoScript.run(model) }
         .onReceive(launch.$pending) { kind in
@@ -452,7 +466,12 @@ enum DemoScript {
             model.map?.setCenter(CLLocationCoordinate2D(latitude: 51.507, longitude: -0.12), zoomLevel: 12.3, animated: false)
             return
         }
-        if step == "wazedemo" {
+        if step == "wazesettings" {
+            model.settings.waze = true
+            model.showSettings = true
+            return
+        }
+        if step == "wazedemo" || step == "wazetap" {
             // Made-up reports around Davis, so the badges and the heat map show even if Waze is down.
             fakeWaze = true
             model.settings.waze = true
@@ -475,6 +494,16 @@ enum DemoScript {
             model.map?.setCenter(CLLocationCoordinate2D(latitude: c.lat, longitude: c.lng), zoomLevel: 13.6, animated: false)
             await wait(2)
             if let map = model.map { (map.delegate as? VelaMapView.Coordinator)?.showDemoWaze(list, map: map) }
+            if step == "wazetap" {
+                await wait(1)
+                var picked = list[list.count - 6]
+                picked.subtype = "ACCIDENT_MAJOR"
+                picked.street = "Russell Blvd"
+                picked.thumbsUp = 4
+                picked.reliability = 9
+                picked.reportedAt = Date().addingTimeInterval(-18 * 60)
+                model.wazeInfo = picked
+            }
             return
         }
         if step == "wazelink" {
@@ -549,6 +578,7 @@ enum DemoScript {
         model.select(first)
         await wait(5)
         guard !["place", "lookaround", "copy"].contains(step) else { return }
+        if step == "wazeroute" { RouteWazeSummary.demo = [(.police, 2), (.accident, 1), (.hazard, 3)] }
         model.openDirections(to: first)
         if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)

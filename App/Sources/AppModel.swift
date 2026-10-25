@@ -98,6 +98,8 @@ final class AppModel: ObservableObject {
     @Published var nav: Navigator?
     @Published var showLayers = false
     @Published var showSettings = false
+    /** A Waze report tapped on the map, shown in a small card. */
+    @Published var wazeInfo: WazeAlert?
     /** The "Add stop" search sheet. */
     @Published var addingStop = false
     @Published var showSaved = false

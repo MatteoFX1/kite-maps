@@ -32,6 +32,38 @@ final class WazeTests: XCTestCase {
         XCTAssertEqual(hits.map(\.alert.id), ["same", "unknown"])
         XCTAssertEqual(hits[0].along, 1113, accuracy: 15)
     }
+
+    func testHeadingWrapsAroundNorth() {
+        // A road heading due north: a report heading 355° is the same way, 175° the other.
+        let line = [LatLng(0, 0), LatLng(0.02, 0)]
+        let same = WazeAlert(id: "same", kind: .police, location: LatLng(0.01, 0.0001), heading: 355)
+        let other = WazeAlert(id: "other", kind: .police, location: LatLng(0.012, 0.0001), heading: 175)
+        // A closure blocks both ways, whichever way its reporter drove.
+        let closed = WazeAlert(id: "closed", kind: .closure, location: LatLng(0.015, 0), heading: 180)
+        XCTAssertEqual(Waze.project([same, other, closed], on: line).map(\.alert.id), ["same", "closed"])
+    }
+
+    func testEdgeCases() {
+        XCTAssertEqual(Waze.parse(Data(#"{"jams":[]}"#.utf8))?.count, 0)
+        XCTAssertEqual(Waze.parse(Data(#"{"alerts":[]}"#.utf8))?.count, 0)
+        XCTAssertNil(Waze.parse(Data("[1,2]".utf8)))
+        XCTAssertTrue(Waze.project([WazeAlert(id: "a", kind: .police, location: LatLng(0, 0))], on: [LatLng(0, 0)]).isEmpty)
+        XCTAssertEqual(Waze.kind(type: "JAM", subtype: "JAM_HEAVY_TRAFFIC"), .jam)
+        XCTAssertEqual(Waze.kind(type: "WEATHERHAZARD", subtype: "HAZARD_ON_ROAD_ICE"), .weather)
+        XCTAssertNil(Waze.kind(type: "CHIT_CHAT", subtype: ""))
+        // A subtype Kite doesn't know still gets a sensible name from its kind.
+        XCTAssertEqual(WazeAlert(id: "x", kind: .hazard, subtype: "HAZARD_SOMETHING_NEW", location: LatLng(0, 0)).title, "Hazard")
+        XCTAssertEqual(WazeAlert(id: "x", kind: .closure, location: LatLng(0, 0)).spoken, "Road closed ahead.")
+        XCTAssertTrue(Waze.url(south: 51, west: -1, north: 52, east: 0).absoluteString.contains("top=52.00000&bottom=51.00000&left=-1.00000&right=0.00000&env=row"))
+    }
+
+    func testEveryKindHasAName() {
+        for k in WazeAlert.Kind.allCases {
+            let a = WazeAlert(id: "x", kind: k, location: LatLng(0, 0))
+            XCTAssertFalse(a.title.isEmpty)
+            XCTAssertTrue(a.spoken.hasSuffix("ahead."))
+        }
+    }
 }
 
 final class PoliceRiskTests: XCTestCase {
@@ -44,6 +76,12 @@ final class PoliceRiskTests: XCTestCase {
         let far = (0..<20).map { _ in PoliceRisk.Report(LatLng(51.6, -0.18), now) }
         XCTAssertEqual(PoliceRisk.level(PoliceRisk.score(ahead: road, past: near, live: 0, now: now)), .medium)
         XCTAssertEqual(PoliceRisk.score(ahead: road, past: far, live: 0, now: now), 0)
+        // Old reports count for less: the same two from a year ago are low.
+        let old = near.map { PoliceRisk.Report($0.location, now.addingTimeInterval(-86_400 * 360)) }
+        XCTAssertEqual(PoliceRisk.level(PoliceRisk.score(ahead: road, past: old, live: 0, now: now)), .low)
+        // No road ahead (just arrived): only live reports matter.
+        XCTAssertEqual(PoliceRisk.score(ahead: [], past: near, live: 0, now: now), 0)
+        XCTAssertGreaterThan(PoliceRisk.score(ahead: [], past: [], live: 1, now: now), 60)
     }
 }
 
@@ -56,5 +94,16 @@ final class AircraftTests: XCTestCase {
         XCTAssertEqual(list[0].callsign, "NPAS15")
         XCTAssertEqual(list[0].altitudeFeet, 1500)
         XCTAssertTrue(list[1].helicopter)
+        XCTAssertEqual(list[1].title, "Police helicopter")
+    }
+
+    func testPoliceNames() {
+        XCTAssertTrue(Aircraft.isPolice(callsign: "NPAS21", operatorName: nil))
+        XCTAssertTrue(Aircraft.isPolice(callsign: nil, operatorName: "Bundespolizei"))
+        XCTAssertTrue(Aircraft.isPolice(callsign: nil, operatorName: "California Highway Patrol"))
+        XCTAssertFalse(Aircraft.isPolice(callsign: "EZY12AB", operatorName: "easyJet"))
+        XCTAssertFalse(Aircraft.isPolice(callsign: nil, operatorName: nil))
+        XCTAssertNil(Aircraft.parse(Data("oops".utf8)))
+        XCTAssertEqual(Aircraft.parse(Data(#"{"ac":[]}"#.utf8))?.count, 0)
     }
 }

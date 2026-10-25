@@ -62,6 +62,8 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     let onChange: () -> Void
     @Environment(\.dismiss) private var dismiss
+    /** Straight into the Waze screen, for the build's screenshot of it. */
+    @State private var openWaze = DemoScript.step == "wazesettings"
 
     var body: some View {
         NavigationView {
@@ -104,7 +106,7 @@ struct SettingsView: View {
                     Text("Fixed speed cameras and license plate readers (DeFlock) mapped in OpenStreetMap. Saying a camera is ahead is off by default, because some countries restrict it.")
                 }
                 Section {
-                    NavigationLink {
+                    NavigationLink(isActive: $openWaze) {
                         WazeSettingsView(settings: settings)
                     } label: {
                         LabeledContent("Waze integration (beta)", value: settings.wazeOn ? "On" : "Off")
@@ -144,6 +146,8 @@ struct SettingsView: View {
 /** Settings › Waze integration: which live reports to show and warn about, and the police heat map. */
 struct WazeSettingsView: View {
     @ObservedObject var settings: AppSettings
+    @State private var remembered = 0
+    @State private var confirmClear = false
 
     private let kinds: [(WazeAlert.Kind, String)] = [
         (.police, "Police and mobile speed traps"),
@@ -195,6 +199,10 @@ struct WazeSettingsView: View {
                 Section {
                     Toggle("Police heat map", isOn: $settings.wazeHeatmap)
                     Toggle("Police risk score while driving", isOn: $settings.policeRisk)
+                    LabeledContent("Police reports remembered", value: "\(remembered)")
+                    if remembered > 0 {
+                        Button("Forget them all", role: .destructive) { confirmClear = true }
+                    }
                 } footer: {
                     Text("A glow where police get reported most, and a low, medium or high risk for the road ahead (counting reports made at this time of day most). Waze only shares what's live now, so Kite remembers the reports it sees on this phone, for 90 days and never anywhere else, and both fill in the more you use it.")
                 }
@@ -204,10 +212,18 @@ struct WazeSettingsView: View {
             } header: {
                 Text("Aircraft")
             } footer: {
-                Text("While navigating, warns when a police aircraft is within about 10 km, from open flight tracking (adsb.lol), not Waze. Some police aircraft don't broadcast their position, so they won't show.")
+                Text("While navigating, warns when a police aircraft is within about 10 km, from open flight tracking (adsb.lol), not Waze. It spots them by their police callsign (like NPAS in the UK), and some don't broadcast at all, so no warning doesn't mean the sky is clear.")
             }
         }
         .navigationTitle("Waze integration (beta)")
+        .onAppear { remembered = WazeHistory.shared.sightings.count }
+        .confirmationDialog("Forget the \(remembered) police reports Kite remembered? The heat map and risk score start again from nothing.",
+                            isPresented: $confirmClear, titleVisibility: .visible) {
+            Button("Forget them", role: .destructive) {
+                WazeHistory.shared.clear()
+                remembered = 0
+            }
+        }
         .navigationBarTitleDisplayMode(.inline)
     }
 }

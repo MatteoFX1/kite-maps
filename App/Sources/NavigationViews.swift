@@ -339,9 +339,7 @@ struct WazeCard: View {
     var body: some View {
         let a = ahead.alert
         let left = min(max(ahead.meters / ahead.startMeters, 0), 1)
-        let mins = max(Int(Date().timeIntervalSince(a.reportedAt) / 60), 0)
-        let when = mins < 1 ? "just now" : mins < 60 ? "\(mins) min ago" : "\(mins / 60) h ago"
-        let detail = ["Reported \(when)", a.thumbsUp > 0 ? "\(a.thumbsUp) 👍" : nil, a.street].compactMap { $0 }.joined(separator: " · ")
+        let detail = [a.reportedText, a.thumbsUp > 0 ? "\(a.thumbsUp) 👍" : nil, a.street].compactMap { $0 }.joined(separator: " · ")
         VStack(spacing: 8) {
             HStack(spacing: 12) {
                 WazeBadge(kind: a.kind, size: 40)
@@ -367,6 +365,112 @@ struct WazeCard: View {
         .background(RoundedRectangle(cornerRadius: 18).fill(Vela.sheet(scheme))
             .shadow(color: .black.opacity(0.25), radius: 4, y: 2))
         .accessibilityElement(children: .combine)
+    }
+}
+
+extension WazeAlert {
+    /** "Reported 12 min ago". */
+    var reportedText: String {
+        let mins = max(Int(Date().timeIntervalSince(reportedAt) / 60), 0)
+        let when = mins < 1 ? "just now" : mins < 60 ? "\(mins) min ago" : mins < 1440 ? "\(mins / 60) h ago" : "\(mins / 1440) d ago"
+        return "Reported \(when)"
+    }
+}
+
+/** A Waze report tapped on the map: what, where, how fresh, how many drivers agree. */
+struct WazeInfoCard: View {
+    let alert: WazeAlert
+    let close: () -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            WazeBadge(kind: alert.kind, size: 40)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(alert.title).font(.headline)
+                Text([alert.street, alert.reportedText].compactMap { $0 }.joined(separator: " · "))
+                    .font(.subheadline).foregroundColor(.secondary)
+                HStack(spacing: 10) {
+                    if alert.thumbsUp > 0 {
+                        Label("\(alert.thumbsUp) confirmed", systemImage: "hand.thumbsup.fill")
+                    }
+                    // Waze's 0-10 trust in the report, as five dots.
+                    HStack(spacing: 3) {
+                        ForEach(0..<5, id: \.self) { i in
+                            Circle().fill(i < (alert.reliability + 1) / 2 ? Color(uiColor: MapIcons.wazeColor(alert.kind)) : Color.secondary.opacity(0.25))
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                    .accessibilityLabel("Reliability \(alert.reliability) out of 10")
+                    Text("via Waze")
+                }
+                .font(.caption).foregroundColor(.secondary)
+            }
+            Spacer(minLength: 0)
+            Button(action: close) {
+                Image(systemName: "xmark").font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+        }
+        .padding(14)
+        .glass(RoundedRectangle(cornerRadius: 18))
+        .padding(.horizontal, 12)
+    }
+}
+
+/**
+ * Before starting a drive: what Waze drivers have reported along this route right now, like
+ * "2 police · 1 crash". Quiet when Waze is off or didn't answer.
+ */
+struct RouteWazeSummary: View {
+    let route: Route
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var counts: [(WazeAlert.Kind, Int)]?
+    /** For the build's screenshots, since Waze turns away the build's computers. */
+    static var demo: [(WazeAlert.Kind, Int)]?
+
+    var body: some View {
+        Group {
+            if let counts {
+                if counts.isEmpty {
+                    Label("No Waze reports on this route", systemImage: "checkmark.shield.fill")
+                        .font(.subheadline).foregroundColor(Color(hex: 0x188038))
+                } else {
+                    HStack(spacing: 10) {
+                        ForEach(counts, id: \.0) { item in
+                            HStack(spacing: 4) {
+                                WazeBadge(kind: item.0, size: 20)
+                                Text("\(item.1) \(Self.label(item.0, item.1))").font(.subheadline.weight(.medium))
+                            }
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+        .task(id: route.id) {
+            if let demo = Self.demo { counts = demo; return }
+            guard settings.wazeOn, route.mode == .drive else { counts = nil; return }
+            counts = nil
+            guard let found = await Waze.alongRoute(route.polyline) else { return }
+            let on = Waze.project(found, on: route.polyline).map(\.alert).filter { settings.shows($0) }
+            let grouped = Dictionary(grouping: on, by: \.kind)
+            counts = WazeAlert.Kind.allCases.compactMap { k in grouped[k].map { (k, $0.count) } }
+        }
+    }
+
+    static func label(_ k: WazeAlert.Kind, _ n: Int) -> String {
+        switch k {
+        case .police: return "police"
+        case .accident: return n == 1 ? "crash" : "crashes"
+        case .hazard: return n == 1 ? "hazard" : "hazards"
+        case .weather: return "weather"
+        case .roadworks: return "roadworks"
+        case .closure: return n == 1 ? "closure" : "closures"
+        case .jam: return n == 1 ? "jam" : "jams"
+        }
     }
 }
 
