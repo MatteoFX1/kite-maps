@@ -54,6 +54,28 @@ final class WazeHistory {
         return true
     }
 
+    private var sweptAt = Date.distantPast
+    private var sweeping = false
+
+    /**
+     * While Kite is open, every 10 minutes, also asks Waze about the areas around [places] (where
+     * you are, home, work), so the heat map and risk fill in faster than from what's on screen.
+     */
+    func sweepIfDue(_ places: [LatLng]) {
+        guard !sweeping, Date().timeIntervalSince(sweptAt) > 600, !places.isEmpty else { return }
+        sweeping = true
+        sweptAt = Date()
+        Task {
+            for p in places.prefix(4) {
+                let d = 0.12
+                if let found = await Waze.alerts(south: p.lat - d, west: p.lng - d * 1.6, north: p.lat + d, east: p.lng + d * 1.6) {
+                    record(found)
+                }
+            }
+            sweeping = false
+        }
+    }
+
     private func save() {
         guard let file, let data = try? JSONEncoder().encode(sightings) else { return }
         try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)

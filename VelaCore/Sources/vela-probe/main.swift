@@ -209,23 +209,17 @@ do {
 
 // Waze live map: reports over central London, and along the Davis to airport drive.
 do {
-    // Each feed, with the browser-like headers and with none, to see what Waze lets through.
-    for url in Waze.urls(south: 51.48, west: -0.20, north: 51.54, east: -0.05) {
-        for browser in [true, false] {
-            var r = URLRequest(url: url)
-            if browser {
-                r.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
-                r.setValue("https://www.waze.com/live-map/", forHTTPHeaderField: "Referer")
-            }
-            if let (data, resp) = try? await URLSession.shared.data(for: r) {
-                print("Waze reply \(url.path) browser=\(browser): HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0), \(data.count) bytes: \(String(decoding: data.prefix(300), as: UTF8.self))")
-            } else {
-                print("Waze reply \(url.path) browser=\(browser): network error")
-            }
+    // The feed alone, then again after opening the live map page with the same cookies.
+    let url = Waze.url(south: 51.48, west: -0.20, north: 51.54, east: -0.05)
+    for step in ["feed", "page", "feed after page"] {
+        let target = step == "page" ? Waze.pageURL : url
+        if let (data, resp) = try? await Waze.session.data(from: target) {
+            let h = resp as? HTTPURLResponse
+            let cookies = Waze.session.configuration.httpCookieStorage?.cookies?.map(\.name) ?? []
+            print("Waze \(step): HTTP \(h?.statusCode ?? 0), \(data.count) bytes, cookies \(cookies): \(step == "page" ? "" : String(decoding: data.prefix(300), as: UTF8.self))")
+        } else {
+            print("Waze \(step): network error")
         }
-    }
-    if let (data, resp) = try? await URLSession.shared.data(from: URL(string: "https://www.waze.com/live-map/")!) {
-        print("Waze live map page: HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0), \(data.count) bytes")
     }
     let london = await Waze.alerts(south: 51.48, west: -0.20, north: 51.54, east: -0.05)
     if let london {
