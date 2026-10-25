@@ -149,6 +149,11 @@ struct ModeTabs: View {
                 tabs(compact: false).fixedSize()
                 tabs(compact: true).fixedSize()
                 ScrollView(.horizontal, showsIndicators: false) { tabs(compact: true) }
+                    .onAppear {
+                        // Only shown once the tabs stop fitting (big text): start at Transit when it's on.
+                        guard state.transit else { return }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { proxy.scrollTo("transit", anchor: .trailing) }
+                    }
             }
             .onAppear {
                 guard state.transit else { return }

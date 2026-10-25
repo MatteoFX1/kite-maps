@@ -17,6 +17,15 @@ struct NavigationOverlay: View {
         return "On my way to \(nav.destination.name), arriving around \(Fmt.arrival(left)) (\(Fmt.duration(left)) away).\(link)"
     }
 
+    /** Warning cards stacked under the banner (camera, Waze report, average check). */
+    private var mainCards: Int {
+        nav.arrived ? 0 : [nav.cameraAhead != nil, nav.wazeAhead != nil, nav.averageCheck != nil].filter { $0 }.count
+    }
+
+    /** With two other cards up, a police aircraft shrinks to a chip by the speed badge, so the
+     *  stack doesn't run into the map buttons. */
+    private var aircraftAsChip: Bool { mainCards >= 2 }
+
     var body: some View {
         ZStack {
             VStack(spacing: 8) {
@@ -34,7 +43,7 @@ struct NavigationOverlay: View {
                         .onTapGesture { withAnimation { nav.dismissWaze() } }
                         .accessibilityHint("Tap to hide")
                 }
-                if let air = nav.aircraftNear, !nav.arrived {
+                if let air = nav.aircraftNear, !nav.arrived, !aircraftAsChip {
                     AircraftCard(aircraft: air.aircraft, meters: air.meters)
                 }
                 if let check = nav.averageCheck, !nav.arrived {
@@ -55,6 +64,9 @@ struct NavigationOverlay: View {
                 Spacer()
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 10) {
+                        if let air = nav.aircraftNear, !nav.arrived, aircraftAsChip {
+                            AircraftChip(aircraft: air.aircraft, meters: air.meters)
+                        }
                         if let risk = nav.policeRisk, !nav.arrived { PoliceRiskChip(score: risk) }
                         HStack(spacing: 8) {
                             SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
@@ -73,17 +85,21 @@ struct NavigationOverlay: View {
                     }
                     Spacer()
                     VStack(spacing: 12) {
-                        MapFab(icon: "magnifyingglass", size: 48) { showAlong = true }
-                            .accessibilityLabel("Search along the route")
-                        ShareLink(item: etaText) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 19, weight: .semibold))
-                                .foregroundColor(.primary)
-                                .frame(width: 48, height: 48)
-                                .glass(Circle())
-                                .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+                        // With three warning cards up there's no room: the cards matter more
+                        // than search and share, which come back once a card goes.
+                        if mainCards < 3 {
+                            MapFab(icon: "magnifyingglass", size: 48) { showAlong = true }
+                                .accessibilityLabel("Search along the route")
+                            ShareLink(item: etaText) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 19, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                    .frame(width: 48, height: 48)
+                                    .glass(Circle())
+                                    .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+                            }
+                            .accessibilityLabel("Share arrival time")
                         }
-                        .accessibilityLabel("Share arrival time")
                         MapFab(icon: "arrow.up.left.and.arrow.down.right", size: 48) { model.overviewNav() }
                         MapFab(icon: nav.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 48) { nav.muted.toggle() }
                         MapFab(icon: "square.3.layers.3d", size: 48) { model.showLayers = true }
@@ -514,6 +530,24 @@ struct PoliceRiskChip: View {
         .background(Capsule().fill(color))
         .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
         .accessibilityLabel("Police risk \(level.rawValue), \(score) out of 100")
+    }
+}
+
+/** The aircraft card made small, for when the screen is already full of warnings. */
+struct AircraftChip: View {
+    let aircraft: PoliceAircraft
+    let meters: Double
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: aircraft.helicopter ? "fanblades.fill" : "airplane").font(.system(size: 13, weight: .bold))
+            Text("\(aircraft.title) · \(Fmt.distance(meters))").font(.caption.weight(.semibold)).lineLimit(1)
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 10).frame(height: 28)
+        .background(Capsule().fill(Color(hex: 0x1E88E5)))
+        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+        .accessibilityElement(children: .combine)
     }
 }
 
