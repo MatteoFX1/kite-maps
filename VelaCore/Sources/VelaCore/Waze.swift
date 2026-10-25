@@ -118,6 +118,7 @@ public enum Waze {
         public var count: Int
     }
     nonisolated(unsafe) public private(set) static var lastStatus: Status?
+    nonisolated(unsafe) private static var openedPage = false
 
     /**
      * Reports in a box. Nil when Waze didn't answer, so the caller can keep what it had. When the
@@ -127,7 +128,12 @@ public enum Waze {
         let u = url(south: south, west: west, north: north, east: east)
         var status = 0
         for attempt in 0..<2 {
-            if attempt == 1 { _ = try? await session.data(from: pageURL) }
+            if attempt == 1 {
+                // Only once per launch: if Waze still says no, a page load each time won't change it.
+                guard !openedPage else { break }
+                openedPage = true
+                _ = try? await session.data(from: pageURL)
+            }
             guard let (data, resp) = try? await session.data(for: URLRequest(url: u)) else { status = 0; break }
             status = (resp as? HTTPURLResponse)?.statusCode ?? 0
             if status == 200 {
