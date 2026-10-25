@@ -20,6 +20,10 @@ struct BottomSheet<Header: View, Content: View>: View {
     @GestureState(resetTransaction: Transaction(animation: sheetSnap)) private var drag: CGFloat = 0
     @GestureState(resetTransaction: Transaction(animation: sheetSnap)) private var bodyDrag: CGFloat = 0
     @State private var contentAtTop = true
+    // What the current drag on the list does, chosen once when it starts (keyed by where the
+    // finger went down). Choosing again mid-drag made a scroll back up to the top of the list
+    // suddenly grab the whole sheet and pull it down.
+    @State private var bodyDragMode: (start: CGPoint, movesSheet: Bool)?
     @Environment(\.colorScheme) private var scheme
 
     static func height(_ d: SheetDetent, container: CGFloat, peek: CGFloat) -> CGFloat {
@@ -65,10 +69,18 @@ struct BottomSheet<Header: View, Content: View>: View {
                 .onPreferenceChange(SheetTopKey.self) { contentAtTop = $0 >= -2 }
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 12, coordinateSpace: .global)
-                        .updating($bodyDrag) { v, s, _ in
-                            if follows(v) { s = v.translation.height }
+                        .onChanged { v in
+                            if bodyDragMode?.start != v.startLocation {
+                                bodyDragMode = (v.startLocation, follows(v))
+                            }
                         }
-                        .onEnded { v in if follows(v) { settle(v) } }
+                        .updating($bodyDrag) { v, s, _ in
+                            if movesSheet(v) { s = v.translation.height }
+                        }
+                        .onEnded { v in
+                            if movesSheet(v) { settle(v) }
+                            bodyDragMode = nil
+                        }
                 )
         }
         .frame(height: current, alignment: .top)
@@ -95,8 +107,14 @@ struct BottomSheet<Header: View, Content: View>: View {
 }
 
 extension BottomSheet {
-    /** Whether a drag on the sheet's body moves the sheet: mostly vertical, and at full height
-     *  only a pull down from the top of the list. */
+    /** Whether the drag in progress on the sheet's body was chosen to move the sheet. */
+    private func movesSheet(_ v: DragGesture.Value) -> Bool {
+        guard let m = bodyDragMode, m.start == v.startLocation else { return false }
+        return m.movesSheet
+    }
+
+    /** Whether a drag on the sheet's body should move the sheet, judged as it starts: mostly
+     *  vertical, and at full height only a pull down that starts with the list at its top. */
     private func follows(_ v: DragGesture.Value) -> Bool {
         guard abs(v.translation.height) > abs(v.translation.width) else { return false }
         return detent != .full || (contentAtTop && v.translation.height > 0)
