@@ -24,6 +24,10 @@ final class Navigator: ObservableObject {
     @Published private(set) var cameraAhead: CameraAlert?
     /** A Waze report coming up on the route (police, a crash…), for its warning card. */
     @Published private(set) var wazeAhead: WazeAhead?
+    /** How likely police are on the next few km, 0-100, when the risk score is on. */
+    @Published private(set) var policeRisk: Int?
+    /** The nearest police plane or helicopter within about 10 km, and how far it is. */
+    @Published private(set) var aircraftNear: (aircraft: PoliceAircraft, meters: Double)?
     /** An average speed check the user is driving through, with their average so far. */
     @Published private(set) var averageCheck: AverageCheck?
 
@@ -47,6 +51,12 @@ final class Navigator: ObservableObject {
     private var spokenWaze: Set<String> = []
     private var wazeAt = Date.distantPast
     private var wazeLoading = false
+    private var riskAt = Date.distantPast
+    private var riskPast: [PoliceRisk.Report]?
+    private var riskSpokenAt = Date.distantPast
+    private var aircraftAt = Date.distantPast
+    private var aircraftLoading = false
+    private var spokenAircraft: Set<String> = []
 
     init(route: Route, destination: Place, stops: [Place] = [], settings: AppSettings) {
         self.route = route
@@ -106,6 +116,8 @@ final class Navigator: ObservableObject {
         announce(p)
         checkCameras(p)
         checkWaze(p)
+        checkRisk(p)
+        checkAircraft(loc)
         checkZones(p)
         checkStops(p)
         if route.mode == .drive, AppSettings.shared.speedingAlert,
@@ -232,6 +244,51 @@ final class Navigator: ObservableObject {
         }
     }
 
+    /** The police risk for the next 3 km, worked out again every 20 seconds. */
+    private func checkRisk(_ p: RouteTracker.Progress) {
+        guard !demoAlerts else { return }
+        let s = AppSettings.shared
+        guard route.mode == .drive, s.wazeOn, s.policeRisk else { policeRisk = nil; return }
+        guard Date().timeIntervalSince(riskAt) > 20 else { return }
+        riskAt = Date()
+        if riskPast == nil { riskPast = WazeHistory.shared.reports }
+        let to = p.alongMeters + 3000
+        let ahead = Geo.slice(route.polyline, from: p.alongMeters, to: to)
+        let live = routeWaze.filter { $0.alert.kind == .police && s.shows($0.alert) && $0.along > p.alongMeters && $0.along < to }.count
+        let score = PoliceRisk.score(ahead: ahead, past: riskPast ?? [], live: live)
+        let was = policeRisk.map(PoliceRisk.level) ?? .low
+        policeRisk = score
+        // Like Highway Radar's hot zone sound: once when it turns high, at most every 10 minutes.
+        if PoliceRisk.level(score) == .high, was != .high, s.wazeVoice, Date().timeIntervalSince(riskSpokenAt) > 600 {
+            riskSpokenAt = Date()
+            speak("Police hotspot ahead.")
+        }
+    }
+
+    /** Police aircraft near the user, asked every 30 seconds while driving. */
+    private func checkAircraft(_ loc: CLLocation) {
+        guard !demoAlerts else { return }
+        guard route.mode == .drive, AppSettings.shared.policeAircraft else { aircraftNear = nil; return }
+        let here = LatLng(loc.coordinate.latitude, loc.coordinate.longitude)
+        if let near = aircraftNear { aircraftNear = (near.aircraft, near.aircraft.location.distance(to: here)) }
+        guard !aircraftLoading, Date().timeIntervalSince(aircraftAt) > 30 else { return }
+        aircraftLoading = true
+        aircraftAt = Date()
+        Task {
+            let found = await Aircraft.police(near: here, nauticalMiles: 10)
+            self.aircraftLoading = false
+            guard let found else { return }
+            let me = self.lastFix.map { LatLng($0.coordinate.latitude, $0.coordinate.longitude) } ?? here
+            let nearest = found.map { ($0, $0.location.distance(to: me)) }.filter { $0.1 < 10_000 }.min { $0.1 < $1.1 }
+            self.aircraftNear = nearest.map { (aircraft: $0.0, meters: $0.1) }
+            if let a = nearest?.0, !self.spokenAircraft.contains(a.id) {
+                self.spokenAircraft.insert(a.id)
+                self.chime()
+                self.speak("\(a.title) nearby.")
+            }
+        }
+    }
+
     /** Average speed checks: say when one starts and ends, and keep the user's average on screen. */
     private func checkZones(_ p: RouteTracker.Progress) {
         guard !demoAlerts else { return }
@@ -272,6 +329,8 @@ final class Navigator: ObservableObject {
         let a = WazeAlert(id: "demo-police", kind: .police, subtype: "POLICE_HIDING", location: here,
                           street: "A9", reportedAt: Date().addingTimeInterval(-7 * 60), thumbsUp: 3, reliability: 8)
         wazeAhead = WazeAhead(alert: a, meters: 260, startMeters: 600)
+        policeRisk = 72
+        aircraftNear = (PoliceAircraft(id: "demo-heli", callsign: "NPAS15", location: here, altitudeFeet: 1400, helicopter: true), 3200)
     }
 
     /** A short tone before a camera warning, the way Waze does it. */

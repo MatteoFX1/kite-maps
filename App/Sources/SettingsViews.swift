@@ -194,9 +194,17 @@ struct WazeSettingsView: View {
                 }
                 Section {
                     Toggle("Police heat map", isOn: $settings.wazeHeatmap)
+                    Toggle("Police risk score while driving", isOn: $settings.policeRisk)
                 } footer: {
-                    Text("A glow where police get reported most. Waze only shares what's live now, so Kite remembers the reports it sees on this phone (for 90 days) and the map fills in the more you use it.")
+                    Text("A glow where police get reported most, and a low, medium or high risk for the road ahead (counting reports made at this time of day most). Waze only shares what's live now, so Kite remembers the reports it sees on this phone, for 90 days and never anywhere else, and both fill in the more you use it.")
                 }
+            }
+            Section {
+                Toggle("Police planes and helicopters", isOn: $settings.policeAircraft)
+            } header: {
+                Text("Aircraft")
+            } footer: {
+                Text("While navigating, warns when a police aircraft is within about 10 km, from open flight tracking (adsb.lol), not Waze. Some police aircraft don't broadcast their position, so they won't show.")
             }
         }
         .navigationTitle("Waze integration")

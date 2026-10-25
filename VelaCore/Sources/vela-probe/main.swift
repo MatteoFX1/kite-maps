@@ -241,4 +241,17 @@ do {
     print("Waze Davis/Sacramento (env \(Waze.env(for: LatLng(38.5, -121.6)))): \(davis.map { "\($0.count) reports" } ?? "failed")")
 }
 
+// Police aircraft: what the open flight trackers send around London, and police ones found.
+for base in Aircraft.endpoints {
+    let url = Aircraft.url(base, near: LatLng(51.5, -0.12), nauticalMiles: 40)
+    if let (data, resp) = try? await URLSession.shared.data(from: url) {
+        let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let ac = root?["ac"] as? [[String: Any]] ?? []
+        let ops = Set(ac.compactMap { $0["ownOp"] as? String }).sorted().prefix(15)
+        print("Aircraft \(base): HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0), \(ac.count) aircraft, police \(Aircraft.parse(data)?.count ?? -1); fields \(ac.first.map { Array($0.keys).sorted() } ?? []); operators \(Array(ops))")
+    } else {
+        print("Aircraft \(base): network error")
+    }
+}
+
 exit(exitCode)

@@ -31,6 +31,9 @@ struct NavigationOverlay: View {
                 if let w = nav.wazeAhead, !nav.arrived {
                     WazeCard(ahead: w)
                 }
+                if let air = nav.aircraftNear, !nav.arrived {
+                    AircraftCard(aircraft: air.aircraft, meters: air.meters)
+                }
                 if let check = nav.averageCheck, !nav.arrived {
                     AverageCheckCard(check: check)
                 }
@@ -49,6 +52,7 @@ struct NavigationOverlay: View {
                 Spacer()
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 10) {
+                        if let risk = nav.policeRisk, !nav.arrived { PoliceRiskChip(score: risk) }
                         HStack(spacing: 8) {
                             SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
                             if let limit = nav.speedLimitKmh { SpeedLimitSign(kmh: limit) }
@@ -358,6 +362,55 @@ struct WazeCard: View {
                 }
             }
             .frame(height: 6)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Vela.sheet(scheme))
+            .shadow(color: .black.opacity(0.25), radius: 4, y: 2))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/** "Police risk: High" over the speed badge, from past and live Waze police reports ahead. */
+struct PoliceRiskChip: View {
+    let score: Int
+
+    var body: some View {
+        let level = PoliceRisk.level(score)
+        let color: Color = level == .high ? Color(hex: 0xD93025) : level == .medium ? Color(hex: 0xF29900) : Color(hex: 0x188038)
+        HStack(spacing: 6) {
+            Image(systemName: "shield.lefthalf.filled").font(.system(size: 13, weight: .bold))
+            Text("Police risk: \(level.rawValue.capitalized)").font(.caption.weight(.semibold))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 10).frame(height: 28)
+        .background(Capsule().fill(color))
+        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+        .accessibilityLabel("Police risk \(level.rawValue), \(score) out of 100")
+    }
+}
+
+/** A police plane or helicopter nearby: what, how far, how high. */
+struct AircraftCard: View {
+    let aircraft: PoliceAircraft
+    let meters: Double
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let detail = [aircraft.altitudeFeet.map { !Fmt.metric ? "\(Int($0)) ft up" : "\(Int($0 * 0.3048)) m up" },
+                      aircraft.callsign ?? aircraft.registration].compactMap { $0 }.joined(separator: " · ")
+        HStack(spacing: 12) {
+            Image(systemName: aircraft.helicopter ? "fanblades.fill" : "airplane")
+                .font(.system(size: 20, weight: .bold)).foregroundColor(.white)
+                .frame(width: 40, height: 40)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: 0x1E88E5)))
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(Fmt.distance(meters)).font(.system(size: 22, weight: .bold)).monospacedDigit()
+                    Text(aircraft.title).font(.headline)
+                }
+                if !detail.isEmpty { Text(detail).font(.subheadline).foregroundColor(.secondary).lineLimit(1) }
+            }
+            Spacer(minLength: 4)
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 18).fill(Vela.sheet(scheme))

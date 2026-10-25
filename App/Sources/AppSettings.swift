@@ -57,6 +57,10 @@ final class AppSettings: ObservableObject {
     @Published var wazeMaxAge: Int { didSet { d.set(wazeMaxAge, forKey: "wazeMaxAge") } }
     /** A glow where police get reported, from what Kite has seen on this phone. */
     @Published var wazeHeatmap: Bool { didSet { d.set(wazeHeatmap, forKey: "wazeHeatmap") } }
+    /** "Police risk: high" while driving, from the Waze police reports remembered on this phone. */
+    @Published var policeRisk: Bool { didSet { d.set(policeRisk, forKey: "policeRisk") } }
+    /** Warn about police planes and helicopters nearby (open ADS-B flight tracking, not Waze). */
+    @Published var policeAircraft: Bool { didSet { d.set(policeAircraft, forKey: "policeAircraft") } }
     /** The map's "P" button: save where you parked, and find the way back. */
     @Published var parkingButton: Bool { didSet { d.set(parkingButton, forKey: "parkingButton") } }
     @Published var home: Place? { didSet { save(home, "home") } }
@@ -94,6 +98,8 @@ final class AppSettings: ObservableObject {
         wazeVoice = d.object(forKey: "wazeVoice") as? Bool ?? true
         wazeHeatmap = d.bool(forKey: "wazeHeatmap")
         wazeMaxAge = d.object(forKey: "wazeMaxAge") as? Int ?? 120
+        policeRisk = d.object(forKey: "policeRisk") as? Bool ?? true
+        policeAircraft = d.bool(forKey: "policeAircraft")
         home = d.data(forKey: "home").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }
         work = d.data(forKey: "work").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }
         parking = d.data(forKey: "parking").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }

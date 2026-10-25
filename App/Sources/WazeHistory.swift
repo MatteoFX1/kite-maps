@@ -32,6 +32,11 @@ final class WazeHistory {
         }
     }
 
+    /** For the risk score. */
+    var reports: [PoliceRisk.Report] {
+        sightings.map { PoliceRisk.Report(LatLng($0.lat, $0.lng), $0.t) }
+    }
+
     /** Adds the police reports not seen before. True when anything was added. */
     @discardableResult
     func record(_ alerts: [WazeAlert]) -> Bool {
