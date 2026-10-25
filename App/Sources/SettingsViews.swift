@@ -161,6 +161,20 @@ struct WazeSettingsView: View {
 
     private let ages: [(Int, String)] = [(30, "30 minutes"), (60, "1 hour"), (120, "2 hours"), (240, "4 hours"), (0, "Keep them all")]
 
+    /** Whether Waze answered last time, so it's easy to tell when it has stopped working. */
+    private var connection: (text: String, color: Color) {
+        guard let s = Waze.lastStatus else { return ("Not checked yet: open the map at city zoom", .gray) }
+        let mins = Int(Date().timeIntervalSince(s.at) / 60)
+        let when = mins < 1 ? "just now" : "\(mins) min ago"
+        switch s.code {
+        case 200: return ("Working: \(s.count) reports, \(when)", Color(hex: 0x188038))
+        case 0: return ("No connection (\(when))", .orange)
+        case 401, 403: return ("Waze turned Kite away (\(s.code), \(when)). It may work again later.", .red)
+        case -1: return ("Waze sent something Kite can't read (\(when))", .red)
+        default: return ("Waze error \(s.code) (\(when))", .orange)
+        }
+    }
+
     var body: some View {
         Form {
             Section {
@@ -171,6 +185,14 @@ struct WazeSettingsView: View {
                      : "Kite reads the public Waze live map, with no account. Waze sees the area you're looking at, anonymously. It doesn't officially allow other apps to do this, so it may stop working one day.")
             }
             if settings.wazeOn {
+                Section {
+                    HStack(spacing: 8) {
+                        Circle().fill(connection.color).frame(width: 10, height: 10)
+                        Text(connection.text).font(.subheadline)
+                    }
+                } header: {
+                    Text("Connection")
+                }
                 Section("Show and warn about") {
                     ForEach(kinds, id: \.0) { item in
                         let k = item.0

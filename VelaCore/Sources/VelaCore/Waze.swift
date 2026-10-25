@@ -111,19 +111,33 @@ public enum Waze {
 
     public static let pageURL = URL(string: "https://www.waze.com/live-map/")!
 
+    /** How the last ask went, for the status line in Settings: when, the HTTP code (0 = no network), how many reports. */
+    public struct Status: Sendable {
+        public var at: Date
+        public var code: Int
+        public var count: Int
+    }
+    nonisolated(unsafe) public private(set) static var lastStatus: Status?
+
     /**
      * Reports in a box. Nil when Waze didn't answer, so the caller can keep what it had. When the
      * feed turns us away, open the live map page first (it hands out cookies) and ask once more.
      */
     public static func alerts(south: Double, west: Double, north: Double, east: Double) async -> [WazeAlert]? {
         let u = url(south: south, west: west, north: north, east: east)
+        var status = 0
         for attempt in 0..<2 {
             if attempt == 1 { _ = try? await session.data(from: pageURL) }
-            guard let (data, resp) = try? await session.data(for: URLRequest(url: u)) else { return nil }
-            let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-            if status == 200 { return parse(data) }
-            if status != 403 && status != 401 { return nil }
+            guard let (data, resp) = try? await session.data(for: URLRequest(url: u)) else { status = 0; break }
+            status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 200 {
+                let list = parse(data)
+                lastStatus = Status(at: Date(), code: list == nil ? -1 : 200, count: list?.count ?? 0)
+                return list
+            }
+            if status != 403 && status != 401 { break }
         }
+        lastStatus = Status(at: Date(), code: status, count: 0)
         return nil
     }
 
