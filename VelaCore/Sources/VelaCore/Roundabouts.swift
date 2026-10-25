@@ -42,8 +42,10 @@ public enum Roundabouts {
                 }
                 continue
             }
+            // The map's picture only if it counts the exits the way the spoken "Nth exit" does; on
+            // 2026-10-25's Hampshire drives that held for 17 of 24, and the rest keep the router's sketch.
             if let s = shape(ways, entry: m.location, line: route.polyline, cumulative: cum, along: m.alongMeters,
-                             clockwise: clockwise, exitNumber: m.exit) {
+                             clockwise: clockwise, exitNumber: m.exit), m.exit == nil || s.taken + 1 == m.exit {
                 r.maneuvers[i].roundabout = s
                 changed = true
             }
