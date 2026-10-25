@@ -116,16 +116,26 @@ public enum Waze {
         public var at: Date
         public var code: Int
         public var count: Int
+        /** Answered through the hidden web view rather than directly. */
+        public var viaPage = false
     }
+    /** Asks for [url] the way the live map page itself would, when Waze turns plain requests away. */
+    nonisolated(unsafe) public static var fallback: (@Sendable (URL) async -> Data?)?
     nonisolated(unsafe) public private(set) static var lastStatus: Status?
     nonisolated(unsafe) private static var openedPage = false
 
     /**
      * Reports in a box. Nil when Waze didn't answer, so the caller can keep what it had. When the
-     * feed turns us away, open the live map page first (it hands out cookies) and ask once more.
+     * feed turns us away, open the live map page first, as a browser would have, and ask once more;
+     * then let [fallback] (a hidden web view in the app) ask from inside the page itself.
      */
     public static func alerts(south: Double, west: Double, north: Double, east: Double) async -> [WazeAlert]? {
         let u = url(south: south, west: west, north: north, east: east)
+        // Once the page route has worked, go straight to it: the plain one will only be refused.
+        if lastStatus?.viaPage == true, let fallback, let data = await fallback(u), let list = parse(data) {
+            lastStatus = Status(at: Date(), code: 200, count: list.count, viaPage: true)
+            return list
+        }
         var status = 0
         for attempt in 0..<2 {
             if attempt == 1 {
@@ -142,6 +152,10 @@ public enum Waze {
                 return list
             }
             if status != 403 && status != 401 { break }
+        }
+        if status == 403 || status == 401, let fallback, let data = await fallback(u), let list = parse(data) {
+            lastStatus = Status(at: Date(), code: 200, count: list.count, viaPage: true)
+            return list
         }
         lastStatus = Status(at: Date(), code: status, count: 0)
         return nil

@@ -167,7 +167,7 @@ struct WazeSettingsView: View {
         let mins = Int(Date().timeIntervalSince(s.at) / 60)
         let when = mins < 1 ? "just now" : "\(mins) min ago"
         switch s.code {
-        case 200: return ("Working: \(s.count) reports, \(when)", Color(hex: 0x188038))
+        case 200: return ("Working\(s.viaPage ? " (through the live map page)" : ""): \(s.count) reports, \(when)", Color(hex: 0x188038))
         case 0: return ("No connection (\(when))", .orange)
         case 401, 403: return ("Waze turned Kite away (\(s.code), \(when)). It may work again later.", .red)
         case -1: return ("Waze sent something Kite can't read (\(when))", .red)

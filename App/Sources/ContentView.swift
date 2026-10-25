@@ -37,6 +37,16 @@ struct ContentView: View {
                 }
             }
         }
+        .overlay(alignment: .bottom) {
+            if DemoScript.step == "wazemap" {
+                // Screenshot run only: what Waze answered, since the build's computers can't be trusted to get through.
+                TimelineView(.periodic(from: .now, by: 2)) { _ in
+                    Text(Waze.lastStatus.map { "Waze: HTTP \($0.code), \($0.count) reports\($0.viaPage ? " via page" : "")" } ?? "Waze: not asked yet")
+                        .font(.caption.monospaced()).padding(6).background(Color.red).foregroundColor(.white)
+                        .padding(.bottom, 40)
+                }
+            }
+        }
         .animation(.easeOut(duration: 0.25), value: model.wazeInfo?.id)
         .preferredColorScheme(settings.colorScheme)
         .task { await DemoScript.run(model) }
