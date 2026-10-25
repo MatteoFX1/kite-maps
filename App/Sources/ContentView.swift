@@ -37,6 +37,12 @@ struct ContentView: View {
                 }
             }
         }
+        .overlay(alignment: .topLeading) {
+            if settings.wazeOn, settings.wazeHeatmap, model.nav == nil, model.directions == nil,
+               model.results.isEmpty, model.selected == nil {
+                HeatLegend().padding(.top, 118).padding(.leading, 14)
+            }
+        }
         .overlay(alignment: .bottom) {
             if DemoScript.step == "wazemap" {
                 // Screenshot run only: what Waze answered, since the build's computers can't be trusted to get through.

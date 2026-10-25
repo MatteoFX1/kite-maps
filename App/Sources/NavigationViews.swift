@@ -21,7 +21,8 @@ struct NavigationOverlay: View {
         ZStack {
             VStack(spacing: 8) {
                 if nav.arrived {
-                    ArrivedCard(name: nav.destination.name, onPark: nav.route.mode == .drive ? { model.saveParking() } : nil) { model.endNavigation() }
+                    ArrivedCard(name: nav.destination.name, onPark: nav.route.mode == .drive ? { model.saveParking() } : nil,
+                                note: nav.wazeWarned > 0 ? "Waze drivers warned you about \(nav.wazeWarned) report\(nav.wazeWarned == 1 ? "" : "s") on the way" : nil) { model.endNavigation() }
                 } else {
                     InstructionBanner(nav: nav)
                 }
@@ -30,6 +31,8 @@ struct NavigationOverlay: View {
                 }
                 if let w = nav.wazeAhead, !nav.arrived {
                     WazeCard(ahead: w)
+                        .onTapGesture { withAnimation { nav.dismissWaze() } }
+                        .accessibilityHint("Tap to hide")
                 }
                 if let air = nav.aircraftNear, !nav.arrived {
                     AircraftCard(aircraft: air.aircraft, meters: air.meters)
@@ -261,6 +264,7 @@ struct TripBar: View {
 struct ArrivedCard: View {
     let name: String
     var onPark: (() -> Void)?
+    var note: String?
     let done: () -> Void
     @State private var parked = false
 
@@ -270,6 +274,7 @@ struct ArrivedCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("You have arrived").font(.title3.weight(.bold))
                 Text(name).font(.subheadline).lineLimit(1)
+                if let note { Text(note).font(.caption).opacity(0.85).lineLimit(2) }
             }
             Spacer()
             if let onPark, !parked {
@@ -471,6 +476,24 @@ struct RouteWazeSummary: View {
         case .closure: return n == 1 ? "closure" : "closures"
         case .jam: return n == 1 ? "jam" : "jams"
         }
+    }
+}
+
+/** The heat map's key, top left of the map while it's on: blue for a few police reports, red for many. */
+struct HeatLegend: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundColor(Color(hex: 0xE91E63))
+            Text("Police").font(.caption2.weight(.semibold))
+            LinearGradient(colors: [Color(hex: 0x4285F4), Color(hex: 0x7C4DFF), Color(hex: 0xE91E63), Color(hex: 0xD50000)],
+                           startPoint: .leading, endPoint: .trailing)
+                .frame(width: 54, height: 6).clipShape(Capsule())
+            Text("often").font(.caption2).foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 10).frame(height: 28)
+        .glass(Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Police heat map on: red where police are reported most often")
     }
 }
 

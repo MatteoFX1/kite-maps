@@ -24,6 +24,8 @@ final class Navigator: ObservableObject {
     @Published private(set) var cameraAhead: CameraAlert?
     /** A Waze report coming up on the route (police, a crash…), for its warning card. */
     @Published private(set) var wazeAhead: WazeAhead?
+    /** How many Waze reports this drive warned about, for the arrival card. */
+    @Published private(set) var wazeWarned = 0
     /** How likely police are on the next few km, 0-100, when the risk score is on. */
     @Published private(set) var policeRisk: Int?
     /** The nearest police plane or helicopter within about 10 km, and how far it is. */
@@ -241,10 +243,12 @@ final class Navigator: ObservableObject {
         for w in routeWaze where abs(w.along - next.along) < 60 { spokenWaze.insert(w.alert.id) }
         let ahead = next.along - p.alongMeters
         wazeAhead = WazeAhead(alert: next.alert, meters: ahead, startMeters: max(ahead, 1))
+        wazeWarned += 1
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
         if s.wazeVoice {
             chime()
-            speak(next.alert.spoken)
+            // "Police reported ahead, in 400 yards."
+            speak("\(String(next.alert.spoken.dropLast())), in \(Fmt.spokenDistance(ahead)).")
         }
     }
 
@@ -326,6 +330,9 @@ final class Navigator: ObservableObject {
         cameraAhead = CameraAlert(kind: .speed, meters: 180, startMeters: 400, limitKmh: 48.3)
         averageCheck = AverageCheck(limitKmh: 80.5, averageKmh: 77, metersLeft: 2400)
     }
+
+    /** Tapping the Waze card puts it away; the report still won't be warned about again. */
+    func dismissWaze() { wazeAhead = nil }
 
     /** For the build's screenshots: police reported up the road. */
     func showDemoWaze() {
