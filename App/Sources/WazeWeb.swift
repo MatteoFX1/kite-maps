@@ -56,6 +56,19 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
         }
         return sd.apply(this, arguments);
       };
+      // The page asks reCAPTCHA for a one-off token before each request; note the site key and
+      // action it uses, so Kite can ask for fresh tokens of its own.
+      var wrap = setInterval(function () {
+        var e = window.grecaptcha && window.grecaptcha.enterprise;
+        if (!e || !e.execute || e.__kite) { return; }
+        var ex = e.execute;
+        e.execute = function (key, opts) {
+          k.key = key; k.action = (opts && opts.action) || k.action;
+          return ex.apply(this, arguments);
+        };
+        e.__kite = true;
+        clearInterval(wrap);
+      }, 30);
     })();
     """
 
@@ -63,9 +76,27 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
         await openPage()
         guard let web, ready else { note = "page: didn't load"; return nil }
         let js = """
+        var k = window.__kite || {};
         var h = { 'Accept': 'application/json, text/plain, */*' };
-        var seen = (window.__kite && window.__kite.headers) || {};
+        var seen = k.headers || {};
         for (var n in seen) { h[n] = seen[n]; }
+        var e = window.grecaptcha && window.grecaptcha.enterprise;
+        if (!k.key) {
+          // Not seen the page ask yet: the key is in the reCAPTCHA script's address.
+          var s = document.querySelector('script[src*="recaptcha"][src*="render="]');
+          var m = s && s.src.match(/render=([^&]+)/);
+          if (m && m[1] !== 'explicit') { k.key = m[1]; }
+        }
+        if (e && k.key) {
+          var t = await new Promise(function (done) {
+            e.ready(function () { e.execute(k.key, { action: k.action || 'livemap' }).then(done, function () { done(null); }); });
+            setTimeout(function () { done(null); }, 8000);
+          });
+          if (t) {
+            for (var n in h) { if (n.toLowerCase() === 'x-recaptcha-token') { delete h[n]; } }
+            h['X-Recaptcha-Token'] = t;
+          }
+        }
         var r = await fetch(u, { credentials: 'include', headers: h, __kite: true });
         if (!r.ok) { return 'HTTP ' + r.status; }
         return await r.text();
@@ -97,9 +128,15 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
     /** "pass yes, page asked 2× (200)": for the status line. */
     private func pageState() async -> String {
         let pass = await hasPass()
-        let js = "var k = window.__kite; return k ? 'page asked ' + k.seen + '× (' + k.status + ')' + (k.headers ? ' ' + Object.keys(k.headers).join('+') : '') : 'no watcher';"
+        let js = "var k = window.__kite; return k ? 'page asked ' + k.seen + '× (' + k.status + ')' + (k.headers ? ' ' + Object.keys(k.headers).join('+') : '') + (k.key ? ' key ' + String(k.key).slice(0, 6) + ' ' + (k.action || '?') : ' no key') : 'no watcher';"
         let page = (try? await web?.callAsyncJavaScript(js, arguments: [:], contentWorld: .page)) as? String ?? "?"
         return "pass \(pass ? "yes" : "no"), \(page)"
+    }
+
+    /** The page has asked for reports itself, or reCAPTCHA is ready to hand out tokens. */
+    private func pageReady(_ w: WKWebView) async -> Bool {
+        let js = "var k = window.__kite; return !!(k && (k.seen > 0 || k.key));"
+        return (try? await w.callAsyncJavaScript(js, arguments: [:], contentWorld: .page)) as? Bool ?? false
     }
 
     private func hasPass() async -> Bool {
@@ -148,6 +185,7 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
         Task {
             for _ in 0..<24 {
                 if await hasPass() { break }
+                if await pageReady(w) { break }
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 guard self.web === w else { return }
             }
