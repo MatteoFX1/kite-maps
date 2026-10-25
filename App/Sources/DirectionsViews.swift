@@ -143,24 +143,30 @@ struct ModeTabs: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) { tabs }
-                .onAppear {
-                    guard state.transit else { return }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { proxy.scrollTo("transit", anchor: .trailing) }
-                }
-                .onChange(of: state.transit) { on in
-                    withAnimation { proxy.scrollTo(on ? "transit" : "drive", anchor: on ? .trailing : .leading) }
-                }
-                .onChange(of: state.trips?.count) { _ in
-                    // The tab grows when its time arrives; keep it in view.
-                    guard state.transit else { return }
-                    withAnimation { proxy.scrollTo("transit", anchor: .trailing) }
-                }
+            // All four tabs side by side when they fit, a tighter version if not, and only
+            // as a last resort a row to scroll (which hid the end of the Transit tab).
+            ViewThatFits(in: .horizontal) {
+                tabs(compact: false).fixedSize()
+                tabs(compact: true).fixedSize()
+                ScrollView(.horizontal, showsIndicators: false) { tabs(compact: true) }
+            }
+            .onAppear {
+                guard state.transit else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { proxy.scrollTo("transit", anchor: .trailing) }
+            }
+            .onChange(of: state.transit) { on in
+                withAnimation { proxy.scrollTo(on ? "transit" : "drive", anchor: on ? .trailing : .leading) }
+            }
+            .onChange(of: state.trips?.count) { _ in
+                // The tab grows when its time arrives; keep it in view.
+                guard state.transit else { return }
+                withAnimation { proxy.scrollTo("transit", anchor: .trailing) }
+            }
         }
     }
 
-    private var tabs: some View {
-        HStack(spacing: 4) {
+    private func tabs(compact: Bool) -> some View {
+        HStack(spacing: compact ? 0 : 4) {
             ForEach(TravelMode.allCases) { m in
                 let on = !state.transit && m == state.mode
                 Button { model.setMode(m) } label: {
@@ -174,7 +180,7 @@ struct ModeTabs: View {
                             Text("–").font(.subheadline)
                         }
                     }
-                    .padding(.horizontal, 11)
+                    .padding(.horizontal, compact ? 8 : 11)
                     .frame(height: 34)
                     .foregroundColor(on ? Vela.onTonal(scheme) : .primary)
                     .background(Capsule().fill(on ? Vela.tonal(scheme) : Color.clear))
@@ -191,7 +197,7 @@ struct ModeTabs: View {
                         ProgressView().scaleEffect(0.7)
                     }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, compact ? 8 : 12)
                 .frame(height: 34)
                 .foregroundColor(state.transit ? Vela.onTonal(scheme) : .primary)
                 .background(Capsule().fill(state.transit ? Vela.tonal(scheme) : Color.clear))
