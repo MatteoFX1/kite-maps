@@ -23,7 +23,39 @@ struct ContentView: View {
             } else {
                 BrowseOverlay(model: model)
             }
+            if let info = model.wazeInfo, model.nav == nil {
+                VStack {
+                    WazeInfoCard(alert: info) { withAnimation { model.wazeInfo = nil } }
+                        .padding(.top, 64)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    Spacer()
+                }
+                .task(id: info.id) {
+                    // Out of the way by itself after a while, like a toast.
+                    guard !DemoScript.active else { return }
+                    try? await Task.sleep(nanoseconds: 9_000_000_000)
+                    if model.wazeInfo?.id == info.id { withAnimation { model.wazeInfo = nil } }
+                }
+            }
         }
+        .overlay(alignment: .topLeading) {
+            if settings.wazeOn, settings.wazeHeatmap, model.nav == nil, model.directions == nil,
+               model.results.isEmpty, model.selected == nil, model.wazeInfo == nil {
+                HeatLegend().padding(.top, 118).padding(.leading, 14)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if DemoScript.step == "wazemap" {
+                // Screenshot run only: what Waze answered, since the build's computers can't be trusted to get through.
+                TimelineView(.periodic(from: .now, by: 2)) { _ in
+                    Text((Waze.lastStatus.map { "Waze: HTTP \($0.code), \($0.count) reports\($0.viaPage ? " via page" : "")" } ?? "Waze: not asked yet")
+                         + "\n" + WazeWeb.shared.note)
+                        .font(.caption.monospaced()).padding(6).background(Color.red).foregroundColor(.white)
+                        .padding(.bottom, 40)
+                }
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: model.wazeInfo?.id)
         .preferredColorScheme(settings.colorScheme)
         .task { await DemoScript.run(model) }
         .onReceive(launch.$pending) { kind in
@@ -42,8 +74,12 @@ struct ContentView: View {
             GoogleStreetViewScreen(name: "Test pattern", pano: StreetView.Panorama(id: PanoramaViewer.testID, location: LatLng(0, 0)),
                                    heading: Double(DemoScript.step?.dropFirst(6) ?? "") ?? 0)
         }
-        .fullScreenCover(isPresented: Binding(get: { !settings.welcomed && (!DemoScript.active || DemoScript.step == "welcome") }, set: { _ in })) {
-            WelcomeView(settings: settings)
+        .fullScreenCover(isPresented: Binding(get: {
+            (!settings.welcomed || settings.needsWazeChoice)
+                && (!DemoScript.active || DemoScript.step == "welcome" || DemoScript.step == "wazeintro")
+        }, set: { _ in })) {
+            // First the Google choice, then (also once for people updating) the Waze one.
+            if settings.welcomed { WazeIntroView(settings: settings) } else { WelcomeView(settings: settings) }
         }
         .sheet(isPresented: $model.addingStop) {
             StopPicker(model: model)
@@ -408,6 +444,8 @@ struct NoticeBanner: View {
 /** Drives the app into one screen for the build's screenshots: `-demo search|place|directions|nav`. */
 enum DemoScript {
     static let scrollResults = Notification.Name("demo-scroll-results")
+    /** Made-up Waze reports are on screen, so live ones mustn't replace them. */
+    static var fakeWaze = false
     static var active: Bool { ProcessInfo.processInfo.arguments.contains("-demo") }
     static var step: String? {
         let a = ProcessInfo.processInfo.arguments
@@ -436,6 +474,61 @@ enum DemoScript {
             return
         }
         if step == "welcome" { model.settings.welcomed = false; return }
+        if step == "wazeintro" {
+            model.settings.welcomed = true
+            model.settings.noGoogle = false
+            model.settings.wazeAsked = false
+            return
+        }
+        if step == "wazemap" {
+            // Live Waze reports and the police glow over central London.
+            model.settings.waze = true
+            model.settings.wazeOnMap = true
+            model.settings.wazeHeatmap = true
+            model.settings.wazeKinds = Set(WazeAlert.Kind.allCases)
+            model.map?.setCenter(CLLocationCoordinate2D(latitude: 51.507, longitude: -0.12), zoomLevel: 12.3, animated: false)
+            return
+        }
+        if step == "wazesettings" {
+            model.settings.waze = true
+            model.showSettings = true
+            return
+        }
+        if step == "wazedemo" || step == "wazetap" {
+            // Made-up reports around Davis, so the badges and the heat map show even if Waze is down.
+            fakeWaze = true
+            model.settings.waze = true
+            model.settings.wazeHeatmap = true
+            model.settings.wazeKinds = Set(WazeAlert.Kind.allCases)
+            model.settings.wazeMaxAge = 0
+            let c = LatLng(38.5449, -121.7405)
+            var list: [WazeAlert] = []
+            var seed: UInt64 = 7
+            func rnd() -> Double { seed = seed &* 6364136223846793005 &+ 1442695040888963407; return Double(seed >> 11) / Double(1 << 53) }
+            for i in 0..<60 {
+                // Most police around two hot spots, a few anywhere.
+                let spot = i % 3 == 0 ? LatLng(38.5530, -121.7600) : i % 3 == 1 ? LatLng(38.5390, -121.7280) : c
+                list.append(WazeAlert(id: "demo-p\(i)", kind: .police, location: LatLng(spot.lat + (rnd() - 0.5) * 0.012, spot.lng + (rnd() - 0.5) * 0.016),
+                                      reportedAt: Date().addingTimeInterval(-rnd() * 7200)))
+            }
+            for (i, k) in WazeAlert.Kind.allCases.enumerated() where k != .police {
+                list.append(WazeAlert(id: "demo-k\(i)", kind: k, location: LatLng(c.lat + Double(i - 3) * 0.004, c.lng + 0.008 * Double(i % 2 == 0 ? 1 : -1))))
+            }
+            model.map?.setCenter(CLLocationCoordinate2D(latitude: c.lat, longitude: c.lng), zoomLevel: 13.6, animated: false)
+            await wait(2)
+            if let map = model.map { (map.delegate as? VelaMapView.Coordinator)?.showDemoWaze(list, map: map) }
+            if step == "wazetap" {
+                await wait(1)
+                var picked = list[list.count - 6]
+                picked.subtype = "ACCIDENT_MAJOR"
+                picked.street = "Russell Blvd"
+                picked.thumbsUp = 4
+                picked.reliability = 9
+                picked.reportedAt = Date().addingTimeInterval(-18 * 60)
+                model.wazeInfo = picked
+            }
+            return
+        }
         if step == "wazelink" {
             // A Waze share link pasted into search: a geohash by Westminster Bridge.
             model.search("https://waze.com/ul/hgcpuvpk4")
@@ -508,14 +601,19 @@ enum DemoScript {
         model.select(first)
         await wait(5)
         guard !["place", "lookaround", "copy"].contains(step) else { return }
+        if step == "wazeroute" { RouteWazeSummary.demo = [(.police, 2), (.accident, 1), (.hazard, 3)] }
         model.openDirections(to: first)
         if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)
-        guard step == "nav" || step == "camalert" else { return }
+        guard ["nav", "camalert", "wazealert"].contains(step) else { return }
         model.startNavigation()
         if step == "camalert" {
             await wait(4)
             model.nav?.showDemoAlerts()
+        }
+        if step == "wazealert" {
+            await wait(4)
+            model.nav?.showDemoWaze()
         }
     }
 }

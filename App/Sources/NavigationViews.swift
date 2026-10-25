@@ -21,12 +21,21 @@ struct NavigationOverlay: View {
         ZStack {
             VStack(spacing: 8) {
                 if nav.arrived {
-                    ArrivedCard(name: nav.destination.name, onPark: nav.route.mode == .drive ? { model.saveParking() } : nil) { model.endNavigation() }
+                    ArrivedCard(name: nav.destination.name, onPark: nav.route.mode == .drive ? { model.saveParking() } : nil,
+                                note: nav.wazeWarned > 0 ? "Waze drivers warned you about \(nav.wazeWarned) report\(nav.wazeWarned == 1 ? "" : "s") on the way" : nil) { model.endNavigation() }
                 } else {
                     InstructionBanner(nav: nav)
                 }
                 if let cam = nav.cameraAhead, !nav.arrived {
                     CameraCard(alert: cam, speedKmh: nav.speedMps * 3.6)
+                }
+                if let w = nav.wazeAhead, !nav.arrived {
+                    WazeCard(ahead: w)
+                        .onTapGesture { withAnimation { nav.dismissWaze() } }
+                        .accessibilityHint("Tap to hide")
+                }
+                if let air = nav.aircraftNear, !nav.arrived {
+                    AircraftCard(aircraft: air.aircraft, meters: air.meters)
                 }
                 if let check = nav.averageCheck, !nav.arrived {
                     AverageCheckCard(check: check)
@@ -46,6 +55,7 @@ struct NavigationOverlay: View {
                 Spacer()
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 10) {
+                        if let risk = nav.policeRisk, !nav.arrived { PoliceRiskChip(score: risk) }
                         HStack(spacing: 8) {
                             SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
                             if let limit = nav.speedLimitKmh { SpeedLimitSign(kmh: limit) }
@@ -254,6 +264,7 @@ struct TripBar: View {
 struct ArrivedCard: View {
     let name: String
     var onPark: (() -> Void)?
+    var note: String?
     let done: () -> Void
     @State private var parked = false
 
@@ -263,6 +274,7 @@ struct ArrivedCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("You have arrived").font(.title3.weight(.bold))
                 Text(name).font(.subheadline).lineLimit(1)
+                if let note { Text(note).font(.caption).opacity(0.85).lineLimit(2) }
             }
             Spacer()
             if let onPark, !parked {
@@ -321,6 +333,226 @@ struct CameraCard: View {
             .shadow(color: .black.opacity(0.25), radius: 4, y: 2))
         .animation(.easeOut(duration: 0.3), value: over)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/** A Waze report on the road ahead, styled like the camera card: what, how far, how fresh. */
+struct WazeCard: View {
+    let ahead: WazeAhead
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let a = ahead.alert
+        let left = min(max(ahead.meters / ahead.startMeters, 0), 1)
+        let detail = [a.reportedText, a.thumbsUp > 0 ? "\(a.thumbsUp) 👍" : nil, a.street].compactMap { $0 }.joined(separator: " · ")
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                WazeBadge(kind: a.kind, size: 40)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(Fmt.distance(ahead.meters)).font(.system(size: 24, weight: .bold)).monospacedDigit()
+                        Text(a.title).font(.headline)
+                    }
+                    Text(detail).font(.subheadline).foregroundColor(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                Text("Waze").font(.caption2.weight(.bold)).foregroundColor(.secondary)
+            }
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.secondary.opacity(0.25))
+                    Capsule().fill(Color(uiColor: MapIcons.wazeColor(a.kind))).frame(width: g.size.width * left)
+                }
+            }
+            .frame(height: 6)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Vela.sheet(scheme))
+            .shadow(color: .black.opacity(0.25), radius: 4, y: 2))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+extension WazeAlert {
+    /** "Reported 12 min ago". */
+    var reportedText: String {
+        let mins = max(Int(Date().timeIntervalSince(reportedAt) / 60), 0)
+        let when = mins < 1 ? "just now" : mins < 60 ? "\(mins) min ago" : mins < 1440 ? "\(mins / 60) h ago" : "\(mins / 1440) d ago"
+        return "Reported \(when)"
+    }
+}
+
+/** A Waze report tapped on the map: what, where, how fresh, how many drivers agree. */
+struct WazeInfoCard: View {
+    let alert: WazeAlert
+    let close: () -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            WazeBadge(kind: alert.kind, size: 40)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(alert.title).font(.headline)
+                Text([alert.street, alert.reportedText].compactMap { $0 }.joined(separator: " · "))
+                    .font(.subheadline).foregroundColor(.secondary)
+                HStack(spacing: 10) {
+                    if alert.thumbsUp > 0 {
+                        Label("\(alert.thumbsUp) confirmed", systemImage: "hand.thumbsup.fill")
+                    }
+                    // Waze's 0-10 trust in the report, as five dots.
+                    HStack(spacing: 3) {
+                        ForEach(0..<5, id: \.self) { i in
+                            Circle().fill(i < (alert.reliability + 1) / 2 ? Color(uiColor: MapIcons.wazeColor(alert.kind)) : Color.secondary.opacity(0.25))
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                    .accessibilityLabel("Reliability \(alert.reliability) out of 10")
+                    Text("via Waze")
+                }
+                .font(.caption).foregroundColor(.secondary)
+            }
+            Spacer(minLength: 0)
+            Button(action: close) {
+                Image(systemName: "xmark").font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+        }
+        .padding(14)
+        .glass(RoundedRectangle(cornerRadius: 18))
+        .padding(.horizontal, 12)
+    }
+}
+
+/**
+ * Before starting a drive: what Waze drivers have reported along this route right now, like
+ * "2 police · 1 crash". Quiet when Waze is off or didn't answer.
+ */
+struct RouteWazeSummary: View {
+    let route: Route
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var counts: [(WazeAlert.Kind, Int)]?
+    /** For the build's screenshots, since Waze turns away the build's computers. */
+    static var demo: [(WazeAlert.Kind, Int)]?
+
+    var body: some View {
+        // A VStack, not a Group: an empty Group has nothing to hang .task on, so it would never ask.
+        VStack(alignment: .leading, spacing: 0) {
+            if let counts {
+                if counts.isEmpty {
+                    Label("No Waze reports on this route", systemImage: "checkmark.shield.fill")
+                        .font(.subheadline).foregroundColor(Color(hex: 0x188038))
+                } else {
+                    HStack(spacing: 10) {
+                        ForEach(counts, id: \.0) { item in
+                            HStack(spacing: 4) {
+                                WazeBadge(kind: item.0, size: 20)
+                                Text("\(item.1) \(Self.label(item.0, item.1))").font(.subheadline.weight(.medium))
+                            }
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+        .task(id: route.id) {
+            if let demo = Self.demo { counts = demo; return }
+            guard settings.wazeOn, route.mode == .drive else { counts = nil; return }
+            counts = nil
+            guard let found = await Waze.alongRoute(route.polyline) else { return }
+            let on = Waze.project(found, on: route.polyline).map(\.alert).filter { settings.shows($0) }
+            let grouped = Dictionary(grouping: on, by: \.kind)
+            counts = WazeAlert.Kind.allCases.compactMap { k in grouped[k].map { (k, $0.count) } }
+        }
+    }
+
+    static func label(_ k: WazeAlert.Kind, _ n: Int) -> String {
+        switch k {
+        case .police: return "police"
+        case .accident: return n == 1 ? "crash" : "crashes"
+        case .hazard: return n == 1 ? "hazard" : "hazards"
+        case .weather: return "weather"
+        case .roadworks: return "roadworks"
+        case .closure: return n == 1 ? "closure" : "closures"
+        case .jam: return n == 1 ? "jam" : "jams"
+        }
+    }
+}
+
+/** The heat map's key, top left of the map while it's on: blue for a few police reports, red for many. */
+struct HeatLegend: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundColor(Color(hex: 0xE91E63))
+            Text("Police").font(.caption2.weight(.semibold))
+            LinearGradient(colors: [Color(hex: 0x4285F4), Color(hex: 0x7C4DFF), Color(hex: 0xE91E63), Color(hex: 0xD50000)],
+                           startPoint: .leading, endPoint: .trailing)
+                .frame(width: 54, height: 6).clipShape(Capsule())
+            Text("often").font(.caption2).foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 10).frame(height: 28)
+        .glass(Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Police heat map on: red where police are reported most often")
+    }
+}
+
+/** "Police risk: High" over the speed badge, from past and live Waze police reports ahead. */
+struct PoliceRiskChip: View {
+    let score: Int
+
+    var body: some View {
+        let level = PoliceRisk.level(score)
+        let color: Color = level == .high ? Color(hex: 0xD93025) : level == .medium ? Color(hex: 0xF29900) : Color(hex: 0x188038)
+        HStack(spacing: 6) {
+            Image(systemName: "shield.lefthalf.filled").font(.system(size: 13, weight: .bold))
+            Text("Police risk: \(level.rawValue.capitalized)").font(.caption.weight(.semibold))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 10).frame(height: 28)
+        .background(Capsule().fill(color))
+        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+        .accessibilityLabel("Police risk \(level.rawValue), \(score) out of 100")
+    }
+}
+
+/** A police plane or helicopter nearby: what, how far, how high. */
+struct AircraftCard: View {
+    let aircraft: PoliceAircraft
+    let meters: Double
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let detail = [aircraft.altitudeFeet.map { !Fmt.metric ? "\(Int($0)) ft up" : "\(Int($0 * 0.3048)) m up" },
+                      aircraft.callsign ?? aircraft.registration].compactMap { $0 }.joined(separator: " · ")
+        HStack(spacing: 12) {
+            Image(systemName: aircraft.helicopter ? "fanblades.fill" : "airplane")
+                .font(.system(size: 20, weight: .bold)).foregroundColor(.white)
+                .frame(width: 40, height: 40)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: 0x1E88E5)))
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(Fmt.distance(meters)).font(.system(size: 22, weight: .bold)).monospacedDigit()
+                    Text(aircraft.title).font(.headline)
+                }
+                if !detail.isEmpty { Text(detail).font(.subheadline).foregroundColor(.secondary).lineLimit(1) }
+            }
+            Spacer(minLength: 4)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Vela.sheet(scheme))
+            .shadow(color: .black.opacity(0.25), radius: 4, y: 2))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct WazeBadge: View {
+    let kind: WazeAlert.Kind
+    var size: CGFloat = 28
+
+    var body: some View {
+        Image(uiImage: MapIcons.waze(kind)).resizable().frame(width: size, height: size)
     }
 }
 

@@ -22,6 +22,14 @@ final class Navigator: ObservableObject {
     @Published private(set) var lastFix: CLLocation?
     /** A camera coming up within about twelve seconds, for the warning card. */
     @Published private(set) var cameraAhead: CameraAlert?
+    /** A Waze report coming up on the route (police, a crash…), for its warning card. */
+    @Published private(set) var wazeAhead: WazeAhead?
+    /** How many Waze reports this drive warned about, for the arrival card. */
+    @Published private(set) var wazeWarned = 0
+    /** How likely police are on the next few km, 0-100, when the risk score is on. */
+    @Published private(set) var policeRisk: Int?
+    /** The nearest police plane or helicopter within about 10 km, and how far it is. */
+    @Published private(set) var aircraftNear: (aircraft: PoliceAircraft, meters: Double)?
     /** An average speed check the user is driving through, with their average so far. */
     @Published private(set) var averageCheck: AverageCheck?
 
@@ -40,6 +48,17 @@ final class Navigator: ObservableObject {
     private var zoneEntry: (index: Int, time: Date, along: Double)?
     private var demoAlerts = false
     private var speeding = SpeedingAlerts()
+    private var routeWaze: [(alert: WazeAlert, along: Double)] = []
+    /** Reports already warned about, by Waze's id, so a refresh doesn't warn again. */
+    private var spokenWaze: Set<String> = []
+    private var wazeAt = Date.distantPast
+    private var wazeLoading = false
+    private var riskAt = Date.distantPast
+    private var riskPast: [PoliceRisk.Report]?
+    private var riskSpokenAt = Date.distantPast
+    private var aircraftAt = Date.distantPast
+    private var aircraftLoading = false
+    private var spokenAircraft: Set<String> = []
 
     init(route: Route, destination: Place, stops: [Place] = [], settings: AppSettings) {
         self.route = route
@@ -53,6 +72,7 @@ final class Navigator: ObservableObject {
         UIApplication.shared.isIdleTimerDisabled = true
         let first = route.maneuvers.first { $0.type != .depart } ?? route.maneuvers.first
         loadCameras()
+        loadWaze()
         speak("Starting route to \(destination.name). " + (first.map { "\($0.instruction)." } ?? ""))
     }
 
@@ -97,6 +117,9 @@ final class Navigator: ObservableObject {
         }
         announce(p)
         checkCameras(p)
+        checkWaze(p)
+        checkRisk(p)
+        checkAircraft(loc)
         checkZones(p)
         checkStops(p)
         if route.mode == .drive, AppSettings.shared.speedingAlert,
@@ -177,6 +200,106 @@ final class Navigator: ObservableObject {
         }
     }
 
+    /** Live Waze reports along the route; asked again every three minutes, since they come and go. */
+    private func loadWaze() {
+        guard route.mode == .drive, AppSettings.shared.wazeOn, !wazeLoading, !demoAlerts else { return }
+        wazeLoading = true
+        wazeAt = Date()
+        let line = route.polyline, id = route.id
+        // Only the next 60 km: on a long drive the rest will have changed by the time you get there.
+        let at = progress?.alongMeters ?? 0
+        let window = Geo.slice(line, from: max(at - 200, 0), to: at + 60_000)
+        Task {
+            let found = await Waze.alongRoute(window.count >= 2 ? window : line)
+            self.wazeLoading = false
+            guard let found, self.route.id == id else { return }
+            WazeHistory.shared.record(found)
+            self.routeWaze = Waze.project(found, on: line)
+        }
+    }
+
+    private func checkWaze(_ p: RouteTracker.Progress) {
+        guard !demoAlerts else { return }
+        let s = AppSettings.shared
+        if Date().timeIntervalSince(wazeAt) > 180 { loadWaze() }
+        if let ahead = wazeAhead {
+            // Keep the card up, counting down, until the report is passed.
+            if let hit = routeWaze.first(where: { $0.alert.id == ahead.alert.id }), hit.along > p.alongMeters - 10 {
+                var a = ahead
+                a.meters = max(hit.along - p.alongMeters, 0)
+                wazeAhead = a.meters > 0 ? a : nil
+            } else {
+                wazeAhead = nil
+            }
+        }
+        guard s.wazeOn, speedMps >= CameraAlerts.movingFloor else { return }
+        // A little earlier than a camera: police and crashes are worth more notice.
+        let lead = min(max(speedMps * 20, 250), 1200)
+        guard let next = routeWaze.first(where: {
+            !spokenWaze.contains($0.alert.id) && s.shows($0.alert)
+                && $0.along > p.alongMeters && $0.along - p.alongMeters <= lead
+        }) else { return }
+        // Reports a few meters apart are one warning.
+        for w in routeWaze where abs(w.along - next.along) < 60 { spokenWaze.insert(w.alert.id) }
+        let ahead = next.along - p.alongMeters
+        wazeAhead = WazeAhead(alert: next.alert, meters: ahead, startMeters: max(ahead, 1))
+        wazeWarned += 1
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        if s.wazeVoice {
+            chime()
+            // "Police reported ahead, in 400 yards."
+            speak("\(String(next.alert.spoken.dropLast())), in \(Fmt.spokenDistance(ahead)).")
+        }
+    }
+
+    /** The police risk for the next 3 km, worked out again every 20 seconds. */
+    private func checkRisk(_ p: RouteTracker.Progress) {
+        guard !demoAlerts else { return }
+        let s = AppSettings.shared
+        guard route.mode == .drive, s.wazeOn, s.policeRisk else { policeRisk = nil; return }
+        guard Date().timeIntervalSince(riskAt) > 20 else { return }
+        riskAt = Date()
+        if riskPast == nil { riskPast = WazeHistory.shared.reports }
+        let to = p.alongMeters + 3000
+        let ahead = Geo.slice(route.polyline, from: p.alongMeters, to: to)
+        let live = routeWaze.filter { $0.alert.kind == .police && s.shows($0.alert) && $0.along > p.alongMeters && $0.along < to }.count
+        let score = PoliceRisk.score(ahead: ahead, past: riskPast ?? [], live: live)
+        let was = policeRisk.map(PoliceRisk.level) ?? .low
+        policeRisk = score
+        // Like Highway Radar's hot zone sound: once when it turns high, at most every 10 minutes. Only
+        // for a place police keep being seen; a live report already has its own warning.
+        if PoliceRisk.level(score) == .high, was != .high, s.wazeVoice, Date().timeIntervalSince(riskSpokenAt) > 600,
+           live == 0 || PoliceRisk.level(PoliceRisk.score(ahead: ahead, past: riskPast ?? [], live: 0)) == .high {
+            riskSpokenAt = Date()
+            speak("Police hotspot ahead.")
+        }
+    }
+
+    /** Police aircraft near the user, asked every 30 seconds while driving. */
+    private func checkAircraft(_ loc: CLLocation) {
+        guard !demoAlerts else { return }
+        guard route.mode == .drive, AppSettings.shared.policeAircraft else { aircraftNear = nil; return }
+        let here = LatLng(loc.coordinate.latitude, loc.coordinate.longitude)
+        if let near = aircraftNear { aircraftNear = (near.aircraft, near.aircraft.location.distance(to: here)) }
+        guard !aircraftLoading, Date().timeIntervalSince(aircraftAt) > 30 else { return }
+        aircraftLoading = true
+        aircraftAt = Date()
+        Task {
+            let found = await Aircraft.police(near: here, nauticalMiles: 10)
+            self.aircraftLoading = false
+            guard let found else { return }
+            let me = self.lastFix.map { LatLng($0.coordinate.latitude, $0.coordinate.longitude) } ?? here
+            let nearest = found.map { ($0, $0.location.distance(to: me)) }.filter { $0.1 < 10_000 }.min { $0.1 < $1.1 }
+            self.aircraftNear = nearest.map { (aircraft: $0.0, meters: $0.1) }
+            if let a = nearest?.0, !self.spokenAircraft.contains(a.id) {
+                self.spokenAircraft.insert(a.id)
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                self.chime()
+                self.speak("\(a.title) nearby.")
+            }
+        }
+    }
+
     /** Average speed checks: say when one starts and ends, and keep the user's average on screen. */
     private func checkZones(_ p: RouteTracker.Progress) {
         guard !demoAlerts else { return }
@@ -208,6 +331,20 @@ final class Navigator: ObservableObject {
         demoAlerts = true
         cameraAhead = CameraAlert(kind: .speed, meters: 180, startMeters: 400, limitKmh: 48.3)
         averageCheck = AverageCheck(limitKmh: 80.5, averageKmh: 77, metersLeft: 2400)
+    }
+
+    /** Tapping the Waze card puts it away; the report still won't be warned about again. */
+    func dismissWaze() { wazeAhead = nil }
+
+    /** For the build's screenshots: police reported up the road. */
+    func showDemoWaze() {
+        demoAlerts = true
+        let here = progress.map { Geo.point(along: route.polyline, meters: $0.alongMeters + 300) } ?? route.polyline.first ?? LatLng(0, 0)
+        let a = WazeAlert(id: "demo-police", kind: .police, subtype: "POLICE_HIDING", location: here,
+                          street: "A9", reportedAt: Date().addingTimeInterval(-7 * 60), thumbsUp: 3, reliability: 8)
+        wazeAhead = WazeAhead(alert: a, meters: 260, startMeters: 600)
+        policeRisk = 72
+        aircraftNear = (PoliceAircraft(id: "demo-heli", callsign: "NPAS15", location: here, altitudeFeet: 1400, helicopter: true), 3200)
     }
 
     /** A short tone before a camera warning, the way Waze does it. */
@@ -254,6 +391,10 @@ final class Navigator: ObservableObject {
             self.tracker = RouteTracker(route: fresh)
             self.spokenStage = [:]
             self.loadCameras()
+            self.wazeAt = .distantPast
+            self.routeWaze = []
+            self.wazeAhead = nil
+            self.loadWaze()
             if let fix = self.lastFix { self.handle(fix) }
         }
     }
@@ -281,6 +422,12 @@ struct CameraAlert: Equatable {
     var startMeters: Double
     /** The limit it checks, when known. */
     var limitKmh: Double?
+}
+
+struct WazeAhead: Equatable {
+    var alert: WazeAlert
+    var meters: Double
+    var startMeters: Double
 }
 
 struct AverageCheck: Equatable {

@@ -250,6 +250,7 @@ struct TripBody: View {
                     .font(.subheadline).foregroundColor(delayColor(r))
             }
             Text("Arrive around \(Fmt.arrival(r.durationSeconds))").font(.subheadline).foregroundColor(.secondary)
+            if r.mode == .drive { RouteWazeSummary(route: r).padding(.top, 2) }
         }
     }
 

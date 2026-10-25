@@ -207,4 +207,45 @@ do {
     print("Street View London: \(london.map { "\($0.id)" } ?? "none")")
 }
 
+// Waze live map: reports over central London, and along the Davis to airport drive.
+do {
+    // The feed alone, then again after opening the live map page with the same cookies.
+    let url = Waze.url(south: 51.48, west: -0.20, north: 51.54, east: -0.05)
+    for step in ["feed", "page", "feed after page"] {
+        let target = step == "page" ? Waze.pageURL : url
+        if let (data, resp) = try? await Waze.session.data(from: target) {
+            let h = resp as? HTTPURLResponse
+            let cookies = Waze.session.configuration.httpCookieStorage?.cookies?.map(\.name) ?? []
+            print("Waze \(step): HTTP \(h?.statusCode ?? 0), \(data.count) bytes, cookies \(cookies): \(step == "page" ? "" : String(decoding: data.prefix(300), as: UTF8.self))")
+        } else {
+            print("Waze \(step): network error")
+        }
+    }
+    let london = await Waze.alerts(south: 51.48, west: -0.20, north: 51.54, east: -0.05)
+    if let london {
+        let counts = Dictionary(grouping: london, by: \.kind).map { "\($0.key.rawValue) \($0.value.count)" }.sorted()
+        print("Waze London: \(london.count) reports: \(counts); subtypes \(Set(london.map(\.subtype)).sorted().prefix(20))")
+        for a in london.prefix(6) {
+            print("  · \(a.title) on \(a.street ?? "-") at \(a.location), heading \(a.heading.map { String(Int($0)) } ?? "-"), \(Int(Date().timeIntervalSince(a.reportedAt) / 60)) min old, 👍 \(a.thumbsUp), reliability \(a.reliability)")
+        }
+    } else {
+        print("Waze London: failed")
+    }
+    let davis = await Waze.alerts(south: 38.40, west: -121.90, north: 38.70, east: -121.40)
+    print("Waze Davis/Sacramento (env \(Waze.env(for: LatLng(38.5, -121.6)))): \(davis.map { "\($0.count) reports" } ?? "failed")")
+}
+
+// Police aircraft: what the open flight trackers send around London, and police ones found.
+for base in Aircraft.endpoints {
+    let url = Aircraft.url(base, near: LatLng(51.5, -0.12), nauticalMiles: 40)
+    if let (data, resp) = try? await URLSession.shared.data(from: url) {
+        let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let ac = root?["ac"] as? [[String: Any]] ?? []
+        let ops = Set(ac.compactMap { $0["ownOp"] as? String }).sorted().prefix(15)
+        print("Aircraft \(base): HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0), \(ac.count) aircraft, police \(Aircraft.parse(data)?.count ?? -1); fields \(ac.first.map { Array($0.keys).sorted() } ?? []); operators \(Array(ops))")
+    } else {
+        print("Aircraft \(base): network error")
+    }
+}
+
 exit(exitCode)
