@@ -72,7 +72,8 @@ public enum OSRM {
             var roads: [String: Double] = [:]
             let legs = (r["legs"] as? [[String: Any]]) ?? []
             for (li, leg) in legs.enumerated() {
-                for step in (leg["steps"] as? [[String: Any]]) ?? [] {
+                let steps = (leg["steps"] as? [[String: Any]]) ?? []
+                for (si, step) in steps.enumerated() {
                     let m = step["maneuver"] as? [String: Any] ?? [:]
                     let type = m["type"] as? String ?? ""
                     // A route through vias stops and restarts at each one: those aren't turns.
@@ -94,6 +95,24 @@ public enum OSRM {
                                        distanceMeters: dist, road: name ?? ref, laneHint: nil)
                     man.lanes = lanes(step)
                     man.exit = m["exit"] as? Int
+                    if type == "roundabout" || type == "rotary" {
+                        // The lanes for a roundabout are mapped on the road leading up to it.
+                        if man.lanes.isEmpty, si > 0, let last = (steps[si - 1]["intersections"] as? [[String: Any]])?.last {
+                            man.lanes = lanes(["intersections": [last]])
+                        }
+                        // A first sketch from the router; OpenStreetMap fills in the whole circle later.
+                        man.roundabout = roundaboutSketch(step, next: si + 1 < steps.count ? steps[si + 1] : nil,
+                                                          clockwise: Geo.drivesOnLeft(loc))
+                    }
+                    if type == "exit roundabout" || type == "exit rotary" {
+                        // Still going round: keep the roundabout's exit number until off it.
+                        man.leavesRoundabout = true
+                        man.lanes = []
+                        if let prev = maneuvers.last, prev.type == .roundabout {
+                            man.exit = man.exit ?? prev.exit
+                            man.roundabout = prev.roundabout
+                        }
+                    }
                     maneuvers.append(man)
                     along += dist
                 }
@@ -107,6 +126,70 @@ public enum OSRM {
             route.speedLimits = speedLimits(legs, line: line, cumulative: cum)
             return route
         }
+    }
+
+    /**
+     * The roundabout as far as the router knows it: the exits passed on the way round (side roads
+     * you could take at each point on the circle) and the one taken, placed around a circle
+     * fitted through those points. The roads after yours aren't known, so it's marked incomplete.
+     */
+    static func roundaboutSketch(_ step: [String: Any], next: [String: Any]?, clockwise: Bool) -> RoundaboutShape? {
+        guard let ints = step["intersections"] as? [[String: Any]], ints.count >= 1,
+              let exitInt = (next?["intersections"] as? [[String: Any]])?.first else { return nil }
+        func loc(_ x: [String: Any]) -> LatLng? {
+            (x["location"] as? [Double]).flatMap { $0.count == 2 ? LatLng($0[1], $0[0]) : nil }
+        }
+        guard let entry = loc(ints[0]), let out = loc(exitInt) else { return nil }
+        var passed: [LatLng] = []
+        var inOnly: [LatLng] = []
+        for x in ints.dropFirst() {
+            guard let p = loc(x), let bearings = x["bearings"] as? [Int] else { continue }
+            let entries = x["entry"] as? [Bool] ?? []
+            let into = x["in"] as? Int, onward = x["out"] as? Int
+            for k in bearings.indices where k != into && k != onward {
+                if k < entries.count && entries[k] { passed.append(p) } else { inOnly.append(p) }
+            }
+        }
+        let ring = [entry] + passed + inOnly + [out]
+        guard let center = fitCircle(ring) else { return nil }
+        let e = Geo.bearing(center, entry)
+        func rel(_ p: LatLng) -> Double {
+            let a = Geo.bearing(center, p) - e + 180
+            return (a.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
+        }
+        let exits = passed.map(rel) + [rel(out)]
+        return RoundaboutShape(exits: exits, taken: exits.count - 1, entriesOnly: inOnly.map(rel), clockwise: clockwise, complete: false)
+    }
+
+    /** The middle of the circle best through [pts] (least squares), or nil when they don't make one. */
+    static func fitCircle(_ pts: [LatLng]) -> LatLng? {
+        guard pts.count >= 3 else { return nil }
+        let o = pts[0]
+        let k = cos(o.lat * .pi / 180) * 111_320.0
+        let xy = pts.map { (x: ($0.lng - o.lng) * k, y: ($0.lat - o.lat) * 110_540) }
+        // Solve for x² + y² + Dx + Ey + F = 0.
+        var a = [[Double]](repeating: [0, 0, 0], count: 3)
+        var b = [0.0, 0.0, 0.0]
+        for p in xy {
+            let row = [p.x, p.y, 1.0]
+            let z = -(p.x * p.x + p.y * p.y)
+            for i in 0..<3 {
+                for j in 0..<3 { a[i][j] += row[i] * row[j] }
+                b[i] += row[i] * z
+            }
+        }
+        func det(_ m: [[Double]]) -> Double {
+            m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+                + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+        }
+        let d = det(a)
+        guard abs(d) > 1e-6 else { return nil }
+        func col(_ c: Int) -> [[Double]] { a.enumerated().map { i, r in r.enumerated().map { j, v in j == c ? b[i] : v } } }
+        let dd = det(col(0)) / d, ee = det(col(1)) / d
+        let cx = -dd / 2, cy = -ee / 2
+        let r = (xy.map { (($0.x - cx) * ($0.x - cx) + ($0.y - cy) * ($0.y - cy)).squareRoot() }.reduce(0, +)) / Double(xy.count)
+        guard r > 3, r < 300 else { return nil }
+        return LatLng(o.lat + cy / 110_540, o.lng + cx / k)
     }
 
     /** The turn lanes at a step's maneuver point (its first intersection), left to right. */

@@ -24,7 +24,7 @@ public enum Roundabouts {
 
     /** Fills in [Maneuver.roundabout] on every roundabout of [route] that OpenStreetMap answers for. */
     public static func apply(to route: Route) async -> Route? {
-        let spots = route.maneuvers.filter { $0.type == .roundabout }.map(\.location)
+        let spots = route.maneuvers.filter { $0.type == .roundabout && !$0.leavesRoundabout }.map(\.location)
         guard !spots.isEmpty, let data = await fetch(spots) else { return nil }
         var r = route
         let ways = parse(data)
@@ -34,6 +34,14 @@ public enum Roundabouts {
         var changed = false
         for i in r.maneuvers.indices where r.maneuvers[i].type == .roundabout {
             let m = r.maneuvers[i]
+            if m.leavesRoundabout {
+                // The way off: the same picture as the way on.
+                if i > 0, r.maneuvers[i - 1].type == .roundabout, let prev = r.maneuvers[i - 1].roundabout {
+                    r.maneuvers[i].roundabout = prev
+                    r.maneuvers[i].exit = r.maneuvers[i].exit ?? r.maneuvers[i - 1].exit
+                }
+                continue
+            }
             if let s = shape(ways, entry: m.location, line: route.polyline, cumulative: cum, along: m.alongMeters,
                              clockwise: clockwise, exitNumber: m.exit) {
                 r.maneuvers[i].roundabout = s

@@ -261,7 +261,7 @@ enum LaneGuide {
             else { words = valid.count > 1 ? "Middle lanes" : "Middle lane" }
             return (m.lanes, words)
         }
-        guard m.type == .roundabout, let shape = m.roundabout else { return nil }
+        guard m.type == .roundabout, !m.leavesRoundabout, let shape = m.roundabout else { return nil }
         // Two lanes, the near-side one for left and straight on, the far one for right.
         let farSide = shape.ruleLane == 1
         let rightLane = leftTraffic ? farSide : !farSide

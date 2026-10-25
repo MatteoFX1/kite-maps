@@ -47,6 +47,8 @@ public struct Maneuver: Hashable, Sendable {
     public var exit: Int?
     /** The roundabout's real layout, for drawing it: where every road leaves, and which is yours. */
     public var roundabout: RoundaboutShape?
+    /** The point where the route leaves a roundabout (the router's "exit roundabout" step), shown with that roundabout's picture. */
+    public var leavesRoundabout = false
 
     public init(type: ManeuverType, instruction: String, location: LatLng, alongMeters: Double, distanceMeters: Double,
                 road: String? = nil, laneHint: String? = nil, lanes: [Lane] = [], exit: Int? = nil,

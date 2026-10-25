@@ -611,7 +611,9 @@ final class AppModel: ObservableObject {
         let center = onRoute ? CLLocationCoordinate2D(latitude: p!.snapped.lat, longitude: p!.snapped.lng) : loc.coordinate
         let heading = loc.course >= 0 && loc.speed > 2 ? loc.course : (p?.routeBearing ?? map.direction)
         let speed = max(0, loc.speed)
-        let across = n.route.mode == .drive ? min(1400, max(450, 300 + speed * 30)) : 300
+        var across = n.route.mode == .drive ? min(1400, max(450, 300 + speed * 30)) : 300
+        // Close to a roundabout, zoom in so the whole of it and its exits fill the view.
+        if n.nextManeuver?.type == .roundabout, let d = p?.distanceToNext, d < 350 { across = min(across, 380) }
         let cam = MLNMapCamera(lookingAtCenter: center, acrossDistance: across, pitch: 50, heading: heading)
         let pad = UIEdgeInsets(top: map.bounds.height * 0.45, left: 0, bottom: 120, right: 0)
         map.setCamera(cam, withDuration: animated ? 1.0 : 0, animationTimingFunction: CAMediaTimingFunction(name: .linear),

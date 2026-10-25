@@ -98,6 +98,8 @@ final class Navigator: ObservableObject {
     var thenManeuver: Maneuver? {
         guard let i = progress?.nextIndex, i + 1 < route.maneuvers.count else { return nil }
         let a = route.maneuvers[i], b = route.maneuvers[i + 1]
+        // Leaving a roundabout is part of the roundabout, not a turn of its own.
+        if b.leavesRoundabout { return nil }
         return b.alongMeters - a.alongMeters < 300 ? b : nil
     }
 

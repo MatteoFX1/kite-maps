@@ -40,7 +40,7 @@ struct WelcomeView: View {
             .buttonStyle(.plain)
         }
         .padding(24)
-        .background(Vela.sheet(scheme).ignoresSafeArea())
+        .background(Vela.ground(scheme).ignoresSafeArea())
     }
 
     private func option(title: String, detail: String, icon: String, picked: Bool, tap: @escaping () -> Void) -> some View {
@@ -113,7 +113,7 @@ struct WazeIntroView: View {
             .buttonStyle(.plain)
         }
         .padding(24)
-        .background(Vela.sheet(scheme).ignoresSafeArea())
+        .background(Vela.ground(scheme).ignoresSafeArea())
     }
 
     private func option(title: String, detail: String, icon: String, picked: Bool, tap: @escaping () -> Void) -> some View {
