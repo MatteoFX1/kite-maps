@@ -260,7 +260,7 @@ public enum OSRM {
 
         /** "Eastleigh and Southampton" from "A335: Eastleigh, Southampton"; the road numbers if that's all there is. */
         var toward: String? {
-            guard let d = destinations?.trimmingCharacters(in: .whitespaces), !d.isEmpty else { return nil }
+            guard let d = destinations?.replacingOccurrences(of: ";", with: ",").trimmingCharacters(in: .whitespaces), !d.isEmpty else { return nil }
             let parts = d.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             let names = (parts.count == 2 ? parts[1] : parts[0]).split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }

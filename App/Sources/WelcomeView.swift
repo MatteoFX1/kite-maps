@@ -8,6 +8,8 @@ struct WelcomeView: View {
     @State private var openOnly = false
 
     var body: some View {
+        // Scrolls with very big text, with the button always in reach at the bottom.
+        ScrollView {
         VStack(alignment: .leading, spacing: 22) {
             Spacer(minLength: 20)
             Image("Logo")
@@ -17,6 +19,7 @@ struct WelcomeView: View {
                 Text("Welcome to Kite").font(.largeTitle.weight(.bold))
                 Text("Maps, search and turn-by-turn directions with no account and no tracking.")
                     .font(.title3).foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             VStack(spacing: 12) {
                 option(title: "Best results", detail: "Search, place details, live traffic and routes from Google, asked anonymously. The map itself is open data.",
@@ -26,7 +29,10 @@ struct WelcomeView: View {
             }
             Text("You can change this any time in Settings. Next, Kite asks to use your location, so it can show where you are and guide you.")
                 .font(.footnote).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-            Spacer()
+        }
+        .padding(24)
+        }
+        .safeAreaInset(edge: .bottom) {
             Button {
                 settings.noGoogle = openOnly
                 // Someone keeping away from Google isn't asked about Waze, which Google owns.
@@ -39,8 +45,9 @@ struct WelcomeView: View {
                     .background(Capsule().fill(Vela.accent(scheme)))
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 24).padding(.vertical, 12)
+            .background(Vela.ground(scheme))
         }
-        .padding(24)
         .background(Vela.ground(scheme).ignoresSafeArea())
     }
 
@@ -76,6 +83,8 @@ struct WazeIntroView: View {
     @State private var on = true
 
     var body: some View {
+        // Scrolls with very big text, with the button always in reach at the bottom.
+        ScrollView {
         VStack(alignment: .leading, spacing: 22) {
             Spacer(minLength: 20)
             HStack(spacing: 10) {
@@ -93,6 +102,7 @@ struct WazeIntroView: View {
                 }
                 Text("Live police, crash and hazard reports from Waze drivers, on the map and as warnings while you drive, plus a police heat map and risk score.")
                     .font(.title3).foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             VStack(spacing: 12) {
                 option(title: "Turn on Waze alerts", detail: "Kite asks Waze anonymously about the area you're looking at and your route. Reports Kite sees are kept only on this phone.",
@@ -101,7 +111,10 @@ struct WazeIntroView: View {
             }
             Text("This is a beta: Waze doesn't officially allow other apps to read its live map, so it may stop working. You can change this any time in Settings › Waze integration.")
                 .font(.footnote).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-            Spacer()
+        }
+        .padding(24)
+        }
+        .safeAreaInset(edge: .bottom) {
             Button {
                 settings.waze = on
                 settings.wazeAsked = true
@@ -112,8 +125,9 @@ struct WazeIntroView: View {
                     .background(Capsule().fill(Vela.accent(scheme)))
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 24).padding(.vertical, 12)
+            .background(Vela.ground(scheme))
         }
-        .padding(24)
         .background(Vela.ground(scheme).ignoresSafeArea())
     }
 
