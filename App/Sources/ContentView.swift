@@ -407,6 +407,7 @@ struct NoticeBanner: View {
 
 /** Drives the app into one screen for the build's screenshots: `-demo search|place|directions|nav`. */
 enum DemoScript {
+    static let scrollResults = Notification.Name("demo-scroll-results")
     static var active: Bool { ProcessInfo.processInfo.arguments.contains("-demo") }
     static var step: String? {
         let a = ProcessInfo.processInfo.arguments
@@ -494,6 +495,14 @@ enum DemoScript {
         }
         model.search("restaurants", title: "Restaurants")
         await wait(8)
+        if step == "listscroll" {
+            // The results sheet open full height and its list scrolled: the red label must say
+            // "list scrolled", so a pull down scrolls the list instead of closing the sheet.
+            model.detent = .full
+            await wait(2)
+            NotificationCenter.default.post(name: scrollResults, object: nil)
+            return
+        }
         guard step != "search", let first = model.visibleResults.first else { return }
         if step == "copy" { CopyOnHold.demoText = first.address }
         model.select(first)

@@ -66,6 +66,7 @@ struct PlaceBody: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 80)
         }
+        .sheetScroll()
         .task(id: place.id) { await loadDriveTime() }
     }
 
