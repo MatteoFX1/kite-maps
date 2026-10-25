@@ -602,6 +602,7 @@ struct StopPicker: View {
             }
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search for a stop")
             .onSubmit(of: .search) { run() }
+            .kiteList()
             .navigationTitle("Add stop")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }

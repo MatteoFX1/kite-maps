@@ -49,8 +49,21 @@ struct KiteType: ViewModifier {
     }
 }
 
+/** A settings-style list on Kite's own ground colour, with the taller rows. */
+struct KiteList: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+    func body(content: Content) -> some View {
+        content
+            .scrollContentBackground(.hidden)
+            .background(Vela.ground(scheme))
+            .environment(\.defaultMinListRowHeight, 56)
+            .tint(Vela.accentText(scheme))
+    }
+}
+
 extension View {
     func kiteType() -> some View { modifier(KiteType()) }
+    func kiteList() -> some View { modifier(KiteList()) }
 }
 
 extension Color {

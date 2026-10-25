@@ -9,7 +9,7 @@ struct LayersSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Text("Layers").font(.title3.weight(.semibold))
+                Text("Layers").font(.system(size: 26, weight: .heavy))
                 Spacer()
                 CircleIconButton(icon: "xmark") { dismiss() }
             }
@@ -35,6 +35,7 @@ struct LayersSheet: View {
             Spacer()
         }
         .padding(20)
+        .background(Vela.sheet(scheme).ignoresSafeArea())
         .presentationDetents([.height(560)])
     }
 
@@ -138,10 +139,7 @@ struct SettingsView: View {
                         .font(.caption).foregroundColor(.secondary)
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(Vela.ground(scheme))
-            .environment(\.defaultMinListRowHeight, 56)
-            .tint(Vela.accentText(scheme))
+            .kiteList()
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(inTab ? .large : .inline)
             .toolbar {
@@ -258,6 +256,7 @@ struct WazeSettingsView: View {
                 Text("While navigating, warns when a police aircraft is within about 10 km, from open flight tracking (adsb.lol), not Waze. It spots them by their police callsign (like NPAS in the UK), and some don't broadcast at all, so no warning doesn't mean the sky is clear.")
             }
         }
+        .kiteList()
         .navigationTitle("Waze integration (beta)")
         .onAppear { remembered = WazeHistory.shared.sightings.count }
         .confirmationDialog("Forget the \(remembered) police reports Kite remembered? The heat map and risk score start again from nothing.",

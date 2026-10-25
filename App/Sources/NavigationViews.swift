@@ -26,21 +26,28 @@ struct NavigationOverlay: View {
      *  stack doesn't run into the map buttons. */
     private var aircraftAsChip: Bool { mainCards >= 2 }
 
+    /** With a camera and a Waze report both up, the average check waits its turn: there's only so much screen. */
+    private var showAverage: Bool { !(nav.cameraAhead != nil && nav.wazeAhead != nil) }
+
     var body: some View {
-        ZStack {
+        // One column, so however many warnings are up, they push the map buttons down rather than cover them.
+        VStack(spacing: 10) {
             VStack(spacing: 10) {
                 if nav.arrived {
                     ArrivedCard(name: nav.destination.name, onPark: nav.route.mode == .drive ? { model.saveParking() } : nil,
                                 note: nav.wazeWarned > 0 ? "Waze drivers warned you about \(nav.wazeWarned) report\(nav.wazeWarned == 1 ? "" : "s") on the way" : nil) { model.endNavigation() }
                 } else {
                     InstructionBanner(nav: nav)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if let cam = nav.cameraAhead, !nav.arrived {
                     CameraCard(alert: cam, speedKmh: nav.speedMps * 3.6)
+                        .fixedSize(horizontal: false, vertical: true)
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
                 if let w = nav.wazeAhead, !nav.arrived {
                     WazeCard(ahead: w)
+                        .fixedSize(horizontal: false, vertical: true)
                         .onTapGesture { withAnimation { nav.dismissWaze() } }
                         .accessibilityHint("Tap to hide")
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -48,7 +55,7 @@ struct NavigationOverlay: View {
                 if let air = nav.aircraftNear, !nav.arrived, !aircraftAsChip {
                     AircraftCard(aircraft: air.aircraft, meters: air.meters)
                 }
-                if let check = nav.averageCheck, !nav.arrived {
+                if let check = nav.averageCheck, !nav.arrived, showAverage {
                     AverageCheckCard(check: check)
                 }
                 if nav.rerouting {
@@ -57,50 +64,47 @@ struct NavigationOverlay: View {
                         .padding(.horizontal, 18).frame(height: 44)
                         .glass(Capsule())
                 }
-                Spacer()
             }
             .padding(.horizontal, 12)
             .padding(.top, 4)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: nav.cameraAhead?.startMeters)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: nav.wazeAhead?.alert.id)
 
-            VStack(spacing: 12) {
+            Spacer(minLength: 0)
+
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 10) {
+                    if let air = nav.aircraftNear, !nav.arrived, aircraftAsChip {
+                        AircraftChip(aircraft: air.aircraft, meters: air.meters)
+                    }
+                    // A Waze police card already says it louder; the chip comes back when it's gone.
+                    if let risk = nav.policeRisk, !nav.arrived, mainCards < 2 { PoliceRiskChip(score: risk) }
+                    HStack(spacing: 10) {
+                        SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
+                        if let limit = nav.speedLimitKmh { SpeedLimitSign(kmh: limit, size: 70) }
+                    }
+                }
                 Spacer()
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if let air = nav.aircraftNear, !nav.arrived, aircraftAsChip {
-                            AircraftChip(aircraft: air.aircraft, meters: air.meters)
-                        }
-                        if let risk = nav.policeRisk, !nav.arrived { PoliceRiskChip(score: risk) }
-                        HStack(spacing: 10) {
-                            SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
-                            if let limit = nav.speedLimitKmh { SpeedLimitSign(kmh: limit, size: 70) }
-                        }
-                    }
-                    Spacer()
-                    VStack(spacing: 12) {
-                        MapFab(icon: nav.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 64) { nav.muted.toggle() }
-                            .accessibilityLabel(nav.muted ? "Turn voice on" : "Mute voice")
-                    }
-                }
-                .padding(.horizontal, 16)
-                if !nav.following {
-                    Button { model.recenterNav() } label: {
-                        Label("Re-centre", systemImage: "location.north.line.fill")
-                            .font(.system(size: 20, weight: .bold))
-                            .padding(.horizontal, 26).frame(height: 60)
-                            .foregroundColor(Vela.onAccent(scheme))
-                            .background(Capsule().fill(Vela.accent(scheme)))
-                            .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
-                    }
-                    .buttonStyle(.plain)
-                }
-                TripBar(nav: nav, onEnd: { if nav.arrived { model.endNavigation() } else { confirmEnd = true } }, onSteps: { showSteps = true })
-                    .confirmationDialog("End this trip?", isPresented: $confirmEnd, titleVisibility: .visible) {
-                        Button("End trip", role: .destructive) { model.endNavigation() }
-                        Button("Keep going", role: .cancel) {}
-                    }
+                MapFab(icon: nav.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 64) { nav.muted.toggle() }
+                    .accessibilityLabel(nav.muted ? "Turn voice on" : "Mute voice")
             }
+            .padding(.horizontal, 16)
+            if !nav.following {
+                Button { model.recenterNav() } label: {
+                    Label("Re-centre", systemImage: "location.north.line.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .padding(.horizontal, 26).frame(height: 60)
+                        .foregroundColor(Vela.onAccent(scheme))
+                        .background(Capsule().fill(Vela.accent(scheme)))
+                        .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
+                }
+                .buttonStyle(.plain)
+            }
+            TripBar(nav: nav, onEnd: { if nav.arrived { model.endNavigation() } else { confirmEnd = true } }, onSteps: { showSteps = true })
+                .confirmationDialog("End this trip?", isPresented: $confirmEnd, titleVisibility: .visible) {
+                    Button("End trip", role: .destructive) { model.endNavigation() }
+                    Button("Keep going", role: .cancel) {}
+                }
         }
         .sheet(isPresented: $showAlong) {
             AlongRouteSheet(nav: nav).kiteType()
@@ -476,10 +480,9 @@ struct WazeCard: View {
             HStack(spacing: 14) {
                 WazeBadge(kind: a.kind, size: 58)
                 VStack(alignment: .leading, spacing: 1) {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(Fmt.distance(ahead.meters)).font(.system(size: 36, weight: .heavy)).monospacedDigit()
-                        Text(a.title).font(.system(size: 21, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
-                    }
+                    Text(Fmt.distance(ahead.meters)).font(.system(size: 38, weight: .heavy)).monospacedDigit()
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    Text(a.title).font(.system(size: 21, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
                     Text(detail).font(.system(size: 15, weight: .medium)).opacity(0.9).lineLimit(1)
                 }
                 Spacer(minLength: 4)
