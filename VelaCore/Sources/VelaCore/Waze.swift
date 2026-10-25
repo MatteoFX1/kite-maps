@@ -103,17 +103,28 @@ public enum Waze {
     }()
 
     public static func url(south: Double, west: Double, north: Double, east: Double) -> URL {
+        urls(south: south, west: west, north: north, east: east)[0]
+    }
+
+    /** The live map's feed first, then the older one behind it, which answers in the same shape. */
+    public static func urls(south: Double, west: Double, north: Double, east: Double) -> [URL] {
         let env = env(for: LatLng((south + north) / 2, (west + east) / 2))
         let q = String(format: "top=%.5f&bottom=%.5f&left=%.5f&right=%.5f", north, south, west, east)
-        return URL(string: "https://www.waze.com/live-map/api/georss?\(q)&env=\(env)&types=alerts")!
+        let rt = env == "na" ? "rtserver" : "\(env)-rtserver"
+        return [
+            URL(string: "https://www.waze.com/live-map/api/georss?\(q)&env=\(env)&types=alerts")!,
+            URL(string: "https://www.waze.com/\(rt)/web/TGeoRSS?\(q)&ma=500&mj=0&mu=0&types=alerts")!,
+        ]
     }
 
     /** Reports in a box. Nil when Waze didn't answer, so the caller can keep what it had. */
     public static func alerts(south: Double, west: Double, north: Double, east: Double) async -> [WazeAlert]? {
-        let r = URLRequest(url: url(south: south, west: west, north: north, east: east))
-        guard let (data, resp) = try? await session.data(for: r),
-              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-        return parse(data)
+        for u in urls(south: south, west: west, north: north, east: east) {
+            guard let (data, resp) = try? await session.data(for: URLRequest(url: u)),
+                  (resp as? HTTPURLResponse)?.statusCode == 200, let list = parse(data) else { continue }
+            return list
+        }
+        return nil
     }
 
     /**
