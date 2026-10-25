@@ -51,6 +51,7 @@ struct VelaMapView: UIViewRepresentable {
         }
         c.render(map)
         c.loadCameras(map)
+        c.loadWaze(map)
     }
 
     @MainActor
@@ -71,6 +72,12 @@ struct VelaMapView: UIViewRepresentable {
         private var cameraCells: Set<String> = []
         private var cameraFetch: Task<Void, Never>?
         private var railFetch: Task<Void, Never>?
+        /** Live Waze reports for the box last asked about, and when. */
+        private var wazeAlerts: [WazeAlert] = []
+        private var wazeBox: (s: Double, w: Double, n: Double, e: Double)?
+        private var wazeAt = Date.distantPast
+        private var wazeFetch: Task<Void, Never>?
+        private var lastWazeKey = ""
         /** The box the drawn rail lines cover, so panning inside it asks nothing. */
         private var railBox: (s: Double, w: Double, n: Double, e: Double, z: Int)?
 
@@ -90,7 +97,7 @@ struct VelaMapView: UIViewRepresentable {
             addVelaLayers(style)
             styleReady = true
             repaint(mapView)
-            lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""
+            lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""; lastWazeKey = ""
             render(mapView)
         }
 
@@ -224,6 +231,29 @@ struct VelaMapView: UIViewRepresentable {
             cams.minimumZoomLevel = 12
             style.addLayer(cams)
 
+            // Waze: a glow where police get reported (under), and live reports as badges (over).
+            let heatSrc = MLNShapeSource(identifier: "vela-waze-heat", shape: nil, options: nil)
+            style.addSource(heatSrc)
+            let heat = MLNHeatmapStyleLayer(identifier: "vela-waze-heat", source: heatSrc)
+            heat.heatmapRadius = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 6, 10, 10, 18, 14, 34])
+            heat.heatmapIntensity = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 6, 0.6, 14, 1.6])
+            heat.heatmapOpacity = NSExpression(forConstantValue: 0.75)
+            heat.heatmapColor = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["heatmap-density"],
+                                                             0, "rgba(0,0,0,0)", 0.15, "rgba(66,133,244,0.45)",
+                                                             0.4, "rgba(124,77,255,0.65)", 0.7, "rgba(233,30,99,0.8)",
+                                                             1, "rgba(213,0,0,0.9)"])
+            heat.isVisible = false
+            style.addLayer(heat)
+            let wazeSrc = MLNShapeSource(identifier: "vela-waze", shape: nil, options: nil)
+            style.addSource(wazeSrc)
+            let waze = MLNSymbolStyleLayer(identifier: "vela-waze", source: wazeSrc)
+            waze.iconImageName = NSExpression(forKeyPath: "icon")
+            waze.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            waze.iconScale = NSExpression(forConstantValue: 1.15)
+            waze.iconOpacity = NSExpression(forKeyPath: "op")
+            waze.minimumZoomLevel = 11
+            style.addLayer(waze)
+
             // My places: home, work, the parked car and saved places, under the result pins.
             let mineSrc = MLNShapeSource(identifier: "vela-mine", shape: nil, options: nil)
             style.addSource(mineSrc)
@@ -346,6 +376,7 @@ struct VelaMapView: UIViewRepresentable {
             renderRoutes(style)
             renderPuck(style)
             renderCameras(style)
+            renderWaze(style)
             renderMine(style)
             if s.transitLines { loadRail(map) }
         }
@@ -387,6 +418,69 @@ struct VelaMapView: UIViewRepresentable {
                 return f
             }
             (style.source(withIdentifier: "vela-cameras") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
+        }
+
+        private func renderWaze(_ style: MLNStyle) {
+            let s = model.settings
+            let history = WazeHistory.shared.sightings
+            let kinds = s.wazeKinds.map(\.rawValue).sorted().joined()
+            let key = "\(s.wazeOn)\(s.wazeOnMap)\(s.wazeHeatmap)\(s.wazeMaxAge)\(kinds)\(wazeAt.timeIntervalSince1970)\(history.count)"
+            guard key != lastWazeKey else { return }
+            lastWazeKey = key
+            let shown = s.wazeOn && s.wazeOnMap ? wazeAlerts.filter { s.shows($0) } : []
+            let features: [MLNPointFeature] = shown.map { a in
+                let f = MLNPointFeature()
+                f.coordinate = CLLocationCoordinate2D(latitude: a.location.lat, longitude: a.location.lng)
+                // Fresh reports solid, fading to half over two hours, like Highway Radar's.
+                let age = Date().timeIntervalSince(a.reportedAt)
+                f.attributes = ["icon": "waze-\(a.kind.rawValue)", "op": max(0.5, 1 - age / 14_400)]
+                return f
+            }
+            (style.source(withIdentifier: "vela-waze") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
+            let heatOn = s.wazeOn && s.wazeHeatmap
+            style.layer(withIdentifier: "vela-waze-heat")?.isVisible = heatOn
+            guard heatOn else { return }
+            var seen = Set(history.map(\.id))
+            var pts = history.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
+            for a in wazeAlerts where a.kind == .police && seen.insert(a.id).inserted {
+                pts.append(CLLocationCoordinate2D(latitude: a.location.lat, longitude: a.location.lng))
+            }
+            let heat: [MLNPointFeature] = pts.map { c in
+                let f = MLNPointFeature()
+                f.coordinate = c
+                return f
+            }
+            (style.source(withIdentifier: "vela-waze-heat") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: heat)
+        }
+
+        /** Live Waze reports for the view and a margin, asked again after two minutes or when the map leaves the box. */
+        func loadWaze(_ map: MLNMapView) {
+            let s = model.settings
+            guard s.wazeOn, s.wazeOnMap || s.wazeHeatmap, map.zoomLevel >= 10, wazeFetch == nil, !DemoScript.fakeWaze else { return }
+            let b = map.visibleCoordinateBounds
+            if let r = wazeBox, b.sw.latitude >= r.s, b.sw.longitude >= r.w, b.ne.latitude <= r.n, b.ne.longitude <= r.e,
+               Date().timeIntervalSince(wazeAt) < 120 { return }
+            let dLat = (b.ne.latitude - b.sw.latitude) * 0.3, dLng = (b.ne.longitude - b.sw.longitude) * 0.3
+            let box = (s: b.sw.latitude - dLat, w: b.sw.longitude - dLng, n: b.ne.latitude + dLat, e: b.ne.longitude + dLng)
+            guard box.n - box.s < 1.5, box.e - box.w < 2.5 else { return }
+            wazeFetch = Task { [weak self, weak map] in
+                let found = await Waze.alerts(south: box.s, west: box.w, north: box.n, east: box.e)
+                guard let self else { return }
+                self.wazeFetch = nil
+                guard let found else { return }
+                self.wazeAlerts = found
+                self.wazeBox = box
+                self.wazeAt = Date()
+                WazeHistory.shared.record(found)
+                if let map { self.render(map) }
+            }
+        }
+
+        /** For the build's screenshots: made-up reports, so the badges and glow show without Waze. */
+        func showDemoWaze(_ list: [WazeAlert], map: MLNMapView) {
+            wazeAlerts = list
+            wazeAt = Date()
+            render(map)
         }
 
         /** Transit lines for the view and a margin around it, when the layer is on. */
@@ -676,6 +770,7 @@ struct VelaMapView: UIViewRepresentable {
         nonisolated func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) {
             MainActor.assumeIsolated {
                 loadCameras(mapView)
+                loadWaze(mapView)
                 loadRail(mapView)
                 noteHeading(mapView)
             }

@@ -25,18 +25,27 @@ struct LayersSheet: View {
                 tile("Terrain", icon: "mountain.2.fill", on: settings.terrain) { settings.terrain.toggle() }
                 tile("Speed cameras", badge: .speed, on: settings.speedCameras) { settings.speedCameras.toggle() }
                 tile("Plate cameras", badge: .plate, on: settings.plateCameras) { settings.plateCameras.toggle() }
+                tile("Waze reports", waze: .police, on: settings.wazeOn && settings.wazeOnMap) {
+                    if settings.waze && settings.wazeOnMap { settings.wazeOnMap = false } else { settings.waze = true; settings.wazeOnMap = true }
+                }
+                tile("Police heat map", icon: "flame.fill", on: settings.wazeOn && settings.wazeHeatmap) {
+                    if settings.waze && settings.wazeHeatmap { settings.wazeHeatmap = false } else { settings.waze = true; settings.wazeHeatmap = true }
+                }
             }
             Spacer()
         }
         .padding(20)
-        .presentationDetents([.height(470)])
+        .presentationDetents([.height(560)])
     }
 
-    private func tile(_ title: String, icon: String = "", badge: RoadCamera.Kind? = nil, on: Bool, action: @escaping () -> Void) -> some View {
+    private func tile(_ title: String, icon: String = "", badge: RoadCamera.Kind? = nil, waze: WazeAlert.Kind? = nil,
+                      on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Group {
-                    if let badge { CameraBadge(kind: badge, size: 34) } else { Image(systemName: icon).font(.system(size: 26)) }
+                    if let badge { CameraBadge(kind: badge, size: 34) }
+                    else if let waze { WazeBadge(kind: waze, size: 34) }
+                    else { Image(systemName: icon).font(.system(size: 26)) }
                 }
                     .frame(width: 74, height: 64)
                     .background(RoundedRectangle(cornerRadius: 14).fill(Vela.chip(scheme)))
@@ -95,6 +104,15 @@ struct SettingsView: View {
                     Text("Fixed speed cameras and license plate readers (DeFlock) mapped in OpenStreetMap. Saying a camera is ahead is off by default, because some countries restrict it.")
                 }
                 Section {
+                    NavigationLink {
+                        WazeSettingsView(settings: settings)
+                    } label: {
+                        LabeledContent("Waze integration", value: settings.wazeOn ? "On" : "Off")
+                    }
+                } footer: {
+                    Text("Live police, crash and hazard reports from Waze drivers.")
+                }
+                Section {
                     Toggle("Use Kite without Google", isOn: $settings.noGoogle)
                 } header: {
                     Text("Data source & privacy")
@@ -120,5 +138,68 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+}
+
+/** Settings › Waze integration: which live reports to show and warn about, and the police heat map. */
+struct WazeSettingsView: View {
+    @ObservedObject var settings: AppSettings
+
+    private let kinds: [(WazeAlert.Kind, String)] = [
+        (.police, "Police and mobile speed traps"),
+        (.accident, "Crashes"),
+        (.hazard, "Hazards (stopped cars, objects, potholes)"),
+        (.weather, "Weather (fog, ice, flooding)"),
+        (.roadworks, "Roadworks"),
+        (.closure, "Road closures"),
+        (.jam, "Traffic jams reported by drivers"),
+    ]
+
+    private let ages: [(Int, String)] = [(30, "30 minutes"), (60, "1 hour"), (120, "2 hours"), (240, "4 hours"), (0, "Keep them all")]
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Use Waze reports", isOn: $settings.waze).disabled(settings.noGoogle)
+            } footer: {
+                Text(settings.noGoogle
+                     ? "Off while \"Use Kite without Google\" is on, since Waze belongs to Google."
+                     : "Kite reads the public Waze live map, with no account. Waze sees the area you're looking at, anonymously. It doesn't officially allow other apps to do this, so it may stop working one day.")
+            }
+            if settings.wazeOn {
+                Section("Show and warn about") {
+                    ForEach(kinds, id: \.0) { item in
+                        let k = item.0
+                        Toggle(isOn: Binding(
+                            get: { settings.wazeKinds.contains(k) },
+                            set: { on in if on { settings.wazeKinds.insert(k) } else { settings.wazeKinds.remove(k) } }
+                        )) {
+                            HStack(spacing: 10) {
+                                WazeBadge(kind: k, size: 26)
+                                Text(item.1)
+                            }
+                        }
+                    }
+                }
+                Section {
+                    Toggle("Show reports on the map", isOn: $settings.wazeOnMap)
+                    Toggle("Chime and say them while navigating", isOn: $settings.wazeVoice)
+                    Picker("Ignore reports older than", selection: $settings.wazeMaxAge) {
+                        ForEach(ages, id: \.0) { Text($0.1).tag($0.0) }
+                    }
+                } header: {
+                    Text("Alerts")
+                } footer: {
+                    Text("While navigating, a card pops up for reports on your route, only ones made by drivers going your way.")
+                }
+                Section {
+                    Toggle("Police heat map", isOn: $settings.wazeHeatmap)
+                } footer: {
+                    Text("A glow where police get reported most. Waze only shares what's live now, so Kite remembers the reports it sees on this phone (for 90 days) and the map fills in the more you use it.")
+                }
+            }
+        }
+        .navigationTitle("Waze integration")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

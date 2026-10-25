@@ -70,6 +70,9 @@ Pull requests build too: their `.ipa` is under the run's **Artifacts** in the Ac
   and speed camera warnings with a chime and a countdown bar. Average speed checks show your
   average against the limit.
 - 📷 **Speed and number plate cameras** from OpenStreetMap on the map.
+- 🚓 **Live Waze reports**: police, crashes, hazards, weather, roadworks and closures from Waze
+  drivers, on the map and as warnings on your route, plus a police heat map. Pick which ones in
+  **Settings → Waze integration**.
 - 🚆 **Transit**: live departure boards at stops and stations, line colours and live delays, from
   [Transitous](https://transitous.org).
 - 🇬🇧 **Great in the UK**: miles and yards, British signs, postcode search, and clockwise
@@ -97,10 +100,11 @@ Pull requests build too: their `.ipa` is under the run's **Artifacts** in the Ac
 | Search | **Your search text, anonymously**, like a logged-out browser |
 | Tap a place | **An anonymous lookup of that place** for its hours, photos and reviews |
 | Get directions | **Where the trip starts and ends, anonymously.** Turn-by-turn steps come from the open OSRM router |
+| Waze reports (on unless you turn them off) | **The map area you're looking at, or your route, anonymously**, sent to Waze (owned by Google) |
 | Your saved places, history and settings | **Nothing, ever.** No account, no tracking, no Kite server |
 
 Turn on **Settings → Use Kite without Google** (or pick "Open data only" on first launch) and
-nothing is sent to Google at all: search comes from OpenStreetMap and routes from the FOSSGIS
+nothing is sent to Google (or Waze) at all: search comes from OpenStreetMap and routes from the FOSSGIS
 servers.
 
 ## Vibecoded with Claude
@@ -125,9 +129,9 @@ but treat it as a beta, and bug reports and pull requests are very welcome.
 - Routing by [FOSSGIS OSRM](https://routing.openstreetmap.de), transit by
   [Transitous](https://transitous.org), search fallback by [Photon](https://photon.komoot.io),
   UK postcodes by [postcodes.io](https://postcodes.io), cameras from OpenStreetMap and
-  [DeFlock](https://deflock.me), imagery © Esri.
+  [DeFlock](https://deflock.me), live reports from the [Waze](https://www.waze.com/live-map) live map, imagery © Esri.
 
-Kite is not affiliated with or endorsed by Google or Apple.
+Kite is not affiliated with or endorsed by Google, Waze or Apple.
 
 ## How it's built
 

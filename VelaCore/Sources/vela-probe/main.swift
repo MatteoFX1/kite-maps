@@ -207,4 +207,29 @@ do {
     print("Street View London: \(london.map { "\($0.id)" } ?? "none")")
 }
 
+// Waze live map: reports over central London, and along the Davis to airport drive.
+do {
+    let url = Waze.url(south: 51.48, west: -0.20, north: 51.54, east: -0.05)
+    var r = URLRequest(url: url)
+    r.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+    r.setValue("https://www.waze.com/live-map/", forHTTPHeaderField: "Referer")
+    if let (data, resp) = try? await URLSession.shared.data(for: r) {
+        print("Waze reply: HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0), \(data.count) bytes: \(String(decoding: data.prefix(700), as: UTF8.self))")
+    } else {
+        print("Waze reply: network error")
+    }
+    let london = await Waze.alerts(south: 51.48, west: -0.20, north: 51.54, east: -0.05)
+    if let london {
+        let counts = Dictionary(grouping: london, by: \.kind).map { "\($0.key.rawValue) \($0.value.count)" }.sorted()
+        print("Waze London: \(london.count) reports: \(counts); subtypes \(Set(london.map(\.subtype)).sorted().prefix(20))")
+        for a in london.prefix(6) {
+            print("  · \(a.title) on \(a.street ?? "-") at \(a.location), heading \(a.heading.map { String(Int($0)) } ?? "-"), \(Int(Date().timeIntervalSince(a.reportedAt) / 60)) min old, 👍 \(a.thumbsUp), reliability \(a.reliability)")
+        }
+    } else {
+        print("Waze London: failed")
+    }
+    let davis = await Waze.alerts(south: 38.40, west: -121.90, north: 38.70, east: -121.40)
+    print("Waze Davis/Sacramento (env \(Waze.env(for: LatLng(38.5, -121.6)))): \(davis.map { "\($0.count) reports" } ?? "failed")")
+}
+
 exit(exitCode)

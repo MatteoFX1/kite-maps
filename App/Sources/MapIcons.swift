@@ -39,6 +39,7 @@ enum MapIcons {
         style.setImage(bubble(fill: .white, stroke: UIColor(hex: 0xBDC1C6)), forName: "bubble-alt")
         style.setImage(speedCamera(), forName: "cam-speed")
         style.setImage(plateCamera(), forName: "cam-plate")
+        for k in WazeAlert.Kind.allCases { style.setImage(waze(k), forName: "waze-\(k.rawValue)") }
         style.setImage(turnHead(), forName: "turn-head")
         style.setImage(dot("smallcircle.filled.circle", UIColor(hex: 0x5F6368)), forName: "pin-stop")
         // My places: home, work, the parked car and saved places.
@@ -94,6 +95,34 @@ enum MapIcons {
             arm.lineWidth = 2.4
             UIColor.white.setStroke()
             arm.stroke()
+        }
+    }
+
+    /** Waze report badges, in Waze's own colors: blue police, red crashes, amber hazards… */
+    static func waze(_ k: WazeAlert.Kind) -> UIImage {
+        let symbol: String
+        switch k {
+        case .police: symbol = "shield.fill"
+        case .accident: symbol = "burst.fill"
+        case .hazard: symbol = "exclamationmark.triangle.fill"
+        case .weather: symbol = "cloud.fog.fill"
+        case .roadworks: symbol = "wrench.and.screwdriver.fill"
+        case .closure: symbol = "nosign"
+        case .jam: symbol = "car.2.fill"
+        }
+        return badge(wazeColor(k)) { _ in
+            draw(symbol, in: CGRect(x: 12, y: 12, width: 22, height: 22), color: .white)
+        }
+    }
+
+    static func wazeColor(_ k: WazeAlert.Kind) -> UIColor {
+        switch k {
+        case .police: return UIColor(hex: 0x1E88E5)
+        case .accident, .jam: return UIColor(hex: 0xD93025)
+        case .hazard: return UIColor(hex: 0xF29900)
+        case .weather: return UIColor(hex: 0x00897B)
+        case .roadworks: return UIColor(hex: 0xE8710A)
+        case .closure: return UIColor(hex: 0xB71C1C)
         }
     }
 

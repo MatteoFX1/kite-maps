@@ -45,6 +45,18 @@ final class AppSettings: ObservableObject {
     @Published var cameraWarnings: Bool { didSet { d.set(cameraWarnings, forKey: "cameraWarnings") } }
     /** Say so when driving over the posted limit. Off by default, like Vela. */
     @Published var speedingAlert: Bool { didSet { d.set(speedingAlert, forKey: "speedingAlert") } }
+    /** Live reports from Waze drivers (police, crashes, hazards…): on the map, and warned about while driving. */
+    @Published var waze: Bool { didSet { d.set(waze, forKey: "waze") } }
+    /** Which kinds of Waze report to show; the basics are on at first. */
+    @Published var wazeKinds: Set<WazeAlert.Kind> { didSet { d.set(wazeKinds.map(\.rawValue), forKey: "wazeKinds") } }
+    /** Waze reports as icons on the map (they're always warned about on the route). */
+    @Published var wazeOnMap: Bool { didSet { d.set(wazeOnMap, forKey: "wazeOnMap") } }
+    /** Chime and say "Police reported ahead" while navigating. */
+    @Published var wazeVoice: Bool { didSet { d.set(wazeVoice, forKey: "wazeVoice") } }
+    /** Reports older than this are ignored, in minutes; 0 keeps everything Waze still lists. */
+    @Published var wazeMaxAge: Int { didSet { d.set(wazeMaxAge, forKey: "wazeMaxAge") } }
+    /** A glow where police get reported, from what Kite has seen on this phone. */
+    @Published var wazeHeatmap: Bool { didSet { d.set(wazeHeatmap, forKey: "wazeHeatmap") } }
     /** The map's "P" button: save where you parked, and find the way back. */
     @Published var parkingButton: Bool { didSet { d.set(parkingButton, forKey: "parkingButton") } }
     @Published var home: Place? { didSet { save(home, "home") } }
@@ -75,6 +87,13 @@ final class AppSettings: ObservableObject {
         cameraWarnings = d.bool(forKey: "cameraWarnings")
         speedingAlert = d.bool(forKey: "speedingAlert")
         parkingButton = d.object(forKey: "parkingButton") as? Bool ?? true
+        waze = d.object(forKey: "waze") as? Bool ?? true
+        wazeKinds = (d.stringArray(forKey: "wazeKinds")).map { Set($0.compactMap(WazeAlert.Kind.init(rawValue:))) }
+            ?? [.police, .accident, .hazard, .weather]
+        wazeOnMap = d.object(forKey: "wazeOnMap") as? Bool ?? true
+        wazeVoice = d.object(forKey: "wazeVoice") as? Bool ?? true
+        wazeHeatmap = d.bool(forKey: "wazeHeatmap")
+        wazeMaxAge = d.object(forKey: "wazeMaxAge") as? Int ?? 120
         home = d.data(forKey: "home").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }
         work = d.data(forKey: "work").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }
         parking = d.data(forKey: "parking").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }
@@ -95,6 +114,17 @@ final class AppSettings: ObservableObject {
         case .light: return .light
         case .dark: return .dark
         }
+    }
+
+    /** Whether reports of this kind are wanted at all. */
+    /** Waze belongs to Google, so "Use Kite without Google" turns it off too. */
+    var wazeOn: Bool { waze && !noGoogle }
+
+    func wants(_ k: WazeAlert.Kind) -> Bool { wazeOn && wazeKinds.contains(k) }
+
+    /** Whether this report should show and warn: a wanted kind, and not too old. */
+    func shows(_ a: WazeAlert) -> Bool {
+        wants(a.kind) && (wazeMaxAge == 0 || Date().timeIntervalSince(a.reportedAt) <= Double(wazeMaxAge) * 60)
     }
 
     func isSaved(_ p: Place) -> Bool { saved.contains { $0.id == p.id } }

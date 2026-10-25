@@ -28,6 +28,9 @@ struct NavigationOverlay: View {
                 if let cam = nav.cameraAhead, !nav.arrived {
                     CameraCard(alert: cam, speedKmh: nav.speedMps * 3.6)
                 }
+                if let w = nav.wazeAhead, !nav.arrived {
+                    WazeCard(ahead: w)
+                }
                 if let check = nav.averageCheck, !nav.arrived {
                     AverageCheckCard(check: check)
                 }
@@ -321,6 +324,54 @@ struct CameraCard: View {
             .shadow(color: .black.opacity(0.25), radius: 4, y: 2))
         .animation(.easeOut(duration: 0.3), value: over)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/** A Waze report on the road ahead, styled like the camera card: what, how far, how fresh. */
+struct WazeCard: View {
+    let ahead: WazeAhead
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let a = ahead.alert
+        let left = min(max(ahead.meters / ahead.startMeters, 0), 1)
+        let mins = max(Int(Date().timeIntervalSince(a.reportedAt) / 60), 0)
+        let when = mins < 1 ? "just now" : mins < 60 ? "\(mins) min ago" : "\(mins / 60) h ago"
+        let detail = ["Reported \(when)", a.thumbsUp > 0 ? "\(a.thumbsUp) 👍" : nil, a.street].compactMap { $0 }.joined(separator: " · ")
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                WazeBadge(kind: a.kind, size: 40)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(Fmt.distance(ahead.meters)).font(.system(size: 24, weight: .bold)).monospacedDigit()
+                        Text(a.title).font(.headline)
+                    }
+                    Text(detail).font(.subheadline).foregroundColor(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                Text("Waze").font(.caption2.weight(.bold)).foregroundColor(.secondary)
+            }
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.secondary.opacity(0.25))
+                    Capsule().fill(Color(uiColor: MapIcons.wazeColor(a.kind))).frame(width: g.size.width * left)
+                }
+            }
+            .frame(height: 6)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Vela.sheet(scheme))
+            .shadow(color: .black.opacity(0.25), radius: 4, y: 2))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct WazeBadge: View {
+    let kind: WazeAlert.Kind
+    var size: CGFloat = 28
+
+    var body: some View {
+        Image(uiImage: MapIcons.waze(kind)).resizable().frame(width: size, height: size)
     }
 }
 
