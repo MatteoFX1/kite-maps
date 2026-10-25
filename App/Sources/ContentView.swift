@@ -42,8 +42,12 @@ struct ContentView: View {
             GoogleStreetViewScreen(name: "Test pattern", pano: StreetView.Panorama(id: PanoramaViewer.testID, location: LatLng(0, 0)),
                                    heading: Double(DemoScript.step?.dropFirst(6) ?? "") ?? 0)
         }
-        .fullScreenCover(isPresented: Binding(get: { !settings.welcomed && (!DemoScript.active || DemoScript.step == "welcome") }, set: { _ in })) {
-            WelcomeView(settings: settings)
+        .fullScreenCover(isPresented: Binding(get: {
+            (!settings.welcomed || settings.needsWazeChoice)
+                && (!DemoScript.active || DemoScript.step == "welcome" || DemoScript.step == "wazeintro")
+        }, set: { _ in })) {
+            // First the Google choice, then (also once for people updating) the Waze one.
+            if settings.welcomed { WazeIntroView(settings: settings) } else { WelcomeView(settings: settings) }
         }
         .sheet(isPresented: $model.addingStop) {
             StopPicker(model: model)
@@ -438,6 +442,7 @@ enum DemoScript {
             return
         }
         if step == "welcome" { model.settings.welcomed = false; return }
+        if step == "wazeintro" { model.settings.wazeAsked = false; model.settings.noGoogle = false; return }
         if step == "wazemap" {
             // Live Waze reports and the police glow over central London.
             model.settings.waze = true
@@ -450,6 +455,7 @@ enum DemoScript {
         if step == "wazedemo" {
             // Made-up reports around Davis, so the badges and the heat map show even if Waze is down.
             fakeWaze = true
+            model.settings.waze = true
             model.settings.wazeHeatmap = true
             model.settings.wazeKinds = Set(WazeAlert.Kind.allCases)
             model.settings.wazeMaxAge = 0

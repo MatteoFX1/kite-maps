@@ -107,7 +107,7 @@ struct SettingsView: View {
                     NavigationLink {
                         WazeSettingsView(settings: settings)
                     } label: {
-                        LabeledContent("Waze integration", value: settings.wazeOn ? "On" : "Off")
+                        LabeledContent("Waze integration (beta)", value: settings.wazeOn ? "On" : "Off")
                     }
                 } footer: {
                     Text("Live police, crash and hazard reports from Waze drivers.")
@@ -207,7 +207,7 @@ struct WazeSettingsView: View {
                 Text("While navigating, warns when a police aircraft is within about 10 km, from open flight tracking (adsb.lol), not Waze. Some police aircraft don't broadcast their position, so they won't show.")
             }
         }
-        .navigationTitle("Waze integration")
+        .navigationTitle("Waze integration (beta)")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

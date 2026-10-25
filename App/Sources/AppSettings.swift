@@ -47,6 +47,8 @@ final class AppSettings: ObservableObject {
     @Published var speedingAlert: Bool { didSet { d.set(speedingAlert, forKey: "speedingAlert") } }
     /** Live reports from Waze drivers (police, crashes, hazards…): on the map, and warned about while driving. */
     @Published var waze: Bool { didSet { d.set(waze, forKey: "waze") } }
+    /** The "Waze alerts (beta)" question has been answered, on first launch or after updating. */
+    @Published var wazeAsked: Bool { didSet { d.set(wazeAsked, forKey: "wazeAsked") } }
     /** Which kinds of Waze report to show; the basics are on at first. */
     @Published var wazeKinds: Set<WazeAlert.Kind> { didSet { d.set(wazeKinds.map(\.rawValue), forKey: "wazeKinds") } }
     /** Waze reports as icons on the map (they're always warned about on the route). */
@@ -91,7 +93,9 @@ final class AppSettings: ObservableObject {
         cameraWarnings = d.bool(forKey: "cameraWarnings")
         speedingAlert = d.bool(forKey: "speedingAlert")
         parkingButton = d.object(forKey: "parkingButton") as? Bool ?? true
-        waze = d.object(forKey: "waze") as? Bool ?? true
+        // Off until the person says yes on the Waze screen.
+        waze = d.bool(forKey: "waze")
+        wazeAsked = d.bool(forKey: "wazeAsked")
         wazeKinds = (d.stringArray(forKey: "wazeKinds")).map { Set($0.compactMap(WazeAlert.Kind.init(rawValue:))) }
             ?? [.police, .accident, .hazard, .weather]
         wazeOnMap = d.object(forKey: "wazeOnMap") as? Bool ?? true
@@ -125,6 +129,9 @@ final class AppSettings: ObservableObject {
     /** Whether reports of this kind are wanted at all. */
     /** Waze belongs to Google, so "Use Kite without Google" turns it off too. */
     var wazeOn: Bool { waze && !noGoogle }
+
+    /** Ask about Waze once: not to someone who chose no Google, since Waze is Google's. */
+    var needsWazeChoice: Bool { !wazeAsked && !noGoogle }
 
     func wants(_ k: WazeAlert.Kind) -> Bool { wazeOn && wazeKinds.contains(k) }
 
