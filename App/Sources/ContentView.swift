@@ -542,6 +542,16 @@ enum DemoScript {
                     let found = await Waze.alerts(south: 50.92 - d, west: -1.40 - d * 1.6, north: 50.92 + d, east: -1.40 + d * 1.6)
                     wazeProbe += String(format: "±%.2f°: ", d) + (found == nil ? "failed" : (Waze.lastStatus?.summary ?? "?")) + "\n"
                 }
+                // Busy places where Waze always has police and crash reports, and a thin box along the
+                // M27 like the ones Kite asks for while navigating: closures only there too means Waze is
+                // holding drivers' reports back, not that there are none.
+                let busy: [(String, Double, Double, Double, Double)] = [
+                    ("Los Angeles", 33.95, -118.45, 34.10, -118.20), ("New York", 40.70, -74.02, 40.80, -73.93),
+                    ("Paris", 48.83, 2.28, 48.89, 2.40), ("M27 strip", 50.905, -1.45, 50.925, -1.20)]
+                for (name, s, w, n, e) in busy {
+                    let found = await Waze.alerts(south: s, west: w, north: n, east: e)
+                    wazeProbe += name + ": " + (found == nil ? "failed" : (Waze.lastStatus?.summary ?? "?")) + "\n"
+                }
                 // Other doors into the same data: does any of them still hand out drivers' reports?
                 let q = "top=50.98&bottom=50.86&left=-1.50&right=-1.30"
                 let others = ["https://embed.waze.com/live-map/api/georss?\(q)&env=row&types=alerts",
