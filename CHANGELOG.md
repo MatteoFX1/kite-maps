@@ -14,6 +14,9 @@ the middle number for big milestones.
 - **Faster rerouting after a wrong turn:** Kite now notices within a few seconds when you've left
   the route, or when you're driving back along it the wrong way. The new route sets off the way
   you're facing, instead of telling you to turn round on the road you're on.
+- **No pointless "Merge onto…":** when a slip road joins a road and its lane carries straight on
+  to your next exit (like the A33 into Redbridge Road and off again), Kite no longer tells you to
+  merge, and says which lane to stay in for the exit instead.
 - **Smaller camera warning:** the speed camera card is about half the size, Waze-style, so it no
   longer hides the road. It's still bright orange (red when you're too fast) and pulses when it appears.
 - **See more road ahead:** while driving, your arrow sits lower on the screen, so most of the map

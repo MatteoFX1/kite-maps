@@ -5,6 +5,7 @@ import VelaCore
 func ukRoutes() async {
     let drives: [(String, LatLng, LatLng)] = [
         ("M271 into Redbridge roundabout, 1st exit A33", LatLng(50.9890, -1.4970), LatLng(50.9077, -1.4136)),
+        ("Millbrook up the A33 past Redbridge to Romsey (merge then exit)", LatLng(50.9180, -1.4550), LatLng(50.9890, -1.4970)),
         ("Park Gate to Portsmouth Uni", LatLng(50.8705, -1.2690), LatLng(50.7953, -1.0938)),
         ("Park Gate to Southampton Uni", LatLng(50.8705, -1.2690), LatLng(50.9346, -1.3966)),
         ("Fareham to Winchester", LatLng(50.8527, -1.1773), LatLng(51.0632, -1.3080)),

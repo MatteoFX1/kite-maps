@@ -81,6 +81,7 @@ public enum OSRM {
             guard line.count >= 2 else { return nil }
             let cum = Geo.cumulative(line)
             var maneuvers: [Maneuver] = []
+            var mergeSides: [Int: String] = [:]
             var along = 0.0
             var roads: [String: Double] = [:]
             let legs = (r["legs"] as? [[String: Any]]) ?? []
@@ -128,10 +129,12 @@ public enum OSRM {
                             man.roundabout = prev.roundabout
                         }
                     }
+                    if type == "merge", let modifier { mergeSides[maneuvers.count] = modifier }
                     maneuvers.append(man)
                     along += dist
                 }
             }
+            maneuvers = keepLaneThroughMerges(maneuvers, mergeSides: mergeSides)
             if let last = maneuvers.indices.last {
                 maneuvers[last].alongMeters = cum.last ?? along
             }
@@ -214,6 +217,42 @@ public enum OSRM {
         let lanes = raw.map { Lane(indications: $0["indications"] as? [String] ?? ["none"], valid: $0["valid"] as? Bool ?? false) }
         // All lanes valid tells the driver nothing.
         return lanes.allSatisfy(\.valid) ? [] : lanes
+    }
+
+    /**
+     * A slip road that joins a main road and then leaves it again at the next exit on the same side
+     * (into Redbridge Road from the A33, then off again for the A33): the slip road's lane just carries
+     * on to that exit, so there's nothing to merge. Drop the "Merge onto…" step and say to stay in
+     * that lane for the exit instead, unless lanes are mapped there.
+     */
+    static func keepLaneThroughMerges(_ steps: [Maneuver], mergeSides: [Int: String]) -> [Maneuver] {
+        var out: [Maneuver] = []
+        var dropped = false
+        for (i, m) in steps.enumerated() {
+            if let side = mergeSides[i], i > 0, i + 1 < steps.count {
+                let next = steps[i + 1]
+                // Merging to the right means joining from the left, so the lane is the left one.
+                let fromLeft = side.hasSuffix("right")
+                let exitSameSide = fromLeft ? [ManeuverType.rampLeft, .forkLeft, .keepLeft].contains(next.type)
+                                            : [ManeuverType.rampRight, .forkRight, .keepRight].contains(next.type)
+                if exitSameSide, next.alongMeters - m.alongMeters < 1_000, !out.isEmpty {
+                    out[out.count - 1].distanceMeters += m.distanceMeters
+                    dropped = true
+                    continue
+                }
+            }
+            var m = m
+            if dropped, m.lanes.isEmpty {
+                // The merge before this exit was dropped: show its lane.
+                let left = [ManeuverType.rampLeft, .forkLeft, .keepLeft].contains(m.type)
+                let exit = Lane(indications: [left ? "slight left" : "slight right"], valid: true)
+                let main = Lane(indications: ["straight"], valid: false)
+                m.lanes = left ? [exit, main] : [main, exit]
+            }
+            dropped = false
+            out.append(m)
+        }
+        return out
     }
 
     /**

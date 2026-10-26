@@ -82,6 +82,26 @@ final class RoutingTests: XCTestCase {
         for _ in 0..<6 { XCTAssertFalse(t2.update(LatLng(0.004, 0)).offRoute) }
     }
 
+    func testNoMergeWhenTheLaneRunsToTheExit() {
+        // Matteo near Redbridge: the slip road joins Redbridge Road from the left, then leaves at
+        // the next exit on the left. No "Merge onto", and "left lane" for the exit instead.
+        let p = LatLng(50.92, -1.47)
+        let steps = [
+            Maneuver(type: .depart, instruction: "Head out", location: p, alongMeters: 0, distanceMeters: 300),
+            Maneuver(type: .merge, instruction: "Merge onto Redbridge Road", location: p, alongMeters: 300, distanceMeters: 400),
+            Maneuver(type: .rampLeft, instruction: "Take the exit onto A33", location: p, alongMeters: 700, distanceMeters: 500),
+            Maneuver(type: .arrive, instruction: "Arrive", location: p, alongMeters: 1200, distanceMeters: 0),
+        ]
+        let out = OSRM.keepLaneThroughMerges(steps, mergeSides: [1: "slight right"])
+        XCTAssertEqual(out.map(\.type), [.depart, .rampLeft, .arrive])
+        XCTAssertEqual(out[0].distanceMeters, 700)
+        XCTAssertEqual(out[1].lanes.map(\.valid), [true, false], "left lane lit")
+        // Exiting on the far side: the merge is real and stays.
+        var far = steps
+        far[2].type = .rampRight
+        XCTAssertEqual(OSRM.keepLaneThroughMerges(far, mergeSides: [1: "slight right"]).count, 4)
+    }
+
     func testRerouteKeepsHeading() {
         let url = OSRM.routeURL(from: LatLng(50.9, -1.4), to: LatLng(50.8, -1.3), mode: .drive, heading: 271.6).absoluteString
         XCTAssertTrue(url.hasSuffix("&bearings=272,60;"), url)
