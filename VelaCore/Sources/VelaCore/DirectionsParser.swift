@@ -98,9 +98,10 @@ enum DirectionsParser {
         }
     }
 
-    private static func collectSteps(_ n: Any, into out: inout [Maneuver]) {
+    static func collectSteps(_ n: Any, into out: inout [Maneuver]) {
         if let a = n as? [Any] {
-            if let folded = foldedStep(a) {
+            // A step entry is [step, _, [icon, class], ...].
+            if let node = a.first as? [Any], let folded = foldedStep(node, icon: str(at(a, 2, 1))) {
                 out.append(folded)
                 return
             }
@@ -113,13 +114,13 @@ enum DirectionsParser {
     /**
      * A step Google sends with no `<step>` text: the long motorway stretch inside a folded group
      * ("Merge onto M27", 12.5 km). Its length is `[2][0]`, its words are pieces like
-     * `[[2,["Merge onto "]],[2,["M27",1]]]` and its kind is in the icon class ("dir-tt dir-tt-merge").
-     * Left out, the turns after it are counted back to the wrong places.
+     * `[[2,["Merge onto "]],[2,["M27",1]]]`, its time `[3]`, and its kind is in the entry's icon class
+     * ("dir-tt dir-tt-merge"). Left out, the turns after it are counted back to the wrong places.
      */
-    static func foldedStep(_ a: [Any]) -> Maneuver? {
-        guard a.count > 3, let markup = a[1] as? String, markup.isEmpty,
+    static func foldedStep(_ a: [Any], icon: String?) -> Maneuver? {
+        guard a.count > 3, int(at(a, 0)) == 0, let markup = a[1] as? String, markup.isEmpty,
               let meters = dbl(at(a, 2, 0)), str(at(a, 2, 1)) != nil,
-              let icon = a.lazy.compactMap({ str(at($0, 1)) }).first(where: { $0.hasPrefix("dir-tt") }) else { return nil }
+              dbl(at(a, 3, 0)) != nil, str(at(a, 3, 1)) != nil else { return nil }
         var text = "", road: String?
         for e in a {
             guard let pieces = e as? [Any], !pieces.isEmpty,
@@ -131,7 +132,7 @@ enum DirectionsParser {
             }
             break
         }
-        let kind = icon.components(separatedBy: " ").last { $0.hasPrefix("dir-tt-") }.map { String($0.dropFirst(7)) } ?? ""
+        let kind = (icon ?? "").components(separatedBy: " ").last { $0.hasPrefix("dir-tt-") }.map { String($0.dropFirst(7)) } ?? ""
         let token = kind.uppercased().replacingOccurrences(of: "-", with: "_")
         let side = kind.contains("left") ? "LEFT" : (kind.contains("right") ? "RIGHT" : nil)
         let severity = kind.contains("slight") ? "SLIGHT" : (kind.contains("sharp") ? "SHARP" : nil)
