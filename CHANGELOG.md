@@ -45,6 +45,14 @@ the middle number for big milestones.
   risk score stay off until Waze shares reports again.
 - **See what Waze sends:** Settings › Waze integration now has a "Last answer" line, like
   "3 police · 5 hazards · 140 road closures", so it's easy to tell if Waze stops sending a kind.
+- **Google's route on motorway drives:** Google folds the long motorway part of a trip ("Merge
+  onto M27", 12 km) into a step with no words, and Kite missed it. Its turns then looked out of
+  place, so Kite dropped Google's traffic-aware route for the open map's. Now it reads that step,
+  so drives like Park Gate to Southampton on the M27 follow Google's route.
+- **"Open in Google Maps" for any place:** a dropped pin, a postcode or a shared spot opened
+  OpenStreetMap's website instead. It now opens Google Maps at that spot, and Share sends a Google
+  Maps link too.
+- **Tidier step words:** "So'ton" instead of "So&#39;ton".
 
 ## 0.7.1
 
