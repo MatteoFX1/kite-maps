@@ -121,6 +121,14 @@ public enum Waze {
         /** What the answer held, by Waze's own type: ["POLICE": 3, "ROAD_CLOSED": 140]. */
         public var types: [String: Int] = [:]
 
+        public init(at: Date, code: Int, count: Int, viaPage: Bool = false, types: [String: Int] = [:]) {
+            self.at = at
+            self.code = code
+            self.count = count
+            self.viaPage = viaPage
+            self.types = types
+        }
+
         /** "3 police · 140 road closures", most first, for the status line. */
         public var summary: String {
             guard !types.isEmpty else { return "nothing" }

@@ -43,11 +43,11 @@ struct ContentView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if DemoScript.step == "wazemap" || DemoScript.step == "wazeuk" {
+            if DemoScript.step == "wazemap" || DemoScript.step == "wazeuk" || DemoScript.step == "wazesizes" {
                 // Screenshot run only: what Waze answered, since the build's computers can't be trusted to get through.
                 TimelineView(.periodic(from: .now, by: 2)) { _ in
                     Text((Waze.lastStatus.map { "Waze: HTTP \($0.code), \($0.count) reports\($0.viaPage ? " via page" : ""): \($0.summary)" } ?? "Waze: not asked yet")
-                         + "\n" + WazeWeb.shared.note)
+                         + "\n" + WazeWeb.shared.note + (DemoScript.wazeProbe.isEmpty ? "" : "\n" + DemoScript.wazeProbe))
                         .font(.caption.monospaced()).padding(6).background(Color.red).foregroundColor(.white)
                         .padding(.bottom, 120)
                 }
@@ -487,6 +487,8 @@ enum DemoScript {
     static let scrollResults = Notification.Name("demo-scroll-results")
     /** Made-up Waze reports are on screen, so live ones mustn't replace them. */
     static var fakeWaze = false
+    /** The wazesizes step's findings, shown on screen. */
+    static var wazeProbe = ""
     static var active: Bool { ProcessInfo.processInfo.arguments.contains("-demo") }
     static var step: String? {
         let a = ProcessInfo.processInfo.arguments
@@ -529,6 +531,38 @@ enum DemoScript {
             model.settings.wazeHeatmap = true
             model.settings.wazeKinds = Set(WazeAlert.Kind.allCases)
             model.map?.setCenter(CLLocationCoordinate2D(latitude: 51.507, longitude: -0.12), zoomLevel: 12.3, animated: false)
+            return
+        }
+        if step == "wazesizes" {
+            // Does Waze send less for a bigger box? The same spot in Southampton, five box sizes.
+            model.settings.waze = true
+            model.map?.setCenter(CLLocationCoordinate2D(latitude: 50.92, longitude: -1.40), zoomLevel: 12, animated: false)
+            Task {
+                for d in [0.01, 0.03, 0.06, 0.12, 0.25] {
+                    let found = await Waze.alerts(south: 50.92 - d, west: -1.40 - d * 1.6, north: 50.92 + d, east: -1.40 + d * 1.6)
+                    wazeProbe += String(format: "±%.2f°: ", d) + (found == nil ? "failed" : (Waze.lastStatus?.summary ?? "?")) + "\n"
+                }
+                // Other doors into the same data: does any of them still hand out drivers' reports?
+                let q = "top=50.98&bottom=50.86&left=-1.50&right=-1.30"
+                let others = ["https://embed.waze.com/live-map/api/georss?\(q)&env=row&types=alerts",
+                              "https://www.waze.com/live-map/api/georss?\(q)&env=row&types=alerts,traffic,users",
+                              "https://www.waze.com/row-rtserver/web/TGeoRSS?\(q)&ma=200&mj=0&mu=0&types=alerts",
+                              "https://www.waze.com/rtserver/web/TGeoRSS?\(q)&ma=200&mj=0&mu=0&types=alerts"]
+                for u in others.compactMap(URL.init(string:)) {
+                    let name = (u.host ?? "") + u.path.replacingOccurrences(of: "/live-map/api", with: "") + (u.query?.contains("users") == true ? "+users" : "")
+                    var line = name + ": "
+                    if let (data, resp) = try? await Waze.session.data(from: u) {
+                        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                        line += "direct \(code) \(code == 200 ? Waze.Status(at: Date(), code: 200, count: 0, types: Waze.types(data)).summary : "")"
+                    } else { line += "direct failed" }
+                    if let fallback = Waze.fallback {
+                        let data = await fallback(u)
+                        line += data.map { " · page " + Waze.Status(at: Date(), code: 200, count: 0, types: Waze.types($0)).summary } ?? " · page failed"
+                    }
+                    wazeProbe += line + "\n"
+                }
+                wazeProbe += "done"
+            }
             return
         }
         if step == "wazeuk" {

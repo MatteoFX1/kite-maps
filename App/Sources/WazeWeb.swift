@@ -171,10 +171,13 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
         if ready { return }
         if web == nil {
             let config = WKWebViewConfiguration()
+            // The phone's own browser name, so the page and reCAPTCHA see a real Safari on this iOS
+            // (a made-up older iOS version that doesn't match the browser's features looks like a bot).
+            let v = ProcessInfo.processInfo.operatingSystemVersion
+            config.applicationNameForUserAgent = "Version/\(v.majorVersion).\(v.minorVersion) Mobile/15E148 Safari/604.1"
             config.userContentController.addUserScript(WKUserScript(source: Self.watcher, injectionTime: .atDocumentStart, forMainFrameOnly: true))
             let w = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: config)
             w.navigationDelegate = self
-            w.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
             // In a window, behind everything, so the page runs like a real one (reCAPTCHA's check
             // needs its scripts to keep running) without ever being seen or touched.
             w.isUserInteractionEnabled = false
