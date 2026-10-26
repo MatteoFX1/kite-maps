@@ -196,24 +196,43 @@ enum MapIcons {
     }
 
     /** Vela's navigation arrow: white-ringed blue disc with a white chevron pointing up. */
+    /**
+     * The car while navigating: a chunky teal chevron with a lit left face and a shaded right one,
+     * so it reads as a raised 3D arrow, with a white rim and a soft shadow under it.
+     */
     private static func puck() -> UIImage {
-        let size = CGSize(width: 46, height: 46)
+        let size = CGSize(width: 58, height: 58)
         return UIGraphicsImageRenderer(size: size).image { ctx in
             let g = ctx.cgContext
-            g.setShadow(offset: CGSize(width: 0, height: 1), blur: 4, color: UIColor.black.withAlphaComponent(0.4).cgColor)
-            UIColor.white.setFill()
-            UIBezierPath(ovalIn: CGRect(x: 4, y: 4, width: 38, height: 38)).fill()
+            let tip = CGPoint(x: 29, y: 5), left = CGPoint(x: 8, y: 50), right = CGPoint(x: 50, y: 50), notch = CGPoint(x: 29, y: 40)
+            let outline = UIBezierPath()
+            outline.move(to: tip); outline.addLine(to: right); outline.addLine(to: notch); outline.addLine(to: left); outline.close()
+            outline.lineJoinStyle = .round
+            // Shadow and white rim.
+            g.setShadow(offset: CGSize(width: 0, height: 3), blur: 5, color: UIColor.black.withAlphaComponent(0.45).cgColor)
+            UIColor.white.setStroke()
+            outline.lineWidth = 6
+            outline.stroke()
             g.setShadow(offset: .zero, blur: 0, color: nil)
-            UIColor(hex: 0x1F6FEB).setFill()
-            UIBezierPath(ovalIn: CGRect(x: 7, y: 7, width: 32, height: 32)).fill()
-            let a = UIBezierPath()
-            a.move(to: CGPoint(x: 23, y: 12))
-            a.addLine(to: CGPoint(x: 32, y: 33))
-            a.addLine(to: CGPoint(x: 23, y: 28))
-            a.addLine(to: CGPoint(x: 14, y: 33))
-            a.close()
-            UIColor.white.setFill()
-            a.fill()
+            // Lit left face.
+            let lit = UIBezierPath()
+            lit.move(to: tip); lit.addLine(to: notch); lit.addLine(to: left); lit.close()
+            g.saveGState()
+            lit.addClip()
+            let space = CGColorSpaceCreateDeviceRGB()
+            if let grad = CGGradient(colorsSpace: space, colors: [UIColor(hex: 0x99F6E4).cgColor, UIColor(hex: 0x2DD4BF).cgColor] as CFArray, locations: [0, 1]) {
+                g.drawLinearGradient(grad, start: tip, end: left, options: [])
+            }
+            g.restoreGState()
+            // Shaded right face.
+            let shade = UIBezierPath()
+            shade.move(to: tip); shade.addLine(to: right); shade.addLine(to: notch); shade.close()
+            g.saveGState()
+            shade.addClip()
+            if let grad = CGGradient(colorsSpace: space, colors: [UIColor(hex: 0x14B8A6).cgColor, UIColor(hex: 0x0F766E).cgColor] as CFArray, locations: [0, 1]) {
+                g.drawLinearGradient(grad, start: tip, end: right, options: [])
+            }
+            g.restoreGState()
         }
     }
 

@@ -14,7 +14,7 @@ An unofficial iPhone port of [Vela Maps](https://github.com/PimpinPumpkin/Vela) 
 [![Made with Claude](https://img.shields.io/badge/vibecoded%20with-Claude-D97757)](#vibecoded-with-claude)
 ![iOS 16+](https://img.shields.io/badge/iOS-16%2B-black?logo=apple)
 
-[Get the app](#get-the-app) · [What you get](#what-you-get) · [Screenshots](#screenshots) · [Privacy](#privacy) · [Vibecoded](#vibecoded-with-claude) · [Credits](#credits)
+[Get the app](#get-the-app) · [What you get](#what-you-get) · [Screenshots](#screenshots) · [What's new](CHANGELOG.md) · [Privacy](#privacy) · [Vibecoded](#vibecoded-with-claude) · [Credits](#credits)
 
 </div>
 
@@ -49,13 +49,17 @@ https://raw.githubusercontent.com/MatteoFX1/kite-maps/altstore/apps.json
 In AltStore or SideStore, open **Sources**, tap **+**, paste the link above, then install
 **Kite Maps** from the source. If you already have Kite installed, it keeps your saved places.
 
-Every change merged into `main` builds a new release automatically on a GitHub Actions Mac.
+Every change merged into `main` builds a new release automatically on a GitHub Actions Mac,
+named after its version (like `v0.7.1`) with a "What's new" list from [CHANGELOG.md](CHANGELOG.md).
 Pull requests build too: their `.ipa` is under the run's **Artifacts** in the Actions tab.
 
 ## What you get
 
-- 🗺️ **A good-looking map**: navy at night, classic by day, on OpenFreeMap tiles. Live traffic
-  and satellite from the layers button.
+- 🗺️ **A clean, calm map**: a Waze-like look at night, classic by day, on OpenFreeMap tiles.
+  While you drive it strips down to just roads and names. Live traffic and satellite from the
+  layers button.
+- 🚘 **Made for driving**: big buttons you can hit in a phone holder, a huge turn banner, a smooth
+  3D car arrow, the road you're on under the arrow, and a bottom dock with Map, Saved and Settings.
 - 🔎 **Google search with no account**: suggestions as you type, category chips, ratings,
   open now, sort and filters. Falls back to OpenStreetMap if Google doesn't answer. Paste a
   Google Maps, Waze or Apple Maps link and it opens the place.
@@ -86,9 +90,13 @@ Pull requests build too: their `.ipa` is under the run's **Artifacts** in the Ac
 |:-:|:-:|:-:|:-:|:-:|
 | <img src="docs/screenshots/browse.jpg" width="150"> | <img src="docs/screenshots/search.jpg" width="150"> | <img src="docs/screenshots/place.jpg" width="150"> | <img src="docs/screenshots/directions.jpg" width="150"> | <img src="docs/screenshots/nav.jpg" width="150"> |
 
-| Camera alerts | UK driving | Transit | Departure board | Street View |
+| Roundabouts | Camera alerts | Waze reports | Transit | Saved |
 |:-:|:-:|:-:|:-:|:-:|
-| <img src="docs/screenshots/camalert.jpg" width="150"> | <img src="docs/screenshots/uk.jpg" width="150"> | <img src="docs/screenshots/transit.jpg" width="150"> | <img src="docs/screenshots/board.jpg" width="150"> | <img src="docs/screenshots/streetview.jpg" width="150"> |
+| <img src="docs/screenshots/roundabout.jpg" width="150"> | <img src="docs/screenshots/camalert.jpg" width="150"> | <img src="docs/screenshots/wazealert.jpg" width="150"> | <img src="docs/screenshots/transit.jpg" width="150"> | <img src="docs/screenshots/saved.jpg" width="150"> |
+
+| Light mode | Big text | Departure board | Street View | Settings |
+|:-:|:-:|:-:|:-:|:-:|
+| <img src="docs/screenshots/light-nav.jpg" width="150"> | <img src="docs/screenshots/big-directions.jpg" width="150"> | <img src="docs/screenshots/board.jpg" width="150"> | <img src="docs/screenshots/streetview.jpg" width="150"> | <img src="docs/screenshots/settings.jpg" width="150"> |
 
 *Taken automatically in the iPhone simulator on every build.*
 

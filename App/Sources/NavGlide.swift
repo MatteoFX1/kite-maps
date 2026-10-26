@@ -12,6 +12,11 @@ import VelaCore
 @MainActor
 final class NavGlide: NSObject {
     weak var map: MLNMapView?
+    /** Where the car sits on screen while following: below the turn cards, clear of the speed and trip bar. */
+    nonisolated static let topFraction: CGFloat = 0.45
+    nonisolated static let bottomInset: CGFloat = 170
+    /** The car's height on a screen [height] tall, for things drawn next to it. */
+    nonisolated static func carY(_ height: CGFloat) -> CGFloat { (height * topFraction + height - bottomInset) / 2 }
     private weak var nav: Navigator?
     private var link: CADisplayLink?
     private var lastFrame: CFTimeInterval = 0
@@ -134,7 +139,7 @@ final class NavGlide: NSObject {
         }
         if n.following {
             let cam = MLNMapCamera(lookingAtCenter: coordNow, acrossDistance: shownAcross, pitch: 50, heading: shownBearing)
-            let pad = UIEdgeInsets(top: map.bounds.height * 0.45, left: 0, bottom: 120, right: 0)
+            let pad = UIEdgeInsets(top: map.bounds.height * Self.topFraction, left: 0, bottom: Self.bottomInset, right: 0)
             map.setCamera(cam, withDuration: 0, animationTimingFunction: nil, edgePadding: pad, completionHandler: nil)
         }
     }

@@ -60,7 +60,8 @@ public final class RouteTracker {
             remainingMeters: remaining,
             remainingSeconds: total > 0 ? route.durationSeconds * remaining / total : 0,
             offRoute: offCount >= 3,
-            arrived: remaining < 25
+            // Only on the road to it: passing close by on a parallel street isn't arriving.
+            arrived: remaining < 25 && best.dist < limit
         )
     }
 

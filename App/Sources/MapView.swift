@@ -67,6 +67,8 @@ struct VelaMapView: UIViewRepresentable {
         private var lastRouteKey = ""
         private var lastMineKey = ""
         private var lastPuckKey = ""
+        /** Whether the map is currently stripped down for driving; nil after a style load. */
+        private var styledDriving: Bool?
         private var lastCameraKey = ""
         /** Cameras fetched so far, and the 0.1° cells already asked for (cameras don't move). */
         private var cameras: [Int64: RoadCamera] = [:]
@@ -99,6 +101,7 @@ struct VelaMapView: UIViewRepresentable {
             MapIcons.register(in: style)
             addVelaLayers(style)
             styleReady = true
+            styledDriving = nil
             repaint(mapView)
             lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""; lastWazeKey = ""
             render(mapView)
@@ -382,7 +385,14 @@ struct VelaMapView: UIViewRepresentable {
             style.layer(withIdentifier: "vela-sat")?.isVisible = s.satellite
             style.layer(withIdentifier: "vela-terrain")?.isVisible = s.terrain && !s.satellite
             for id in ["vela-rail", "vela-rail-case"] { style.layer(withIdentifier: id)?.isVisible = s.transitLines && !navigating }
-            for id in ["building", "building-3d"] { style.layer(withIdentifier: id)?.isVisible = !s.satellite }
+            if styledDriving != navigating {
+                MapStyler.drive(style, on: navigating)
+                styledDriving = navigating
+                // A bold route line while driving, like Waze; the usual blue when planning.
+                (style.layer(withIdentifier: "vela-route-line") as? MLNLineStyleLayer)?.lineWidth = NSExpression(forConstantValue: navigating ? 13 : 10)
+                (style.layer(withIdentifier: "vela-route-edge") as? MLNLineStyleLayer)?.lineWidth = NSExpression(forConstantValue: navigating ? 19 : 15)
+            }
+            for id in ["building", "building-3d"] { style.layer(withIdentifier: id)?.isVisible = !s.satellite && !navigating }
             renderResults(style)
             renderRoutes(style)
             renderPuck(style)

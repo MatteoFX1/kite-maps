@@ -13,6 +13,8 @@ struct BottomSheet<Header: View, Content: View>: View {
     @Binding var detent: SheetDetent
     let containerHeight: CGFloat
     var peekHeight: CGFloat = 150
+    /** Room to keep free above the sheet at full height, for a card that sits at the top. */
+    var topClearance: CGFloat = 0
     @ViewBuilder var header: () -> Header
     @ViewBuilder var content: () -> Content
     // When a drag ends, the finger's offset springs away together with the snap to the new
@@ -34,9 +36,15 @@ struct BottomSheet<Header: View, Content: View>: View {
         }
     }
 
+    private func height(_ d: SheetDetent) -> CGFloat {
+        let h = Self.height(d, container: containerHeight, peek: peekHeight)
+        return topClearance > 0 ? min(h, containerHeight - topClearance) : h
+    }
+
     private var current: CGFloat {
-        let h = Self.height(detent, container: containerHeight, peek: peekHeight) - drag - bodyDrag
-        return min(max(h, peekHeight * 0.8), containerHeight * 0.96)
+        let h = height(detent) - drag - bodyDrag
+        let top = topClearance > 0 ? containerHeight - topClearance + 20 : containerHeight * 0.96
+        return min(max(h, peekHeight * 0.8), top)
     }
 
     var body: some View {
@@ -135,11 +143,10 @@ extension BottomSheet {
     }
 
     private func settle(_ v: DragGesture.Value) {
-        let end = Self.height(detent, container: containerHeight, peek: peekHeight) - v.predictedEndTranslation.height
+        let end = height(detent) - v.predictedEndTranslation.height
         let options: [SheetDetent] = [.peek, .half, .full]
         let best = options.min { a, b in
-            abs(Self.height(a, container: containerHeight, peek: peekHeight) - end)
-                < abs(Self.height(b, container: containerHeight, peek: peekHeight) - end)
+            abs(height(a) - end) < abs(height(b) - end)
         } ?? .half
         if best != detent { UISelectionFeedbackGenerator().selectionChanged() }
         withAnimation(sheetSnap) { detent = best }

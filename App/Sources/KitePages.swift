@@ -117,7 +117,7 @@ struct SavedPage: View {
                                 }
                             }
                             .background(card)
-                            Text("Hold a place to rename, change or remove it.").font(.subheadline).foregroundColor(Vela.muted(scheme))
+                            Text("Hold a place to rename or remove it.").font(.subheadline).foregroundColor(Vela.muted(scheme))
                                 .padding(.horizontal, 4)
                         }
                     }

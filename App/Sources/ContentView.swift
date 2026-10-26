@@ -195,10 +195,9 @@ struct BrowseOverlay: View {
                 VStack(spacing: 12) {
                     SearchBar(model: model, voice: voice, focused: $searchFocused)
                     if voice.listening { ListeningCard(voice: voice) }
+                    // Home, Work and recents are one tap away under "Where to?", so the map itself stays clear.
                     if searchFocused {
                         SuggestionsPanel(model: model) { searchFocused = false }
-                    } else if idle {
-                        QuickTiles(model: model)
                     }
                     if let n = model.notice, !searchFocused {
                         NoticeBanner(text: n) { model.notice = nil }
@@ -708,7 +707,7 @@ enum DemoScript {
         if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)
         if step == "addstop" { model.addingStop = true; return }
-        guard ["nav", "camalert", "wazealert", "allalerts"].contains(step) else { return }
+        guard ["nav", "camalert", "wazealert", "allalerts", "endtrip"].contains(step) else { return }
         model.startNavigation()
         if step == "camalert" {
             await wait(4)
@@ -746,31 +745,6 @@ struct Shortcuts: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-    }
-}
-
-/**
- * The two big tiles under "Where to?": Home and Work, or your first saved place when work isn't
- * set. One tap starts the route.
- */
-struct QuickTiles: View {
-    @ObservedObject var model: AppModel
-    @ObservedObject var settings = AppSettings.shared
-
-    var body: some View {
-        HStack(spacing: 10) {
-            PlaceTile(model: model, icon: "house.fill", color: Vela.routeBlue, title: "Home", place: settings.home) {
-                model.picking = .home
-            }
-            if settings.work == nil, let first = settings.saved.first {
-                PlaceTile(model: model, icon: "bookmark.fill", color: Color(hex: 0xF59E0B), title: first.name, place: first) {}
-            } else {
-                PlaceTile(model: model, icon: "briefcase.fill", color: Color(hex: 0x8B5CF6), title: "Work", place: settings.work) {
-                    model.picking = .work
-                }
-            }
-        }
-        .padding(.horizontal, 16)
     }
 }
 

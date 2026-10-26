@@ -5,6 +5,8 @@ import VelaCore
 struct DirectionsOverlay: View {
     @ObservedObject var model: AppModel
     @Environment(\.colorScheme) private var scheme
+    /** How tall the from/to card is, so the sheet at full height stops below it. */
+    @State private var cardHeight: CGFloat = 130
 
     var body: some View {
         GeometryReader { geo in
@@ -12,7 +14,8 @@ struct DirectionsOverlay: View {
             ZStack(alignment: .top) {
                 VStack {
                     Spacer()
-                    BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: model.directions?.transit == true ? 200 : 300) {
+                    BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: model.directions?.transit == true ? 200 : 300,
+                                topClearance: cardHeight + 16) {
                         TripHeader(model: model)
                     } content: {
                         TripBody(model: model)
@@ -22,6 +25,11 @@ struct DirectionsOverlay: View {
                 if let d = model.directions {
                     EndpointsCard(model: model, state: d)
                         .padding(.top, 6)
+                        .background(GeometryReader { g in
+                            Color.clear
+                                .onAppear { cardHeight = g.size.height }
+                                .onChange(of: g.size.height) { cardHeight = $0 }
+                        })
                 }
             }
             // Never wider than the screen, whatever a row inside asks for: a long trip's row once
@@ -313,7 +321,8 @@ struct TripBody: View {
                             }
                             Spacer()
                             let diff = r.durationSeconds - picked.durationSeconds
-                            Text(diff >= 0 ? "+\(Fmt.duration(diff))" : "−\(Fmt.duration(-diff))")
+                            // Under half a minute apart would round to "+1 min": call it the same.
+                            Text(abs(diff) < 30 ? "Same time" : diff > 0 ? "+\(Fmt.duration(diff))" : "−\(Fmt.duration(-diff))")
                                 .font(.caption).foregroundColor(.secondary)
                         }
                         .padding(.vertical, 8)
