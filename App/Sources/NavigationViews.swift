@@ -101,7 +101,8 @@ struct NavigationOverlay: View {
                 }
                 .buttonStyle(.plain)
             }
-            if confirmEnd {
+            // Arriving answers the question: the trip bar's Done takes over.
+            if confirmEnd, !nav.arrived {
                 EndTripCard(destination: nav.destination.name,
                             onKeep: { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { confirmEnd = false } },
                             onEnd: { model.endNavigation() })

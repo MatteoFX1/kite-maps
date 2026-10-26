@@ -43,6 +43,10 @@ final class Navigator: ObservableObject {
     private var toldNoSignal = false
     private var spokenStage: [Int: Int] = [:]
     private var lastReroute = Date.distantPast
+    /** Counts reroutes, so only the newest answer is used (adding a stop while one is loading). */
+    private var rerouteRequest = 0
+    /** Set once the trip is ended, so a late answer never talks or moves anything. */
+    private var stopped = false
     private var avoidHighways: Bool
     private var avoidTolls: Bool
     private var routeCameras: [(camera: RoadCamera, along: Double)] = []
@@ -82,6 +86,7 @@ final class Navigator: ObservableObject {
     }
 
     func stop() {
+        stopped = true
         speech.stopSpeaking(at: .immediate)
         UIApplication.shared.isIdleTimerDisabled = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -101,7 +106,8 @@ final class Navigator: ObservableObject {
     /** The road being driven now, for the name under the arrow. */
     var currentRoad: String? {
         guard let i = progress?.nextIndex, i > 0, i - 1 < route.maneuvers.count else { return nil }
-        return route.maneuvers[i - 1].road
+        let road = route.maneuvers[i - 1].road?.trimmingCharacters(in: .whitespaces)
+        return road?.isEmpty == false ? road : nil
     }
 
     /** The one after next, for the "Then" line when two turns come close together. */
@@ -312,7 +318,7 @@ final class Navigator: ObservableObject {
         Task {
             let found = await Aircraft.police(near: here, nauticalMiles: 10)
             self.aircraftLoading = false
-            guard let found else { return }
+            guard let found, !self.stopped else { return }
             let me = self.lastFix.map { LatLng($0.coordinate.latitude, $0.coordinate.longitude) } ?? here
             let nearest = found.map { ($0, $0.location.distance(to: me)) }.filter { $0.1 < 10_000 }.min { $0.1 < $1.1 }
             self.aircraftNear = nearest.map { (aircraft: $0.0, meters: $0.1) }
@@ -388,7 +394,7 @@ final class Navigator: ObservableObject {
 
     /** A short tone before a camera warning, the way Waze does it. */
     private func chime() {
-        guard !muted else { return }
+        guard !muted, !stopped else { return }
         AudioServicesPlaySystemSound(1057)
     }
 
@@ -436,9 +442,12 @@ final class Navigator: ObservableObject {
         let mode = route.mode
         let to = destination.location
         let hw = avoidHighways, tolls = avoidTolls
+        rerouteRequest += 1
+        let req = rerouteRequest
         Task {
             let r = await Directions.routes(from: from, to: to, mode: mode, avoidHighways: hw, avoidTolls: tolls,
                                             useGoogle: !AppSettings.shared.noGoogle, via: self.stops.map(\.location))
+            guard !self.stopped, req == self.rerouteRequest else { return }
             self.rerouting = false
             guard let fresh = r.routes.first else { return }
             self.toldNoSignal = false
@@ -456,7 +465,7 @@ final class Navigator: ObservableObject {
     }
 
     private func speak(_ text: String, urgent: Bool = false) {
-        guard !muted else { return }
+        guard !muted, !stopped else { return }
         if urgent && speech.isSpeaking { speech.stopSpeaking(at: .word) }
         try? AVAudioSession.sharedInstance().setActive(true)
         let u = AVSpeechUtterance(string: text)

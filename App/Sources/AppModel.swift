@@ -278,6 +278,10 @@ final class AppModel: ObservableObject {
     /** A place picked from the suggestions: show it now, then fill in its details from Google. */
     func openSuggestion(_ place: Place) {
         suggestTask?.cancel()
+        // A search still loading would otherwise land afterwards and replace this place.
+        searchTask?.cancel()
+        searching = false
+        notice = nil
         settings.addRecent(place.name)
         query = place.name
         results = []

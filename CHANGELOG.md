@@ -18,6 +18,10 @@ the middle number for big milestones.
 - **Cleaner map screen:** the two big tiles under "Where to?" are gone. Home, Work and recent
   places are one tap away in "Where to?", and everything else is in Saved.
 - **Releases show what's new:** each GitHub release lists its changes from this file.
+- **Fixes:** ending a trip while Kite was finding a new route could make it talk again
+  afterwards; adding a stop while rerouting could lose the stop; picking a suggestion while a
+  search was still loading could swap the place for the search results; the "End this trip?"
+  card now steps aside when you arrive.
 
 ## 0.7.0
 
