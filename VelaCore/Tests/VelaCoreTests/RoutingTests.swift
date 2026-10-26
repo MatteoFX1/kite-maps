@@ -29,6 +29,10 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(m?.distanceMeters, 12553)
         XCTAssertEqual(m?.road, "M27")
         XCTAssertEqual(m?.instruction, "Merge onto M27")
+        let keep = #"[0,"",[900,"0.6 mi",1],[30,"30 sec"],null,null,null,null,null,null,null,null,null,null,[[2,["Keep "]],[2,["right",1]],[2,[" to stay on "]],[2,["M3",1]]]]"#
+        let k = DirectionsParser.foldedStep(try! JSONSerialization.jsonObject(with: Data(keep.utf8)) as! [Any], icon: "dir-tt dir-tt-keep-right")
+        XCTAssertEqual(k?.type, .keepRight)
+        XCTAssertEqual(k?.road, "M3")
         // Found when reading a whole route's steps too.
         var steps: [Maneuver] = []
         DirectionsParser.collectSteps([[entry]], into: &steps)

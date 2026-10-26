@@ -127,7 +127,9 @@ enum DirectionsParser {
                   pieces.allSatisfy({ int(at($0, 0)) != nil && str(at($0, 1, 0)) != nil }) else { continue }
             for p in pieces {
                 let t = str(at(p, 1, 0)) ?? ""
-                if int(at(p, 1, 1)) == 1, road == nil { road = t }
+                // Bold pieces are road names, and also the turn's direction ("Keep <b>right</b>").
+                if int(at(p, 1, 1)) == 1, road == nil,
+                   t.range(of: #"^\s*((slight|sharp)\s+)?(left|right)\s*$"#, options: [.regularExpression, .caseInsensitive]) == nil { road = t }
                 text += t
             }
             break
