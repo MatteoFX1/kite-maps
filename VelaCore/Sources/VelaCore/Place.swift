@@ -58,7 +58,7 @@ public struct Place: Identifiable, Hashable, Codable, Sendable {
         self.source = source
     }
 
-    /** A Google Maps link for the place, for sharing. */
+    /** A Google Maps link for the place, for sharing and for opening it in Google Maps. */
     public var shareURL: URL? {
         if let placeId {
             var c = URLComponents(string: "https://www.google.com/maps/search/")!
@@ -69,6 +69,8 @@ public struct Place: Identifiable, Hashable, Codable, Sendable {
             ]
             return c.url
         }
-        return URL(string: "https://www.openstreetmap.org/?mlat=\(location.lat)&mlon=\(location.lng)#map=18/\(location.lat)/\(location.lng)")
+        // Not a Google place (a dropped pin, a postcode, an open-map place): Google Maps at the spot,
+        // which opens in any maps app the person you send it to has.
+        return URL(string: "https://www.google.com/maps/search/?api=1&query=\(location.lat),\(location.lng)")
     }
 }

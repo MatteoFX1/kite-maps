@@ -3,7 +3,13 @@ import VelaCore
 
 // Live check of the Google search and parser, run by the build workflow.
 // Usage: swift run vela-probe "pizza" 40.7484 -73.9857
+// Line by line, so a step cut off by its time limit still shows what it printed.
+setvbuf(stdout, nil, _IOLBF, 0)
 let args = CommandLine.arguments
+if args.count > 1, args[1] == "google" {
+    await googleCheck()
+    exit(0)
+}
 if args.count > 1, args[1] == "audit" {
     await navAudit()
     exit(0)

@@ -41,6 +41,11 @@ jobs:
         continue-on-error: true
         timeout-minutes: 4
         run: swift run vela-probe audit
+      - name: Live Google check (UK)
+        working-directory: VelaCore
+        continue-on-error: true
+        timeout-minutes: 4
+        run: swift run vela-probe google
       - name: Live Google search check
         working-directory: VelaCore
         continue-on-error: true
