@@ -77,6 +77,13 @@ struct ResultsList: View {
                 SheetTopMarker()
                 LazyVStack(alignment: .leading, spacing: 0) {
                     Divider()
+                    if model.visibleResults.isEmpty && !model.results.isEmpty {
+                        // The filters hid everything: say so rather than show an empty list.
+                        Text("Nothing here matches these filters. Turn one off to see more.")
+                            .font(.body).foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity).multilineTextAlignment(.center)
+                            .padding(.vertical, 32).padding(.horizontal, 20)
+                    }
                     ForEach(model.visibleResults) { p in
                         ResultRow(model: model, place: p)
                             .id(p.id)

@@ -321,7 +321,8 @@ struct TripBody: View {
                             }
                             Spacer()
                             let diff = r.durationSeconds - picked.durationSeconds
-                            Text(diff >= 0 ? "+\(Fmt.duration(diff))" : "−\(Fmt.duration(-diff))")
+                            // Under half a minute apart would round to "+1 min": call it the same.
+                            Text(abs(diff) < 30 ? "Same time" : diff > 0 ? "+\(Fmt.duration(diff))" : "−\(Fmt.duration(-diff))")
                                 .font(.caption).foregroundColor(.secondary)
                         }
                         .padding(.vertical, 8)

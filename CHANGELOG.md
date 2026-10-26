@@ -23,7 +23,8 @@ the middle number for big milestones.
   search was still loading could swap the place for the search results; the "End this trip?"
   card now steps aside when you arrive; the road name no longer hides under the police
   helicopter or police risk chip; the trip sheet pulled up to full height no longer slides under the
-  from/to box; opening Kite with no signal no longer leaves Google
+  from/to box; search filters that hide every result now say so instead of showing an empty
+  list; other routes that take the same time say "Same time" instead of "+1 min"; opening Kite with no signal no longer leaves Google
   search half set up once signal is back.
 
 ## 0.7.0
