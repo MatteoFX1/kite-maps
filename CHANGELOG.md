@@ -18,14 +18,16 @@ the middle number for big milestones.
 - **Cleaner map screen:** the two big tiles under "Where to?" are gone. Home, Work and recent
   places are one tap away in "Where to?", and everything else is in Saved.
 - **Releases show what's new:** each GitHub release lists its changes from this file.
-- **Fixes:** ending a trip while Kite was finding a new route could make it talk again
-  afterwards; adding a stop while rerouting could lose the stop; picking a suggestion while a
-  search was still loading could swap the place for the search results; the "End this trip?"
-  card now steps aside when you arrive; the road name no longer hides under the police
-  helicopter or police risk chip; the trip sheet pulled up to full height no longer slides under the
-  from/to box; search filters that hide every result now say so instead of showing an empty
-  list; other routes that take the same time say "Same time" instead of "+1 min"; opening Kite with no signal no longer leaves Google
-  search half set up once signal is back.
+- **Fixes:**
+  - Ending a trip while Kite was finding a new route could make it talk again afterwards.
+  - Adding a stop while rerouting could lose the stop.
+  - Picking a suggestion while a search was still loading could swap the place for the results.
+  - The "End this trip?" card steps aside when you arrive.
+  - The road name no longer hides under the police helicopter or police risk chip.
+  - The trip sheet pulled up to full height no longer slides under the from/to box.
+  - Search filters that hide every result say so, instead of showing an empty list.
+  - Other routes that take the same time say "Same time", not "+1 min".
+  - Opening Kite with no signal no longer leaves Google search half set up once signal is back.
 
 ## 0.7.0
 
