@@ -39,7 +39,8 @@ struct VelaMapView: UIViewRepresentable {
 
         c.dark = dark
         model.map = map
-        model.location.start()
+        // On a first launch, location is asked for after the welcome, not on top of it.
+        if (settings.welcomed && !settings.needsWazeChoice) || DemoScript.active { model.location.start() }
         return map
     }
 
@@ -191,8 +192,8 @@ struct VelaMapView: UIViewRepresentable {
 
             let altEdge = line("vela-route-alt-edge", altSrc, UIColor(hex: 0x3566C4), width: 11)
             let altFill = line("vela-route-alt", altSrc, UIColor(hex: 0xA9C4F5), width: 7)
-            let edge = line("vela-route-edge", routeSrc, UIColor(hex: 0x0B4FB8), width: 12)
-            let fill = line("vela-route-line", routeSrc, UIColor(hex: 0x1F6FEB), width: 8)
+            let edge = line("vela-route-edge", routeSrc, UIColor(hex: 0x0B3D91), width: 15)
+            let fill = line("vela-route-line", routeSrc, UIColor(hex: 0x2F7BFF), width: 10)
             [altEdge, altFill, edge, fill].forEach(insert)
             // A transit trip: each ride in its line's color, walks dotted.
             let transitSrc = MLNShapeSource(identifier: "vela-transit", shape: nil, options: nil)
@@ -207,7 +208,7 @@ struct VelaMapView: UIViewRepresentable {
             ride.lineColor = NSExpression(mglJSONObject: ["to-color", ["get", "color"]])
             [walk, rideEdge, ride].forEach(insert)
             for (level, color) in [(1, 0xF2A65A), (2, 0xE8453C), (3, 0x9E1C1C)] {
-                let l = line("vela-route-traffic-\(level)", spanSrc, UIColor(hex: UInt32(color)), width: 8)
+                let l = line("vela-route-traffic-\(level)", spanSrc, UIColor(hex: UInt32(color)), width: 10)
                 l.predicate = NSPredicate(format: "level == %d", level)
                 insert(l)
             }
@@ -230,7 +231,14 @@ struct VelaMapView: UIViewRepresentable {
             let cams = MLNSymbolStyleLayer(identifier: "vela-cameras", source: camSrc)
             cams.iconImageName = NSExpression(forKeyPath: "icon")
             cams.iconAllowsOverlap = NSExpression(forConstantValue: true)
-            cams.minimumZoomLevel = 12
+            // Big enough to notice at a glance, and bigger again for the ones on your route.
+            // (Zoom has to be the outermost part of the expression, so the "on route" size goes inside each stop.)
+            let big: [Any] = ["==", ["get", "big"], 1]
+            cams.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"],
+                                                          11, ["case", big, 1.0, 0.7],
+                                                          14, ["case", big, 1.33, 0.92],
+                                                          17, ["case", big, 1.65, 1.15]])
+            cams.minimumZoomLevel = 11
             style.addLayer(cams)
 
             // Waze: a glow where police get reported (under), and live reports as badges (over).
@@ -252,7 +260,7 @@ struct VelaMapView: UIViewRepresentable {
             waze.iconImageName = NSExpression(forKeyPath: "icon")
             waze.iconAllowsOverlap = NSExpression(forConstantValue: true)
             // Smaller when zoomed out, so a busy city doesn't drown in badges.
-            waze.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 11, 0.75, 15, 1.15])
+            waze.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 11, 0.62, 15, 0.95])
             waze.iconOpacity = NSExpression(forKeyPath: "op")
             waze.minimumZoomLevel = 11
             style.addLayer(waze)
@@ -410,14 +418,17 @@ struct VelaMapView: UIViewRepresentable {
 
         private func renderCameras(_ style: MLNStyle) {
             let s = model.settings
-            let key = "\(s.speedCameras)\(s.plateCameras)\(cameras.count)"
+            let line = model.nav?.route.polyline ?? model.directions?.route?.polyline ?? []
+            let key = "\(s.speedCameras)\(s.plateCameras)\(cameras.count)\(line.count)\(line.first?.lat ?? 0)"
             guard key != lastCameraKey else { return }
             lastCameraKey = key
             let shown = cameras.values.filter { $0.kind == .speed ? s.speedCameras : s.plateCameras }
+            let cum = line.count >= 2 ? Geo.cumulative(line) : []
             let features: [MLNPointFeature] = shown.map { c in
                 let f = MLNPointFeature()
                 f.coordinate = CLLocationCoordinate2D(latitude: c.location.lat, longitude: c.location.lng)
-                f.attributes = ["icon": c.kind == .speed ? "cam-speed" : "cam-plate"]
+                let onRoute = !cum.isEmpty && Geo.project(c.location, on: line, cumulative: cum).offset < 40
+                f.attributes = ["icon": c.kind == .speed ? "cam-speed" : "cam-plate", "big": onRoute ? 1 : 0]
                 return f
             }
             (style.source(withIdentifier: "vela-cameras") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
@@ -483,6 +494,8 @@ struct VelaMapView: UIViewRepresentable {
                 self.wazeBox = box
                 self.wazeAt = Date()
                 WazeHistory.shared.record(found)
+                self.model.wazeLiveCount = found.filter { self.model.settings.shows($0) }.count
+                self.model.updateAreaRisk(live: found)
                 if let map { self.render(map) }
             }
         }
@@ -491,6 +504,8 @@ struct VelaMapView: UIViewRepresentable {
         func showDemoWaze(_ list: [WazeAlert], map: MLNMapView) {
             wazeAlerts = list
             wazeAt = Date()
+            model.wazeLiveCount = list.count
+            model.updateAreaRisk(live: list)
             render(map)
         }
 
@@ -686,23 +701,12 @@ struct VelaMapView: UIViewRepresentable {
             bubbleSrc?.shape = MLNShapeCollectionFeature(shapes: bubbles)
         }
 
+        /** While navigating, NavGlide draws the arrow every frame; this only clears it afterwards. */
         private func renderPuck(_ style: MLNStyle) {
-            let src = style.source(withIdentifier: "vela-puck") as? MLNShapeSource
-            guard let n = model.nav, let fix = n.lastFix else {
-                if lastPuckKey != "" { src?.shape = nil; lastPuckKey = "" }
-                return
-            }
-            let p = n.progress
-            let onRoute = p.map { !$0.offRoute && $0.offsetMeters < 40 } ?? false
-            let at = onRoute ? CLLocationCoordinate2D(latitude: p!.snapped.lat, longitude: p!.snapped.lng) : fix.coordinate
-            let bearing = fix.course >= 0 && fix.speed > 1 ? fix.course : (p?.routeBearing ?? 0)
-            let key = "\(at.latitude),\(at.longitude),\(Int(bearing))"
-            guard key != lastPuckKey else { return }
-            lastPuckKey = key
-            let f = MLNPointFeature()
-            f.coordinate = at
-            f.attributes = ["bearing": bearing]
-            src?.shape = f
+            if model.nav != nil { lastPuckKey = "nav"; return }
+            guard lastPuckKey != "" else { return }
+            (style.source(withIdentifier: "vela-puck") as? MLNShapeSource)?.shape = nil
+            lastPuckKey = ""
         }
 
         // MARK: Gestures

@@ -9,7 +9,7 @@ struct LayersSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Text("Layers").font(.title3.weight(.semibold))
+                Text("Layers").font(.system(size: 26, weight: .heavy))
                 Spacer()
                 CircleIconButton(icon: "xmark") { dismiss() }
             }
@@ -35,6 +35,7 @@ struct LayersSheet: View {
             Spacer()
         }
         .padding(20)
+        .background(Vela.sheet(scheme).ignoresSafeArea())
         .presentationDetents([.height(560)])
     }
 
@@ -60,12 +61,17 @@ struct LayersSheet: View {
 
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
+    /** A page of the dock rather than a sheet: no Done button. */
+    var inTab = false
+    /** Opens the search for choosing home or work (the dock's page has it). */
+    var pick: ((PickKind) -> Void)? = nil
     let onChange: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
     var body: some View {
         if DemoScript.step == "wazesettings" {
             // Straight into the Waze screen, for the build's screenshot of it.
-            NavigationView { WazeSettingsView(settings: settings) }
+            NavigationView { WazeSettingsView(settings: settings) }.navigationViewStyle(.stack)
         } else {
             main
         }
@@ -86,7 +92,7 @@ struct SettingsView: View {
                     Toggle("Voice guidance", isOn: $settings.voice)
                     Toggle("Avoid tolls", isOn: $settings.avoidTolls)
                     Toggle(Fmt.yards ? "Avoid motorways" : "Avoid highways", isOn: $settings.avoidHighways)
-                    Toggle("Say when a camera is ahead", isOn: $settings.cameraWarnings)
+                    Toggle("Say when a speed camera is ahead", isOn: $settings.cameraWarnings)
                     Toggle("Say when I'm over the speed limit", isOn: $settings.speedingAlert)
                     Picker("Default travel mode", selection: $settings.defaultMode) {
                         ForEach(TravelMode.allCases) { Text($0.label).tag($0) }
@@ -94,13 +100,20 @@ struct SettingsView: View {
                 }
                 Section("My places") {
                     Toggle("Parking button on the map", isOn: $settings.parkingButton)
-                    if let h = settings.home {
-                        LabeledContent("Home", value: h.name)
-                        Button("Remove home", role: .destructive) { settings.home = nil }
-                    }
-                    if let w = settings.work {
-                        LabeledContent("Work", value: w.name)
-                        Button("Remove work", role: .destructive) { settings.work = nil }
+                    if let pick {
+                        Button { pick(.home) } label: { LabeledContent("Home", value: settings.home?.name ?? "Set") }
+                            .foregroundColor(.primary)
+                        Button { pick(.work) } label: { LabeledContent("Work", value: settings.work?.name ?? "Set") }
+                            .foregroundColor(.primary)
+                    } else {
+                        if let h = settings.home {
+                            LabeledContent("Home", value: h.name)
+                            Button("Remove home", role: .destructive) { settings.home = nil }
+                        }
+                        if let w = settings.work {
+                            LabeledContent("Work", value: w.name)
+                            Button("Remove work", role: .destructive) { settings.work = nil }
+                        }
                     }
                 }
                 Section {
@@ -109,7 +122,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Cameras")
                 } footer: {
-                    Text("Fixed speed cameras and license plate readers (DeFlock) mapped in OpenStreetMap. Saying a camera is ahead is off by default, because some countries restrict it.")
+                    Text("Speed cameras and \(Fmt.yards ? "number" : "license") plate cameras from OpenStreetMap's open map, shown on the map and on your route. Some countries, like France and Germany, don't allow warnings of speed cameras, so check before you turn the voice on there.")
                 }
                 Section {
                     NavigationLink {
@@ -125,7 +138,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Data source & privacy")
                 } footer: {
-                    Text("On: search comes from OpenStreetMap (Photon) and routes from the FOSSGIS servers, and nothing is sent to Google. Off: Google search, place details and live traffic, with no account and no key.")
+                    Text("Off (the usual): search, place details, routes and live traffic come from Google, asked anonymously with no account. On: everything comes from free open-data services instead and nothing goes to Google, but search and routes are less complete.")
                 }
                 Section("About") {
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
@@ -135,17 +148,21 @@ struct SettingsView: View {
                         .font(.caption).foregroundColor(.secondary)
                 }
             }
+            .kiteList()
             .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(inTab ? .large : .inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        onChange()
-                        dismiss()
+                    if !inTab {
+                        Button("Done") {
+                            onChange()
+                            dismiss()
+                        }
                     }
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 }
 
@@ -248,6 +265,7 @@ struct WazeSettingsView: View {
                 Text("While navigating, warns when a police aircraft is within about 10 km, from open flight tracking (adsb.lol), not Waze. It spots them by their police callsign (like NPAS in the UK), and some don't broadcast at all, so no warning doesn't mean the sky is clear.")
             }
         }
+        .kiteList()
         .navigationTitle("Waze integration (beta)")
         .onAppear { remembered = WazeHistory.shared.sightings.count }
         .confirmationDialog("Forget the \(remembered) police reports Kite remembered? The heat map and risk score start again from nothing.",

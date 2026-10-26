@@ -238,6 +238,16 @@ public enum Overpass {
         return (data, (resp as? HTTPURLResponse)?.statusCode ?? 0)
     }
 
+    /** Any query, failing over across the mirrors; nil when none answered with data. */
+    public static func query(_ q: String) async -> Data? {
+        for ep in endpoints {
+            guard let (data, status) = await fetch(ep, query: q), status == 200, !timedOut(data),
+                  (try? JSONSerialization.jsonObject(with: data)) != nil else { continue }
+            return data
+        }
+        return nil
+    }
+
     /** A busy server can answer 200 with a "remark" that the query ran out of time, and no data. */
     static func timedOut(_ data: Data) -> Bool {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

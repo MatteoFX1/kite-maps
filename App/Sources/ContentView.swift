@@ -21,9 +21,13 @@ struct ContentView: View {
             } else if model.directions != nil {
                 DirectionsOverlay(model: model)
             } else {
-                BrowseOverlay(model: model)
+                switch model.tab {
+                case .map: BrowseOverlay(model: model)
+                case .saved: SavedPage(model: model).transition(.opacity)
+                case .settings: SettingsPage(model: model).transition(.opacity)
+                }
             }
-            if let info = model.wazeInfo, model.nav == nil {
+            if let info = model.wazeInfo, model.nav == nil, model.tab == .map {
                 VStack {
                     WazeInfoCard(alert: info) { withAnimation { model.wazeInfo = nil } }
                         .padding(.top, 64)
@@ -38,12 +42,6 @@ struct ContentView: View {
                 }
             }
         }
-        .overlay(alignment: .topLeading) {
-            if settings.wazeOn, settings.wazeHeatmap, model.nav == nil, model.directions == nil,
-               model.results.isEmpty, model.selected == nil, model.wazeInfo == nil {
-                HeatLegend().padding(.top, 118).padding(.leading, 14)
-            }
-        }
         .overlay(alignment: .bottom) {
             if DemoScript.step == "wazemap" {
                 // Screenshot run only: what Waze answered, since the build's computers can't be trusted to get through.
@@ -51,11 +49,13 @@ struct ContentView: View {
                     Text((Waze.lastStatus.map { "Waze: HTTP \($0.code), \($0.count) reports\($0.viaPage ? " via page" : "")" } ?? "Waze: not asked yet")
                          + "\n" + WazeWeb.shared.note)
                         .font(.caption.monospaced()).padding(6).background(Color.red).foregroundColor(.white)
-                        .padding(.bottom, 40)
+                        .padding(.bottom, 120)
                 }
             }
         }
         .animation(.easeOut(duration: 0.25), value: model.wazeInfo?.id)
+        .animation(.easeOut(duration: 0.2), value: model.tab)
+        .kiteType()
         .preferredColorScheme(settings.colorScheme)
         .task { await DemoScript.run(model) }
         .onReceive(launch.$pending) { kind in
@@ -63,11 +63,19 @@ struct ContentView: View {
             launch.pending = nil
             Task { await model.perform(kind) }
         }
-        .sheet(isPresented: $model.showLayers) {
-            LayersSheet(settings: settings)
+        .onChange(of: model.showSettings) { on in
+            // Older ways in (a shortcut, the demo) open the Settings page of the dock.
+            guard on else { return }
+            model.showSettings = false
+            model.tab = .settings
         }
-        .sheet(isPresented: $model.showSettings) {
-            SettingsView(settings: settings, onChange: { model.reloadRoutes() })
+        .onChange(of: model.showSaved) { on in
+            guard on else { return }
+            model.showSaved = false
+            model.tab = .saved
+        }
+        .sheet(isPresented: $model.showLayers) {
+            LayersSheet(settings: settings).kiteType()
         }
         .fullScreenCover(isPresented: .constant(DemoScript.step?.hasPrefix("svtest") == true)) {
             // Screenshot run only: the viewer on a test pattern, turned right by the step's number.
@@ -79,21 +87,24 @@ struct ContentView: View {
                 && (!DemoScript.active || DemoScript.step == "welcome" || DemoScript.step == "wazeintro")
         }, set: { _ in })) {
             // First the Google choice, then (also once for people updating) the Waze one.
-            if settings.welcomed { WazeIntroView(settings: settings) } else { WelcomeView(settings: settings) }
+            Group {
+                if settings.welcomed { WazeIntroView(settings: settings) } else { WelcomeView(settings: settings) }
+            }
+            .kiteType()
         }
         .sheet(isPresented: $model.addingStop) {
-            StopPicker(model: model)
+            StopPicker(model: model).kiteType()
         }
-        .sheet(isPresented: $model.showSaved) {
-            SavedView(settings: settings) { p in
-                model.showSaved = false
-                model.select(p)
-            }
+        .sheet(item: $model.picking) { kind in
+            PlacePicker(model: model, kind: kind).kiteType()
+        }
+        .onChange(of: settings.welcomed && !settings.needsWazeChoice) { ready in
+            if ready { model.location.start() }
         }
     }
 }
 
-/** The normal map screen: search bar, category chips, map buttons and the results or place sheet. */
+/** The map page: a big "Where to?" bar, Home and Work one tap away, and the results or place sheet. */
 struct BrowseOverlay: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var settings = AppSettings.shared
@@ -102,20 +113,25 @@ struct BrowseOverlay: View {
     @Environment(\.colorScheme) private var scheme
 
     private var hasSheet: Bool { model.selected != nil || !model.results.isEmpty }
+    /** Only the map and the dock when nothing is open. */
+    private var idle: Bool { !hasSheet && !searchFocused && !voice.listening }
 
     var body: some View {
         GeometryReader { geo in
             let full = geo.size.height + geo.safeAreaInsets.bottom
-            let sheetH = hasSheet ? BottomSheet<EmptyView, EmptyView>.height(model.detent, container: full, peek: 150) : 0
+            let sheetH = hasSheet ? BottomSheet<EmptyView, EmptyView>.height(model.detent, container: full, peek: 230) : 0
+            // Room the dock takes at the bottom, from the screen's edge.
+            let dockTop = KiteDock.height + KiteDock.bottomGap(geo.safeAreaInsets.bottom)
             ZStack(alignment: .top) {
-                // Map buttons on the right: layers up top, location just above the sheet.
+                // Map buttons: layers and the compass on the right, under the top cards.
                 VStack {
                     HStack(alignment: .top) {
                         Spacer()
-                        VStack(spacing: 10) {
-                            MapFab(icon: "square.3.layers.3d", size: 44) { model.showLayers = true }
+                        VStack(spacing: 12) {
+                            MapFab(icon: "square.3.layers.3d", size: 56) { model.showLayers = true }
+                                .accessibilityLabel("Map layers")
                             if settings.parkingButton || settings.parking != nil {
-                                MapFab(icon: "parkingsign", tint: settings.parking != nil ? Vela.routeBlue : .primary, size: 44) {
+                                MapFab(icon: "parkingsign", tint: settings.parking != nil ? Vela.routeBlue : .primary, size: 56) {
                                     if let p = settings.parking { model.select(p) } else { model.saveParking() }
                                 }
                             }
@@ -123,7 +139,7 @@ struct BrowseOverlay: View {
                                 Button { model.map?.setDirection(0, animated: true) } label: {
                                     CompassNeedle()
                                         .rotationEffect(.degrees(-model.mapHeading))
-                                        .frame(width: 44, height: 44)
+                                        .frame(width: 56, height: 56)
                                         .glass(Circle())
                                 }
                                 .buttonStyle(.plain)
@@ -132,12 +148,14 @@ struct BrowseOverlay: View {
                             }
                         }
                     }
-                    .padding(.top, model.results.isEmpty && model.selected == nil ? 118 : 70)
+                    .padding(.top, idle ? 176 : 86)
                     Spacer()
                     if sheetH < full * 0.6 {
-                        HStack {
+                        HStack(alignment: .bottom) {
+                            if idle { WazeMapChips(model: model) }
                             Spacer()
-                            MapFab(icon: "location.fill", tint: Vela.routeBlue) { model.centerOnUser() }
+                            MapFab(icon: "location.fill", tint: Vela.routeBlue, size: 64) { model.centerOnUser() }
+                                .accessibilityLabel("Centre on me")
                                 .contextMenu {
                                     if let u = model.userLatLng {
                                         ShareLink(item: URL(string: "https://maps.google.com/?q=\(u.lat),\(u.lng)")!) {
@@ -150,10 +168,11 @@ struct BrowseOverlay: View {
                                     Button { model.saveParking() } label: { Label("I parked here", systemImage: "parkingsign") }
                                 }
                         }
-                        .padding(.bottom, max(sheetH - geo.safeAreaInsets.bottom, 0) + 14)
+                        .padding(.bottom, hasSheet ? max(sheetH - geo.safeAreaInsets.bottom, 0) + 14
+                                                   : max(dockTop - geo.safeAreaInsets.bottom, 0) + 16)
                     }
                 }
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 16)
 
                 if hasSheet {
                     VStack {
@@ -164,38 +183,52 @@ struct BrowseOverlay: View {
                     .transition(.move(edge: .bottom))
                 }
 
-                VStack(spacing: 10) {
+                if idle {
+                    VStack {
+                        Spacer()
+                        KiteDock(model: model, bottomInset: geo.safeAreaInsets.bottom)
+                    }
+                    .ignoresSafeArea(edges: .bottom)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                VStack(spacing: 12) {
                     SearchBar(model: model, voice: voice, focused: $searchFocused)
                     if voice.listening { ListeningCard(voice: voice) }
                     if searchFocused {
                         SuggestionsPanel(model: model) { searchFocused = false }
-                    } else if model.results.isEmpty && model.selected == nil {
-                        CategoryChips { c in
-                            searchFocused = false
-                            model.search(c.query, title: c.label)
-                        }
+                    } else if idle {
+                        QuickTiles(model: model)
                     }
                     if let n = model.notice, !searchFocused {
                         NoticeBanner(text: n) { model.notice = nil }
                     }
+                    if !searchFocused { StatusCards(location: model.location) }
                 }
                 .padding(.top, 6)
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.85), value: hasSheet)
+            .animation(.easeOut(duration: 0.2), value: idle)
+        }
+        .task {
+            // Screenshot run only: the search box open, to check nothing sits on its panel.
+            guard DemoScript.step == "searchfocus" else { return }
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            searchFocused = true
         }
     }
 
     @ViewBuilder
     private func sheet(full: CGFloat) -> some View {
         if let place = model.selected {
-            BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: 150) {
+            BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: 230) {
                 PlaceHeader(model: model, place: place)
             } content: {
                 PlaceBody(model: model, place: place)
             }
             .id(place.id)
         } else {
-            BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: 150) {
+            BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: 230) {
                 ResultsHeader(model: model)
             } content: {
                 ResultsList(model: model)
@@ -204,6 +237,7 @@ struct BrowseOverlay: View {
     }
 }
 
+/** "Where to?": the one way into search, big enough to hit from a phone holder. */
 struct SearchBar: View {
     @ObservedObject var model: AppModel
     @ObservedObject var voice: VoiceSearch
@@ -211,16 +245,23 @@ struct SearchBar: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(spacing: 12) {
-            if focused.wrappedValue {
-                Button { focused.wrappedValue = false } label: {
-                    Image(systemName: "arrow.left").font(.system(size: 18, weight: .medium))
+        HStack(spacing: 14) {
+            if focused.wrappedValue || !model.results.isEmpty || model.selected != nil {
+                Button {
+                    if focused.wrappedValue { focused.wrappedValue = false } else { model.clearSearch() }
+                } label: {
+                    Image(systemName: "arrow.left").font(.system(size: 22, weight: .semibold))
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Back")
             } else {
-                Image(systemName: "magnifyingglass").font(.system(size: 18, weight: .medium))
+                Image(systemName: "magnifyingglass").font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(Vela.muted(scheme))
+                    .padding(.leading, 8)
             }
-            TextField("Search", text: $model.query)
+            TextField("Where to?", text: $model.query)
+                .font(.system(size: 21, weight: .medium))
                 .focused(focused)
                 .submitLabel(.search)
                 .autocorrectionDisabled()
@@ -230,15 +271,18 @@ struct SearchBar: View {
                     if focused.wrappedValue { model.typed(q) }
                 }
             if model.searching {
-                ProgressView()
+                ProgressView().frame(width: 48, height: 48)
             } else if !model.query.isEmpty || !model.results.isEmpty || model.selected != nil {
                 Button {
                     model.clearSearch()
                     focused.wrappedValue = false
                 } label: {
-                    Image(systemName: "xmark").font(.system(size: 17, weight: .medium))
+                    Image(systemName: "xmark").font(.system(size: 19, weight: .bold))
+                        .frame(width: 48, height: 48)
+                        .background(Circle().fill(Vela.chip(scheme)))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
             } else {
                 Button {
                     focused.wrappedValue = false
@@ -247,25 +291,20 @@ struct SearchBar: View {
                         model.search(text)
                     }, onError: { model.notice = $0 })
                 } label: {
-                    Image(systemName: "mic").font(.system(size: 18))
+                    Image(systemName: "mic.fill").font(.system(size: 21, weight: .semibold))
+                        .frame(width: 48, height: 48)
+                        .background(Circle().fill(Vela.chip(scheme)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Search by voice")
-                Button { model.showSaved = true } label: {
-                    Image(systemName: "bookmark").font(.system(size: 18))
-                }
-                .buttonStyle(.plain)
             }
-            Button { model.showSettings = true } label: {
-                Image(systemName: "gearshape").font(.system(size: 18))
-            }
-            .buttonStyle(.plain)
         }
         .foregroundColor(.primary)
-        .padding(.horizontal, 18)
-        .frame(height: 52)
+        .padding(.leading, 12)
+        .padding(.trailing, 8)
+        .frame(height: 64)
         .glass(Capsule())
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 16)
     }
 }
 
@@ -348,9 +387,6 @@ struct SuggestionsPanel: View {
                         .frame(height: 50)
                     }
                     Shortcuts(model: model, done: done)
-                    ForEach(Category.all) { c in
-                        row(icon: c.icon, text: c.label) { done(); model.search(c.query, title: c.label) }
-                    }
                     if !settings.recentPlaces.isEmpty || !settings.recents.isEmpty {
                         HStack {
                             Text("Recent").font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
@@ -392,6 +428,12 @@ struct SuggestionsPanel: View {
                                 }
                         }
                     }
+                    // Recents first, like every maps app: most searches are for somewhere you've been.
+                    Text("Nearby").font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
+                        .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 4)
+                    ForEach(Category.all) { c in
+                        row(icon: c.icon, text: c.label) { done(); model.search(c.query, title: c.label) }
+                    }
                 }
             }
             .padding(.vertical, 8)
@@ -417,7 +459,7 @@ struct SuggestionsPanel: View {
                 Spacer()
             }
             .padding(.horizontal, 18)
-            .frame(height: 46)
+            .frame(height: 52)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -466,6 +508,7 @@ enum DemoScript {
             return
         }
         if step == "layers" { model.showLayers = true; return }
+        if step == "pickhome" { model.picking = .home; return }
         if step == "rail" {
             // Lower Manhattan with the subway lines and hill shading on.
             model.settings.transitLines = true
@@ -491,7 +534,7 @@ enum DemoScript {
         }
         if step == "wazesettings" {
             model.settings.waze = true
-            model.showSettings = true
+            model.tab = .settings
             return
         }
         if step == "wazedemo" || step == "wazetap" {
@@ -529,6 +572,51 @@ enum DemoScript {
             }
             return
         }
+        if step == "settings" { model.tab = .settings; return }
+        if step == "saved" {
+            // A few saved places, one with a long name, in the bookmarks list.
+            var pub = Place(id: "demo-pub", name: "The Old Bell Traditional Pub, Restaurant and Rooms by the River", location: LatLng(38.5460, -121.7420), source: "demo")
+            pub.address = "123 Long Address Road, Somewhere Quite Far Away, Davis, CA 95616"
+            pub.category = "Pub"
+            let cafe = Place(id: "demo-cafe", name: "Temple Coffee", location: LatLng(38.5440, -121.7400), source: "demo")
+            model.settings.saved = [pub, cafe]
+            var home = Place(id: "demo-home", name: "Home", location: LatLng(38.5480, -121.7445), source: "demo")
+            home.address = "Home"
+            model.settings.home = home
+            model.tab = .saved
+            return
+        }
+        if step == "longname" || step == "longdir" {
+            // A place with a very long name, its sheet and then directions to it.
+            var pub = Place(id: "demo-pub", name: "The Old Bell Traditional Pub, Restaurant and Rooms by the River", location: LatLng(38.5460, -121.7420), source: "demo")
+            pub.address = "123 Long Address Road, Somewhere Quite Far Away, Davis, CA 95616"
+            pub.category = "Traditional British pub and restaurant"
+            model.select(pub)
+            guard step == "longdir" else { return }
+            await wait(2)
+            model.openDirections(to: pub)
+            return
+        }
+        if step == "searchfocus" {
+            // The search box open with home set and the police heat map on: the legend must hide.
+            model.settings.waze = true
+            model.settings.wazeHeatmap = true
+            var home = Place(id: "demo-home", name: "Home", location: LatLng(38.5480, -121.7445), source: "demo")
+            home.address = "Home"
+            model.settings.home = home
+            return
+        }
+        if step == "transituk" {
+            // A long trip with many changes (the build sets the phone in Reading): a real
+            // Transitous plan to central London, whose rows used to push the screen off its right edge.
+            let to = Place(id: "demo-london", name: "London", location: LatLng(51.5072, -0.1276), source: "demo")
+            model.select(to)
+            await wait(2)
+            model.openDirections(to: to)
+            model.showTransit()
+            model.detent = .full
+            return
+        }
         if step == "wazelink" {
             // A Waze share link pasted into search: a geohash by Westminster Bridge.
             model.search("https://waze.com/ul/hgcpuvpk4")
@@ -555,6 +643,20 @@ enum DemoScript {
             var station = Place(id: "demo-davis", name: "Davis Station", location: LatLng(38.5435, -121.7377), source: "demo")
             station.category = "Train station"
             model.select(station)
+            return
+        }
+        if step == "roundabout" {
+            // Matteo's M27 roundabout drawn in the banner, in miles and yards, with the camera alert.
+            model.settings.units = .yards
+            let to = Place(id: "demo-pitlochry", name: "Pitlochry", location: LatLng(56.7030, -3.7340), source: "demo")
+            model.select(to)
+            await wait(2)
+            model.openDirections(to: to)
+            await wait(10)
+            model.startNavigation()
+            await wait(5)
+            model.nav?.showDemoRoundabout()
+            model.nav?.showDemoAlerts()
             return
         }
         if step == "uk" {
@@ -605,7 +707,8 @@ enum DemoScript {
         model.openDirections(to: first)
         if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)
-        guard ["nav", "camalert", "wazealert"].contains(step) else { return }
+        if step == "addstop" { model.addingStop = true; return }
+        guard ["nav", "camalert", "wazealert", "allalerts"].contains(step) else { return }
         model.startNavigation()
         if step == "camalert" {
             await wait(4)
@@ -615,57 +718,101 @@ enum DemoScript {
             await wait(4)
             model.nav?.showDemoWaze()
         }
+        if step == "allalerts" {
+            // Everything at once: camera, Waze police, helicopter and an average speed check.
+            await wait(4)
+            model.nav?.showDemoAlerts()
+            model.nav?.showDemoWaze()
+        }
     }
 }
 
-/** Home, Work and the parked car, one tap from the search box. */
+/** Home, Work and the parked car at the top of the search panel. */
 struct Shortcuts: View {
     @ObservedObject var model: AppModel
     @ObservedObject var settings = AppSettings.shared
     let done: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            PlaceTile(model: model, icon: "house.fill", color: Vela.routeBlue, title: "Home", place: settings.home) {
+                done()
+                model.picking = .home
+            } go: { done() }
+            PlaceTile(model: model, icon: "briefcase.fill", color: Color(hex: 0x8B5CF6), title: "Work", place: settings.work) {
+                done()
+                model.picking = .work
+            } go: { done() }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+}
+
+/**
+ * The two big tiles under "Where to?": Home and Work, or your first saved place when work isn't
+ * set. One tap starts the route.
+ */
+struct QuickTiles: View {
+    @ObservedObject var model: AppModel
+    @ObservedObject var settings = AppSettings.shared
+
+    var body: some View {
+        HStack(spacing: 10) {
+            PlaceTile(model: model, icon: "house.fill", color: Vela.routeBlue, title: "Home", place: settings.home) {
+                model.picking = .home
+            }
+            if settings.work == nil, let first = settings.saved.first {
+                PlaceTile(model: model, icon: "bookmark.fill", color: Color(hex: 0xF59E0B), title: first.name, place: first) {}
+            } else {
+                PlaceTile(model: model, icon: "briefcase.fill", color: Color(hex: 0x8B5CF6), title: "Work", place: settings.work) {
+                    model.picking = .work
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+}
+
+struct PlaceTile: View {
+    @ObservedObject var model: AppModel
+    let icon: String
+    let color: Color
+    let title: String
+    let place: Place?
+    let unset: () -> Void
+    var go: () -> Void = {}
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                chip("house.fill", "Home", settings.home) {
-                    model.notice = "Open any place and tap More, then Set as home."
-                }
-                chip("briefcase.fill", "Work", settings.work) {
-                    model.notice = "Open any place and tap More, then Set as work."
-                }
-                if let p = settings.parking {
-                    chip("parkingsign", "Parked car", p) {}
-                }
-            }
-            .padding(.horizontal, 14)
-        }
-        .padding(.vertical, 6)
-    }
-
-    private func chip(_ icon: String, _ title: String, _ place: Place?, unset: @escaping () -> Void) -> some View {
         Button {
-            done()
-            if let p = place { model.openDirections(to: p) } else { unset() }
+            if let p = place { go(); model.openDirections(to: p) } else { unset() }
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: icon).font(.system(size: 14, weight: .semibold))
+            HStack(spacing: 12) {
+                Image(systemName: icon).font(.system(size: 19, weight: .bold))
                     .foregroundColor(.white)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(place == nil ? Color.secondary : Vela.routeBlue))
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(title).font(.subheadline.weight(.semibold))
-                    Text(place.flatMap { p in p.distanceMeters ?? model.userLatLng.map { $0.distance(to: p.location) } }.map(Fmt.distance) ?? (place == nil ? "Set" : ""))
-                        .font(.caption).foregroundColor(.secondary)
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(place == nil ? Color.gray : color))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.system(size: 19, weight: .bold)).lineLimit(1)
+                    Text(place.flatMap { p in model.userLatLng.map { $0.distance(to: p.location) } }.map(Fmt.distance) ?? (place == nil ? "Tap to set" : "Tap to go"))
+                        .font(.system(size: 15, weight: .medium)).foregroundColor(Vela.muted(scheme)).lineLimit(1)
                 }
+                Spacer(minLength: 0)
             }
-            .padding(.leading, 6).padding(.trailing, 14)
-            .frame(height: 44)
-            .background(Capsule().stroke(Color.secondary.opacity(0.35)))
-            .contentShape(Capsule())
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 74)
+            .glass(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 22))
         }
         .buttonStyle(.plain)
         .foregroundColor(.primary)
+        .contextMenu {
+            if place != nil, title == "Home" || title == "Work" {
+                Button { model.picking = title == "Home" ? .home : .work } label: { Label("Change \(title.lowercased())", systemImage: "pencil") }
+            }
+        }
+        .accessibilityLabel(place == nil ? "\(title), not set" : "Go to \(title)")
     }
 }
 
@@ -687,5 +834,45 @@ struct Triangle: Shape {
         p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
         p.closeSubpath()
         return p
+    }
+}
+
+/** Why the map can't do its job right now: location turned off, or no internet. */
+struct StatusCards: View {
+    @ObservedObject var location: LocationService
+    @ObservedObject private var net = Connectivity.shared
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        if location.denied || DemoScript.step == "locationoff" {
+            card(icon: "location.slash.fill", color: Vela.closed, title: "Location is off",
+                 detail: "Kite needs it to show where you are and to guide you.", button: "Turn on") { LocationService.openSettings() }
+        } else if !net.online {
+            card(icon: "wifi.slash", color: Color(hex: 0xF59E0B), title: "No internet connection",
+                 detail: "Search, routes and live traffic need one. The map you've already seen still works.", button: nil) {}
+        }
+    }
+
+    private func card(icon: String, color: Color, title: String, detail: String, button: String?, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon).font(.system(size: 20, weight: .bold)).foregroundColor(.white)
+                .frame(width: 44, height: 44).background(Circle().fill(color))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 18, weight: .bold))
+                Text(detail).font(.system(size: 15)).foregroundColor(Vela.muted(scheme)).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            if let button {
+                Button(action: action) {
+                    Text(button).font(.system(size: 17, weight: .bold)).foregroundColor(Vela.onAccent(scheme))
+                        .padding(.horizontal, 16).frame(height: 44).background(Capsule().fill(Vela.accent(scheme)))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .glass(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
     }
 }

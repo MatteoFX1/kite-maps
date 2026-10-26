@@ -12,7 +12,7 @@ struct DirectionsOverlay: View {
             ZStack(alignment: .top) {
                 VStack {
                     Spacer()
-                    BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: 190) {
+                    BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: model.directions?.transit == true ? 200 : 300) {
                         TripHeader(model: model)
                     } content: {
                         TripBody(model: model)
@@ -24,6 +24,9 @@ struct DirectionsOverlay: View {
                         .padding(.top, 6)
                 }
             }
+            // Never wider than the screen, whatever a row inside asks for: a long trip's row once
+            // pushed the whole screen, from/to box included, off the right edge.
+            .frame(width: geo.size.width)
         }
     }
 }
@@ -36,9 +39,11 @@ struct EndpointsCard: View {
     var body: some View {
         HStack(spacing: 10) {
             Button { withAnimation { model.closeDirections() } } label: {
-                Image(systemName: "arrow.left").font(.system(size: 18, weight: .medium))
+                Image(systemName: "arrow.left").font(.system(size: 22, weight: .bold))
+                    .frame(width: 48, height: 48)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Back")
             VStack(spacing: 0) {
                 endpoint(icon: "circle", color: Vela.routeBlue, text: state.reversed ? state.destination.name : "Your location")
                 ForEach(Array(state.stops.enumerated()), id: \.offset) { i, stop in
@@ -52,7 +57,7 @@ struct EndpointsCard: View {
                             .buttonStyle(.plain).foregroundColor(.secondary)
                             .accessibilityLabel("Remove stop")
                     }
-                    .frame(height: 42)
+                    .frame(height: 52)
                 }
                 Divider().padding(.leading, 30)
                 endpoint(icon: "mappin.circle.fill", color: Vela.closed, text: state.reversed ? "Your location" : state.destination.name)
@@ -61,66 +66,119 @@ struct EndpointsCard: View {
                     Button { model.addingStop = true } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "plus").font(.system(size: 14, weight: .bold)).frame(width: 18)
-                            Text("Add stop").font(.subheadline.weight(.medium))
+                            Text("Add stop").font(.system(size: 17, weight: .semibold))
                             Spacer()
                         }
-                        .foregroundColor(Vela.routeBlue)
-                        .frame(height: 36)
+                        .foregroundColor(Vela.accentText(scheme))
+                        .frame(height: 44)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
             }
             Button { model.reverseDirections() } label: {
-                Image(systemName: "arrow.up.arrow.down").font(.system(size: 16, weight: .medium))
+                Image(systemName: "arrow.up.arrow.down").font(.system(size: 19, weight: .bold))
+                    .frame(width: 48, height: 48)
+                    .background(Circle().fill(Vela.chip(scheme)))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Swap start and end")
         }
         .foregroundColor(.primary)
-        .padding(.horizontal, 14)
+        .padding(.leading, 6)
+        .padding(.trailing, 10)
         .padding(.vertical, 8)
-        .glass(RoundedRectangle(cornerRadius: 18))
-        .padding(.horizontal, 12)
+        .glass(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .padding(.horizontal, 16)
     }
 
     private func endpoint(icon: String, color: Color, text: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 14, weight: .bold)).foregroundColor(color).frame(width: 18)
-            Text(text).font(.body.weight(.medium)).lineLimit(1)
+            Image(systemName: icon).font(.system(size: 16, weight: .bold)).foregroundColor(color).frame(width: 18)
+            Text(text).font(.system(size: 19, weight: .semibold)).lineLimit(1)
             Spacer()
         }
-        .frame(height: 42)
+        .frame(height: 52)
     }
 }
 
+/** The part of the trip sheet always in view: how long, how you go, and a giant Go. */
 struct TripHeader: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var settings = AppSettings.shared
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         if let d = model.directions {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(d.transit ? "Transit" : d.mode.label).font(.title2.weight(.semibold))
-                    Spacer()
-                    Menu {
-                        Toggle("Avoid tolls", isOn: $settings.avoidTolls)
-                        Toggle(Fmt.yards ? "Avoid motorways" : "Avoid highways", isOn: $settings.avoidHighways)
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.primary)
-                            .frame(width: 34, height: 34)
-                            .background(Circle().fill(Color.secondary.opacity(0.18)))
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top) {
+                    if d.transit {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(d.pickedTrip.map { Fmt.duration($0.durationSeconds) } ?? "Transit")
+                                .font(.system(size: 40, weight: .heavy)).foregroundColor(Vela.accentText(scheme))
+                            Text("By public transport").font(.system(size: 17, weight: .medium)).foregroundColor(Vela.muted(scheme))
+                        }
+                    } else if let r = d.route {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(Fmt.duration(r.durationSeconds))
+                                .font(.system(size: 44, weight: .heavy))
+                                .foregroundColor(TripBody.delayColor(r, scheme))
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                            Text("\(Fmt.distance(r.distanceMeters)) · arrive \(Fmt.arrival(r.durationSeconds))")
+                                .font(.system(size: 17, weight: .medium)).foregroundColor(Vela.muted(scheme))
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                    } else if d.loading.contains(d.mode) {
+                        HStack(spacing: 10) { ProgressView(); Text("Finding routes…").font(.system(size: 19, weight: .semibold)) }
+                            .frame(height: 52)
+                    } else {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(d.errors[d.mode] ?? "No route found.").font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(Vela.muted(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
+                            if model.location.denied {
+                                PillButton(title: "Open Settings", icon: "location.fill", filled: true) { LocationService.openSettings() }
+                            } else if d.errors[d.mode] != nil {
+                                PillButton(title: "Try again", icon: "arrow.clockwise") { model.reloadRoutes() }
+                            }
+                        }
+                        .frame(minHeight: 52)
                     }
-                    .onChange(of: settings.avoidTolls) { _ in model.reloadRoutes() }
-                    .onChange(of: settings.avoidHighways) { _ in model.reloadRoutes() }
-                    CircleIconButton(icon: "xmark") { withAnimation { model.closeDirections() } }
+                    Spacer(minLength: 8)
+                    if !d.transit {
+                        Menu {
+                            Toggle("Avoid tolls", isOn: $settings.avoidTolls)
+                            Toggle(Fmt.yards ? "Avoid motorways" : "Avoid highways", isOn: $settings.avoidHighways)
+                        } label: {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 19, weight: .bold))
+                                .foregroundColor(.primary)
+                                .frame(width: 48, height: 48)
+                                .background(Circle().fill(Vela.chip(scheme)))
+                        }
+                        .accessibilityLabel("Route options")
+                        .onChange(of: settings.avoidTolls) { _ in model.reloadRoutes() }
+                        .onChange(of: settings.avoidHighways) { _ in model.reloadRoutes() }
+                    }
                 }
                 ModeTabs(model: model, state: d)
+                if !d.transit, !d.reversed, d.route != nil {
+                    Button { model.startNavigation() } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "location.north.fill").font(.system(size: 24, weight: .bold))
+                            Text("Go").font(.system(size: 26, weight: .heavy))
+                        }
+                        .foregroundColor(Vela.onAccent(scheme))
+                        .frame(maxWidth: .infinity, minHeight: 68)
+                        .background(Capsule().fill(Vela.accent(scheme)))
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Start driving")
+                }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 10)
         }
     }
 }
@@ -139,59 +197,36 @@ struct ModeTabs: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) { tabs }
-                .onAppear {
-                    guard state.transit else { return }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { proxy.scrollTo("transit", anchor: .trailing) }
-                }
-                .onChange(of: state.transit) { on in
-                    withAnimation { proxy.scrollTo(on ? "transit" : "drive", anchor: on ? .trailing : .leading) }
-                }
+        // Four equal tiles, always all in view, so the right one is easy to hit.
+        HStack(spacing: 8) {
+            ForEach(TravelMode.allCases) { m in
+                let on = !state.transit && m == state.mode
+                tile(icon: icon(m), on: on, loading: state.loading.contains(m),
+                     time: state.routes[m]?.first.map { Fmt.shortDuration($0.durationSeconds) }) { model.setMode(m) }
+                    .accessibilityLabel(m.label)
+            }
+            tile(icon: "tram.fill", on: state.transit, loading: state.trips == nil,
+                 time: state.trips?.map(\.durationSeconds).min().map(Fmt.shortDuration)) { model.showTransit() }
+                .accessibilityLabel("Transit")
         }
     }
 
-    private var tabs: some View {
-        HStack(spacing: 4) {
-            ForEach(TravelMode.allCases) { m in
-                let on = !state.transit && m == state.mode
-                Button { model.setMode(m) } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: icon(m)).font(.system(size: 13))
-                        if state.loading.contains(m) {
-                            ProgressView().scaleEffect(0.7)
-                        } else if let r = state.routes[m]?.first {
-                            Text(Fmt.duration(r.durationSeconds)).font(.subheadline.weight(.medium))
-                        } else {
-                            Text("–").font(.subheadline)
-                        }
-                    }
-                    .padding(.horizontal, 11)
-                    .frame(height: 34)
-                    .foregroundColor(on ? Vela.onTonal(scheme) : .primary)
-                    .background(Capsule().fill(on ? Vela.tonal(scheme) : Color.clear))
+    private func tile(icon: String, on: Bool, loading: Bool, time: String?, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: icon).font(.system(size: 21, weight: .semibold))
+                if loading {
+                    ProgressView().scaleEffect(0.75).frame(height: 20)
+                } else {
+                    Text(time ?? "–").font(.system(size: 16, weight: .bold)).lineLimit(1).minimumScaleFactor(0.6)
                 }
-                .buttonStyle(.plain)
-                .id(m == .drive ? "drive" : "\(m.rawValue)")
             }
-            Button { model.showTransit() } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "tram.fill").font(.system(size: 13))
-                    if let t = state.trips {
-                        Text(t.map(\.durationSeconds).min().map(Fmt.duration) ?? "–").font(.subheadline.weight(.medium))
-                    } else {
-                        ProgressView().scaleEffect(0.7)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .frame(height: 34)
-                .foregroundColor(state.transit ? Vela.onTonal(scheme) : .primary)
-                .background(Capsule().fill(state.transit ? Vela.tonal(scheme) : Color.clear))
-            }
-            .buttonStyle(.plain)
-            .id("transit")
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, minHeight: 62)
+            .foregroundColor(on ? Vela.onAccent(scheme) : .primary)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(on ? Vela.accent(scheme) : Vela.chip(scheme)))
+            .contentShape(RoundedRectangle(cornerRadius: 18))
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -208,7 +243,7 @@ struct TripBody: View {
                         TransitBody(model: model, state: d)
                     } else if let r = d.route {
                         summary(r, d)
-                        buttons(d)
+                        if let url = d.destination.shareURL { shareButton(url) }
                         if d.current.count > 1 { alternates(d, picked: r) }
                         Divider()
                         Text("Steps").font(.headline)
@@ -227,52 +262,42 @@ struct TripBody: View {
         }
     }
 
-    private func delayColor(_ r: Route) -> Color {
+    static func delayColor(_ r: Route, _ scheme: ColorScheme) -> Color {
         switch r.delayLevel {
         case 2: return scheme == .dark ? Vela.closedDark : Vela.closed
         case 1: return Color(hex: 0xE37400)
-        default: return scheme == .dark ? Vela.openDark : Vela.open
+        default: return Vela.accentText(scheme)
         }
     }
 
+    private func delayColor(_ r: Route) -> Color { Self.delayColor(r, scheme) }
+
     private func summary(_ r: Route, _ d: DirectionsState) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(Fmt.duration(r.durationSeconds)).font(.title2.weight(.semibold)).foregroundColor(delayColor(r))
-                Text("(\(Fmt.distance(r.distanceMeters)))").font(.title3).foregroundColor(.secondary)
-            }
+        VStack(alignment: .leading, spacing: 6) {
             let best = d.current.map(\.durationSeconds).min() ?? r.durationSeconds
             let lead = r.durationSeconds <= best + 30 ? (r.trafficSeconds != nil ? "Fastest route now" : "Best route") : "Slower route"
             Text([lead, r.summary.map { "via \($0)" }].compactMap { $0 }.joined(separator: " · "))
-                .font(.subheadline).foregroundColor(.secondary)
+                .font(.system(size: 18, weight: .semibold))
             if r.mode == .drive, r.trafficSeconds != nil {
                 Text(r.delayLevel == 0 ? "Traffic is light" : "\(Fmt.duration(r.durationSeconds - r.typicalSeconds)) slower than usual")
-                    .font(.subheadline).foregroundColor(delayColor(r))
+                    .font(.system(size: 17, weight: .semibold)).foregroundColor(delayColor(r))
             }
-            Text("Arrive around \(Fmt.arrival(r.durationSeconds))").font(.subheadline).foregroundColor(.secondary)
-            if r.mode == .drive { RouteWazeSummary(route: r).padding(.top, 2) }
+            if r.mode == .drive { RouteWazeSummary(route: r).padding(.top, 4) }
         }
     }
 
-    private func buttons(_ d: DirectionsState) -> some View {
-        HStack(spacing: 8) {
-            if !d.reversed {
-                PillButton(title: "Start", icon: "location.north.fill", filled: true) { model.startNavigation() }
+    private func shareButton(_ url: URL) -> some View {
+        ShareLink(item: url) {
+            HStack(spacing: 8) {
+                Image(systemName: "square.and.arrow.up").font(.system(size: 17, weight: .bold))
+                Text("Share place").font(.system(size: 17, weight: .bold))
             }
-            if let url = d.destination.shareURL {
-                ShareLink(item: url) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.and.arrow.up").font(.system(size: 14, weight: .semibold))
-                        Text("Share").font(.subheadline.weight(.semibold))
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(height: 40)
-                    .foregroundColor(Vela.onTonal(scheme))
-                    .background(Capsule().fill(Vela.tonal(scheme)))
-                }
-                .buttonStyle(.plain)
-            }
+            .padding(.horizontal, 20)
+            .frame(height: 52)
+            .foregroundColor(Vela.onTonal(scheme))
+            .background(Capsule().fill(Vela.tonal(scheme)))
         }
+        .buttonStyle(.plain)
     }
 
     private func alternates(_ d: DirectionsState, picked: Route) -> some View {
@@ -309,13 +334,13 @@ struct StepsList: View {
             ForEach(Array(route.maneuvers.enumerated()), id: \.offset) { _, m in
                 HStack(alignment: .top, spacing: 14) {
                     Image(systemName: maneuverSymbol(m.type))
-                        .font(.system(size: 18, weight: .semibold))
-                        .frame(width: 26)
+                        .font(.system(size: 22, weight: .bold))
+                        .frame(width: 30)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(m.instruction).font(.subheadline)
-                        if let lane = m.laneHint { Text(lane).font(.caption).foregroundColor(.secondary) }
+                        Text(m.instruction).font(.system(size: 18, weight: .medium))
+                        if let lane = m.laneHint { Text(lane).font(.subheadline).foregroundColor(.secondary) }
                         if m.distanceMeters > 0 {
-                            Text(Fmt.distance(m.distanceMeters)).font(.caption).foregroundColor(.secondary)
+                            Text(Fmt.distance(m.distanceMeters)).font(.subheadline).foregroundColor(.secondary)
                         }
                     }
                     Spacer()
@@ -401,17 +426,20 @@ struct TripRow: View {
                 Spacer()
                 Text(Fmt.duration(trip.durationSeconds)).font(.headline)
             }
-            HStack(spacing: 4) {
+            // Wraps onto more lines for trips with many changes, like Google Maps does.
+            WrapLayout(spacing: 4, lineSpacing: 6) {
                 ForEach(Array(trip.legs.enumerated()), id: \.offset) { i, leg in
-                    if i > 0 { Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundColor(.secondary) }
-                    if leg.isWalk {
-                        HStack(spacing: 1) {
-                            Image(systemName: "figure.walk").font(.system(size: 13))
-                            if leg.durationSeconds >= 60 { Text("\(Int((leg.durationSeconds / 60).rounded()))").font(.caption2) }
+                    HStack(spacing: 4) {
+                        if i > 0 { Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundColor(.secondary) }
+                        if leg.isWalk {
+                            HStack(spacing: 1) {
+                                Image(systemName: "figure.walk").font(.system(size: 13))
+                                if leg.durationSeconds >= 60 { Text("\(Int((leg.durationSeconds / 60).rounded()))").font(.caption2) }
+                            }
+                            .foregroundColor(.secondary)
+                        } else {
+                            LineChip(leg: leg)
                         }
-                        .foregroundColor(.secondary)
-                    } else {
-                        LineChip(leg: leg)
                     }
                 }
             }
@@ -429,8 +457,55 @@ struct TripRow: View {
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12).fill(picked ? Color.secondary.opacity(0.14) : Color.clear))
         .contentShape(Rectangle())
+    }
+}
+
+/** Lays its views out left to right, starting a new line when the next one doesn't fit. */
+struct WrapLayout: Layout {
+    var spacing: CGFloat = 4
+    var lineSpacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        let rows = arrange(subviews, width: width)
+        let used = rows.map { $0.width }.max() ?? 0
+        let height = rows.map { $0.height }.reduce(0, +) + lineSpacing * CGFloat(max(rows.count - 1, 0))
+        return CGSize(width: min(used, width), height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(subviews, width: bounds.width) {
+            var x = bounds.minX
+            for i in row.items {
+                let size = subviews[i].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+                subviews[i].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                                  proposal: ProposedViewSize(width: min(size.width, bounds.width), height: size.height))
+                x += min(size.width, bounds.width) + spacing
+            }
+            y += row.height + lineSpacing
+        }
+    }
+
+    private func arrange(_ subviews: Subviews, width: CGFloat) -> [(items: [Int], width: CGFloat, height: CGFloat)] {
+        var rows: [(items: [Int], width: CGFloat, height: CGFloat)] = []
+        var items: [Int] = [], x: CGFloat = 0, h: CGFloat = 0
+        for (i, v) in subviews.enumerated() {
+            let size = v.sizeThatFits(ProposedViewSize(width: width, height: nil))
+            let w = min(size.width, width)
+            if !items.isEmpty && x + spacing + w > width {
+                rows.append((items, x, h))
+                items = []; x = 0; h = 0
+            }
+            x += (items.isEmpty ? 0 : spacing) + w
+            h = max(h, size.height)
+            items.append(i)
+        }
+        if !items.isEmpty { rows.append((items, x, h)) }
+        return rows
     }
 }
 
@@ -536,6 +611,7 @@ struct StopPicker: View {
             }
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search for a stop")
             .onSubmit(of: .search) { run() }
+            .kiteList()
             .navigationTitle("Add stop")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }

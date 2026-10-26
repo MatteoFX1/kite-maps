@@ -6,6 +6,17 @@ import SwiftUI
 import UIKit
 import VelaCore
 
+/** The dock's pages. */
+enum AppTab: Equatable {
+    case map, saved, settings
+}
+
+/** Which of your places the "pick a place" sheet is choosing. */
+enum PickKind: String, Identifiable {
+    case home, work
+    var id: String { rawValue }
+}
+
 enum SheetDetent: Equatable {
     case peek, half, full
 }
@@ -97,12 +108,20 @@ final class AppModel: ObservableObject {
     @Published var directions: DirectionsState?
     @Published var nav: Navigator?
     @Published var showLayers = false
+    /** Which page of the dock is open. */
+    @Published var tab: AppTab = .map
+    /** Live Waze reports in view, for the "Live from Waze" chip; nil until Waze answers. */
+    @Published var wazeLiveCount: Int?
+    /** The police risk around you (0 to 100), for the chip on the map. */
+    @Published var areaRisk: Int?
     @Published var showSettings = false
     /** A Waze report tapped on the map, shown in a small card. */
     @Published var wazeInfo: WazeAlert?
     /** The "Add stop" search sheet. */
     @Published var addingStop = false
     @Published var showSaved = false
+    /** The sheet for choosing home or work by searching for it. */
+    @Published var picking: PickKind?
     @Published var showSteps = false
     /** "Start" on a place: begin the drive as soon as its route arrives. */
     @Published var autoStart = false
@@ -111,7 +130,13 @@ final class AppModel: ObservableObject {
     /** Which way the map faces, for the compass button. */
     @Published var mapHeading: Double = 0
 
-    weak var map: MLNMapView?
+    weak var map: MLNMapView? { didSet { glide.map = map } }
+    /** Moves the nav arrow and camera every frame between GPS fixes. */
+    let glide = NavGlide()
+    /** Bumped on every new route or transit request, so answers to an older one (before a
+     *  reverse, a new stop or another time) are dropped instead of replacing the new ones. */
+    private var routesRequest = 0
+    private var transitRequest = 0
     private var searchTask: Task<Void, Never>?
     private var navSub: AnyCancellable?
 
@@ -178,7 +203,7 @@ final class AppModel: ObservableObject {
             resultsTitle = title ?? q
             results = r.places
             if r.places.isEmpty {
-                notice = "No results for \"\(q)\" here."
+                notice = Connectivity.explain("No results for \"\(q)\" here. Try another word, or move the map.")
             } else if r.googleError != nil && useGoogle {
                 notice = "Google didn't answer, so these results are from OpenStreetMap."
             }
@@ -245,7 +270,7 @@ final class AppModel: ObservableObject {
                 search(q)
             case nil:
                 query = ""
-                notice = "Couldn't find a location in that link."
+                notice = Connectivity.explain("Couldn't find a location in that link.")
             }
         }
     }
@@ -317,6 +342,8 @@ final class AppModel: ObservableObject {
         }
     }
 
+    static let locationOffText = "Location is off for Kite. Turn it on in Settings to get directions from where you are."
+
     // MARK: My places
 
     /** A Siri or Shortcuts request: directions home or to work, or back to the car. */
@@ -331,8 +358,8 @@ final class AppModel: ObservableObject {
         case .car: target = settings.parking
         }
         guard let target else {
-            notice = kind == .car ? "No parking spot saved yet. Tap P on the map when you park."
-                : "Set your \(kind == .home ? "home" : "work") first: open a place, tap More, then Set as \(kind == .home ? "home" : "work")."
+            if kind == .car { notice = "No parking spot saved yet. Tap P on the map when you park." }
+            else { picking = kind == .home ? .home : .work }
             return
         }
         openDirections(to: target)
@@ -358,7 +385,7 @@ final class AppModel: ObservableObject {
     /** Remember where the car is: here, now, with the street name when one is found. */
     func saveParking() {
         guard let me = userLatLng else {
-            notice = "Turn on location to save where you parked."
+            notice = location.denied ? "Location is off for Kite. Turn it on in Settings to save where you parked." : "Still finding your location. Try again in a moment."
             return
         }
         var p = Place(id: "parking:\(Int(Date().timeIntervalSince1970))", name: "Parked car", location: me, source: "osm")
@@ -471,21 +498,36 @@ final class AppModel: ObservableObject {
     private func loadAllModes() {
         guard let d = directions else { return }
         guard let me = userLatLng else {
-            notice = "Turn on location to get directions from where you are."
+            // Say so on the trip card itself, not just in passing.
+            let why = location.denied ? Self.locationOffText : "Waiting for your location…"
+            for m in TravelMode.allCases { directions?.errors[m] = why }
+            directions?.tripsError = why
+            directions?.trips = []
+            if !location.denied {
+                // GPS is on but hasn't answered yet: try again once it does.
+                location.start()
+                Task {
+                    for _ in 0..<40 where userLatLng == nil { try? await Task.sleep(nanoseconds: 250_000_000) }
+                    if userLatLng != nil, directions?.destination.id == d.destination.id, directions?.routes.isEmpty == true { reloadRoutes() }
+                }
+            }
             return
         }
         let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
         let via = (d.reversed ? d.stops.reversed() : d.stops).map(\.location)
-        let destId = d.destination.id
+        routesRequest += 1
+        let req = routesRequest
         let hw = settings.avoidHighways, tolls = settings.avoidTolls, google = !settings.noGoogle
         for m in TravelMode.allCases {
             directions?.loading.insert(m)
             Task {
                 let r = await Directions.routes(from: from, to: to, mode: m, avoidHighways: hw, avoidTolls: tolls, useGoogle: google, via: via)
-                guard directions?.destination.id == destId else { return }
+                guard directions?.destination.id == d.destination.id, routesRequest == req else { return }
                 directions?.loading.remove(m)
                 directions?.routes[m] = r.routes
-                if r.routes.isEmpty { directions?.errors[m] = r.error ?? "No route" }
+                if r.routes.isEmpty {
+                    directions?.errors[m] = Connectivity.explain(r.error == "No route found." ? "No route found." : "Couldn't get a route just now. Try again in a moment.")
+                }
                 if m == directions?.mode {
                     frameRoute()
                     if autoStart, !r.routes.isEmpty {
@@ -504,19 +546,21 @@ final class AppModel: ObservableObject {
         let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
         let destId = d.destination.id
         let time = d.transitTime, arriveBy = d.arriveBy
+        transitRequest += 1
+        let req = transitRequest
         directions?.trips = nil
         directions?.tripsError = nil
         directions?.trip = 0
         Task {
             do {
                 let trips = try await Transitous.plan(from: from, to: to, time: time, arriveBy: arriveBy)
-                guard directions?.destination.id == destId, directions?.transitTime == time, directions?.arriveBy == arriveBy else { return }
+                guard directions?.destination.id == destId, transitRequest == req else { return }
                 directions?.trips = trips
                 if trips.isEmpty { directions?.tripsError = "No transit trips found here." }
             } catch {
-                guard directions?.destination.id == destId else { return }
+                guard directions?.destination.id == destId, transitRequest == req else { return }
                 directions?.trips = []
-                directions?.tripsError = "Couldn't reach the transit planner."
+                directions?.tripsError = Connectivity.explain("Couldn't reach the transit planner.")
             }
             if directions?.transit == true { frameRoute() }
         }
@@ -530,6 +574,16 @@ final class AppModel: ObservableObject {
         }
         guard let r = directions?.route else { mapTick += 1; return }
         frame(r.polyline, bottomFraction: 0.42, top: 170 + CGFloat(directions?.stops.count ?? 0) * 42)
+    }
+
+    /** Police risk within about a kilometre of you, from remembered and live Waze police reports. */
+    func updateAreaRisk(live: [WazeAlert]) {
+        let center = map.map { LatLng($0.centerCoordinate.latitude, $0.centerCoordinate.longitude) }
+        guard settings.wazeOn, settings.policeRisk, let here = userLatLng ?? center else { areaRisk = nil; return }
+        let d = 0.0096 / max(cos(here.lat * .pi / 180), 0.2) * 0.62
+        let line = [LatLng(here.lat, here.lng - d), LatLng(here.lat, here.lng + d)]
+        let near = live.filter { $0.kind == .police && $0.location.distance(to: here) < 1_500 }.count
+        areaRisk = PoliceRisk.score(ahead: line, past: WazeHistory.shared.reports, live: near, radius: 900)
     }
 
     // MARK: Navigation
@@ -546,6 +600,7 @@ final class AppModel: ObservableObject {
 
     func endNavigation() {
         nav?.stop()
+        glide.stop()
         nav = nil
         navSub = nil
         location.setNavigating(false)
@@ -572,29 +627,24 @@ final class AppModel: ObservableObject {
     private func locationChanged(_ loc: CLLocation) {
         guard let n = nav else { return }
         n.handle(loc)
-        if n.following { followCamera(n, loc, animated: true) }
+        followCamera(n, loc, animated: true)
         mapTick += 1
     }
 
     private func followCamera(_ n: Navigator, _ loc: CLLocation, animated: Bool) {
-        guard let map else { return }
         let p = n.progress
-        let onRoute = p.map { !$0.offRoute && $0.offsetMeters < 40 } ?? false
-        let center = onRoute ? CLLocationCoordinate2D(latitude: p!.snapped.lat, longitude: p!.snapped.lng) : loc.coordinate
-        let heading = loc.course >= 0 && loc.speed > 2 ? loc.course : (p?.routeBearing ?? map.direction)
         let speed = max(0, loc.speed)
-        let across = n.route.mode == .drive ? min(1400, max(450, 300 + speed * 30)) : 300
-        let cam = MLNMapCamera(lookingAtCenter: center, acrossDistance: across, pitch: 50, heading: heading)
-        let pad = UIEdgeInsets(top: map.bounds.height * 0.45, left: 0, bottom: 120, right: 0)
-        map.setCamera(cam, withDuration: animated ? 1.0 : 0, animationTimingFunction: CAMediaTimingFunction(name: .linear),
-                      edgePadding: pad, completionHandler: nil)
+        var across = n.route.mode == .drive ? min(1400, max(450, 300 + speed * 30)) : 300
+        // Close to a roundabout, zoom in so the whole of it and its exits fill the view.
+        if n.nextManeuver?.type == .roundabout, let d = p?.distanceToNext, d < 350 { across = min(across, 380) }
+        glide.fix(n, loc, across: across, jump: !animated)
     }
 
     // MARK: Map
 
     func centerOnUser() {
         guard let map, let loc = location.last ?? map.userLocation?.location else {
-            location.start()
+            if location.denied { LocationService.openSettings() } else { location.start() }
             return
         }
         let cam = MLNMapCamera(lookingAtCenter: loc.coordinate, acrossDistance: 1200, pitch: 0, heading: 0)

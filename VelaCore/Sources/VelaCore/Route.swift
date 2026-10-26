@@ -45,6 +45,67 @@ public struct Maneuver: Hashable, Sendable {
     public var lanes: [Lane] = []
     /** Which exit to take at a roundabout. */
     public var exit: Int?
+    /** The roundabout's real layout, for drawing it: where every road leaves, and which is yours. */
+    public var roundabout: RoundaboutShape?
+    /** The point where the route leaves a roundabout (the router's "exit roundabout" step), shown with that roundabout's picture. */
+    public var leavesRoundabout = false
+
+    public init(type: ManeuverType, instruction: String, location: LatLng, alongMeters: Double, distanceMeters: Double,
+                road: String? = nil, laneHint: String? = nil, lanes: [Lane] = [], exit: Int? = nil,
+                roundabout: RoundaboutShape? = nil) {
+        self.type = type
+        self.instruction = instruction
+        self.location = location
+        self.alongMeters = alongMeters
+        self.distanceMeters = distanceMeters
+        self.road = road
+        self.laneHint = laneHint
+        self.lanes = lanes
+        self.exit = exit
+        self.roundabout = roundabout
+    }
+}
+
+/**
+ * A roundabout as you meet it: the way in at the bottom, every road around it by its angle
+ * (degrees clockwise from straight ahead, so the way in is at 180), and the exit to take.
+ */
+public struct RoundaboutShape: Hashable, Sendable {
+    /** Roads you can leave by, in the order you pass them. */
+    public var exits: [Double]
+    /** Which of [exits] to take. */
+    public var taken: Int
+    /** Roads that only come in (one way), drawn faint and not counted. */
+    public var entriesOnly: [Double] = []
+    /** Traffic goes round clockwise (Britain, Ireland and other keep-left countries). */
+    public var clockwise: Bool
+    /** False when only the exits up to yours are known (the rest of the circle is left plain). */
+    public var complete: Bool
+
+    public init(exits: [Double], taken: Int, entriesOnly: [Double] = [], clockwise: Bool, complete: Bool) {
+        self.exits = exits
+        self.taken = taken
+        self.entriesOnly = entriesOnly
+        self.clockwise = clockwise
+        self.complete = complete
+    }
+
+    /** How far round the exit is, the way traffic goes, from the way in: 15 to 375 (back out the same road is a full lap). */
+    public func turn(_ i: Int) -> Double {
+        let a = exits[i]
+        let d = clockwise ? a - 180 : 180 - a
+        let t = (d.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
+        return t < 15 ? t + 360 : t
+    }
+
+    /**
+     * The lane the Highway Code says to use when no lanes are mapped: left (keep-left countries)
+     * for the first exit or straight on, right for anything past 12 o'clock. Mirrored where traffic keeps right.
+     * 0 is the lane nearest the kerb, 1 the one nearest the middle.
+     */
+    public var ruleLane: Int {
+        turn(taken) > 200 ? 1 : 0
+    }
 }
 
 /** One lane: where it goes ("left", "straight", "slight right"…) and whether it's a lane for this maneuver. */
@@ -86,6 +147,8 @@ public struct Route: Identifiable, Hashable, Sendable {
     public var speedLimits: [SpeedLimit] = []
     /** "google" or "osm". */
     public var source: String
+    /** False when Google left steps out (it folds long motorway stretches away), so the turns can't be placed. */
+    public var stepsComplete = true
 
     public var durationSeconds: Double { trafficSeconds ?? typicalSeconds }
 

@@ -81,7 +81,7 @@ final class AppSettings: ObservableObject {
         theme = ThemeMode(rawValue: d.string(forKey: "theme") ?? "") ?? .system
         units = UnitsMode(rawValue: d.string(forKey: "units") ?? "") ?? .auto
         voice = d.object(forKey: "voice") as? Bool ?? true
-        traffic = d.object(forKey: "traffic") as? Bool ?? false
+        traffic = d.object(forKey: "traffic") as? Bool ?? true
         satellite = d.bool(forKey: "satellite")
         terrain = d.bool(forKey: "terrain")
         transitLines = d.bool(forKey: "transitLines")
@@ -90,7 +90,8 @@ final class AppSettings: ObservableObject {
         noGoogle = d.bool(forKey: "noGoogle")
         speedCameras = d.object(forKey: "speedCameras") as? Bool ?? true
         plateCameras = d.object(forKey: "plateCameras") as? Bool ?? true
-        cameraWarnings = d.bool(forKey: "cameraWarnings")
+        // On for new users, except where warning of cameras is against the law.
+        cameraWarnings = d.object(forKey: "cameraWarnings") as? Bool ?? !Self.camerasRestricted
         speedingAlert = d.bool(forKey: "speedingAlert")
         parkingButton = d.object(forKey: "parkingButton") as? Bool ?? true
         // Off until the person says yes on the Waze screen.
@@ -112,6 +113,11 @@ final class AppSettings: ObservableObject {
         saved = (d.data(forKey: "saved")).flatMap { try? JSONDecoder().decode([Place].self, from: $0) } ?? []
         recents = d.stringArray(forKey: "recents") ?? []
         recentPlaces = d.data(forKey: "recentPlaces").flatMap { try? JSONDecoder().decode([Place].self, from: $0) } ?? []
+    }
+
+    /** Countries where apps may not warn of speed cameras (France, Germany, Switzerland and a few more). */
+    static var camerasRestricted: Bool {
+        ["FR", "DE", "CH", "CY", "SK", "TR"].contains(Locale.current.regionCode ?? "")
     }
 
     private func save<T: Encodable>(_ v: T, _ key: String) {

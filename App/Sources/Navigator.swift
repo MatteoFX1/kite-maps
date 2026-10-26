@@ -38,6 +38,9 @@ final class Navigator: ObservableObject {
     @Published private(set) var stops: [Place]
     private var tracker: RouteTracker
     private let speech = AVSpeechSynthesizer()
+    private let speechDone = SpeechDone()
+    private var rerouteSpokenAt = Date.distantPast
+    private var toldNoSignal = false
     private var spokenStage: [Int: Int] = [:]
     private var lastReroute = Date.distantPast
     private var avoidHighways: Bool
@@ -70,9 +73,11 @@ final class Navigator: ObservableObject {
         avoidTolls = settings.avoidTolls
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
         UIApplication.shared.isIdleTimerDisabled = true
+        speech.delegate = speechDone
         let first = route.maneuvers.first { $0.type != .depart } ?? route.maneuvers.first
         loadCameras()
         loadWaze()
+        loadRoundabouts()
         speak("Starting route to \(destination.name). " + (first.map { "\($0.instruction)." } ?? ""))
     }
 
@@ -88,6 +93,7 @@ final class Navigator: ObservableObject {
     }
 
     var nextManeuver: Maneuver? {
+        if let demoManeuver { return demoManeuver }
         guard let i = progress?.nextIndex, i < route.maneuvers.count else { return route.maneuvers.first }
         return route.maneuvers[i]
     }
@@ -96,6 +102,8 @@ final class Navigator: ObservableObject {
     var thenManeuver: Maneuver? {
         guard let i = progress?.nextIndex, i + 1 < route.maneuvers.count else { return nil }
         let a = route.maneuvers[i], b = route.maneuvers[i + 1]
+        // Leaving a roundabout is part of the roundabout, not a turn of its own.
+        if b.leavesRoundabout { return nil }
         return b.alongMeters - a.alongMeters < 300 ? b : nil
     }
 
@@ -145,6 +153,19 @@ final class Navigator: ObservableObject {
     }
 
     /** Cameras and speed limits along the route, from OpenStreetMap, in one query per route. */
+    /** The real shape of each roundabout ahead, for the picture in the banner. */
+    private func loadRoundabouts() {
+        guard route.mode != .walk, route.maneuvers.contains(where: { $0.type == .roundabout }) else { return }
+        let r = route
+        Task {
+            guard let drawn = await Roundabouts.apply(to: r), self.route.id == r.id else { return }
+            // Only the roundabout layouts change; the line and steps are the same.
+            for i in self.route.maneuvers.indices where i < drawn.maneuvers.count {
+                self.route.maneuvers[i].roundabout = drawn.maneuvers[i].roundabout
+            }
+        }
+    }
+
     private func loadCameras() {
         routeCameras = []
         spokenCameras = []
@@ -190,13 +211,11 @@ final class Navigator: ObservableObject {
         let ahead = meters[i] - p.alongMeters
         let limit = cam.kind == .speed ? (cam.maxspeedKmh ?? route.speedLimit(at: meters[i])) : nil
         cameraAhead = CameraAlert(kind: cam.kind, meters: ahead, startMeters: max(ahead, 1), limitKmh: limit)
-        if AppSettings.shared.cameraWarnings {
+        // Spoken for speed cameras only: number plate cameras are everywhere in Britain, and
+        // saying each one would bury the turns. Those get the card alone.
+        if AppSettings.shared.cameraWarnings, cam.kind == .speed {
             chime()
-            if cam.kind == .speed {
-                speak((cam.average ? "Average speed camera ahead" : "Speed camera ahead") + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
-            } else {
-                speak(Fmt.yards ? "Number plate camera ahead." : "License plate camera ahead.")
-            }
+            speak((cam.average ? "Average speed camera ahead" : "Speed camera ahead") + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
         }
     }
 
@@ -327,6 +346,20 @@ final class Navigator: ObservableObject {
     }
 
     /** For the build's screenshots: a camera coming up and an average speed check. */
+    /** For the build's screenshots: the next turn swapped for a made-up one. */
+    private(set) var demoManeuver: Maneuver?
+
+    /** For the build's screenshots: the M27 roundabout at Park Gate, 6th exit, with its seven roads. */
+    func showDemoRoundabout() {
+        var m = Maneuver(type: .roundabout, instruction: "At the roundabout, take the 6th exit onto M27",
+                         location: LatLng(50.87, -1.27), alongMeters: 0, distanceMeters: 400, road: "M27", laneHint: nil)
+        m.exit = 6
+        m.roundabout = RoundaboutShape(exits: [262, 300, 338, 20, 62, 108], taken: 5, entriesOnly: [150],
+                                       clockwise: true, complete: true)
+        demoManeuver = m
+        objectWillChange.send()
+    }
+
     func showDemoAlerts() {
         demoAlerts = true
         cameraAhead = CameraAlert(kind: .speed, meters: 180, startMeters: 400, limitKmh: 48.3)
@@ -364,10 +397,16 @@ final class Navigator: ObservableObject {
         let far = drive ? max(1000, speedMps * 40) : 250
         if d <= now && stage < 3 {
             spokenStage[i] = 3
-            speak(m.instruction)
+            // The turn itself matters more than whatever is still being said.
+            speak(m.instruction, urgent: true)
         } else if d <= near && d > now + 30 && stage < 2 {
             spokenStage[i] = 2
-            speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
+            // Which lane, like the banner shows, so it's known without looking.
+            let lane = LaneGuide.lanes(for: m, leftTraffic: Geo.drivesOnLeft(m.location)).map { g -> String in
+                g.words.hasPrefix("Lane") ? ". Use " + g.words.lowercased().replacingOccurrences(of: "from left", with: "from the left")
+                    : ". Use the \(g.words.lowercased())"
+            } ?? ""
+            speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)\(lane)")
         } else if d <= far && d > near + 150 && stage < 1 && m.type != .arrive {
             spokenStage[i] = 1
             speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
@@ -377,7 +416,16 @@ final class Navigator: ObservableObject {
     private func reroute(from loc: CLLocation, quiet: Bool = false) {
         rerouting = true
         lastReroute = Date()
-        if !quiet { speak("Rerouting.") }
+        if !Connectivity.shared.online {
+            // Without signal there's no new route to get: say so once, not every few seconds.
+            if !quiet && !toldNoSignal {
+                toldNoSignal = true
+                speak("No signal. Keep going, and Kite will find a new route when it's back.")
+            }
+        } else if !quiet && Date().timeIntervalSince(rerouteSpokenAt) > 45 {
+            rerouteSpokenAt = Date()
+            speak("Rerouting.")
+        }
         let from = LatLng(loc.coordinate.latitude, loc.coordinate.longitude)
         let mode = route.mode
         let to = destination.location
@@ -387,10 +435,12 @@ final class Navigator: ObservableObject {
                                             useGoogle: !AppSettings.shared.noGoogle, via: self.stops.map(\.location))
             self.rerouting = false
             guard let fresh = r.routes.first else { return }
+            self.toldNoSignal = false
             self.route = fresh
             self.tracker = RouteTracker(route: fresh)
             self.spokenStage = [:]
             self.loadCameras()
+            self.loadRoundabouts()
             self.wazeAt = .distantPast
             self.routeWaze = []
             self.wazeAhead = nil
@@ -399,14 +449,36 @@ final class Navigator: ObservableObject {
         }
     }
 
-    private func speak(_ text: String) {
+    private func speak(_ text: String, urgent: Bool = false) {
         guard !muted else { return }
+        if urgent && speech.isSpeaking { speech.stopSpeaking(at: .word) }
         try? AVAudioSession.sharedInstance().setActive(true)
         let u = AVSpeechUtterance(string: text)
-        u.voice = AVSpeechSynthesisVoice(language: Locale.preferredLanguages.first?.hasPrefix("en") == true
-                                         ? Locale.preferredLanguages.first : "en-US")
+        u.voice = Self.voice
         u.rate = AVSpeechUtteranceDefaultSpeechRate * 0.95
         speech.speak(u)
+    }
+
+    /** The phone's English voice for its region, the better-sounding download when there is one. */
+    static let voice: AVSpeechSynthesisVoice? = {
+        let lang = Locale.preferredLanguages.first.flatMap { $0.hasPrefix("en") ? $0 : nil } ?? (Fmt.yards ? "en-GB" : "en-US")
+        let better = AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language == lang && $0.quality != .default }
+            .max { $0.quality.rawValue < $1.quality.rawValue }
+        return better ?? AVSpeechSynthesisVoice(language: lang)
+    }()
+}
+
+/** Hands the sound back once Kite stops talking, so music comes back up between instructions. */
+final class SpeechDone: NSObject, AVSpeechSynthesizerDelegate {
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) { release(synthesizer) }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) { release(synthesizer) }
+
+    private func release(_ synthesizer: AVSpeechSynthesizer) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            guard !synthesizer.isSpeaking else { return }
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 }
 
