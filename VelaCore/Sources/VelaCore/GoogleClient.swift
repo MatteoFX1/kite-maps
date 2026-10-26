@@ -41,16 +41,16 @@ public actor GoogleClient {
         try await warm()
         let first = try await page(query, center: center, spanMeters: spanMeters, offset: 0)
         guard pages > 1, first.count >= 18 else { return first }
-        var more: [Place] = []
-        await withTaskGroup(of: [Place].self) { group in
+        var more: [Int: [Place]] = [:]
+        await withTaskGroup(of: (Int, [Place]).self) { group in
             for i in 1..<pages {
-                group.addTask { (try? await self.page(query, center: center, spanMeters: spanMeters, offset: 20 * i)) ?? [] }
+                group.addTask { (i, (try? await self.page(query, center: center, spanMeters: spanMeters, offset: 20 * i)) ?? []) }
             }
-            for await p in group { more += p }
+            for await (i, p) in group { more[i] = p }
         }
+        // Pages in Google's order, as they'd come scrolling down Google Maps' list.
         var seen = Set(first.map(\.id))
-        let extra = more.filter { seen.insert($0.id).inserted }
-            .sorted { ($0.distanceMeters ?? 0) < ($1.distanceMeters ?? 0) }
+        let extra = (1..<pages).flatMap { more[$0] ?? [] }.filter { seen.insert($0.id).inserted }
         return first + extra
     }
 

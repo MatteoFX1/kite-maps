@@ -53,6 +53,9 @@ the middle number for big milestones.
   OpenStreetMap's website instead. It now opens Google Maps at that spot, and Share sends a Google
   Maps link too.
 - **Tidier step words:** "So'ton" instead of "So&#39;ton".
+- **Search results in Google's order:** results now come in the same order as Google Maps, best
+  match first, instead of nearest first (which could put a fuel company's office above real petrol
+  stations). Sort › Distance still lists them nearest first.
 
 ## 0.7.1
 

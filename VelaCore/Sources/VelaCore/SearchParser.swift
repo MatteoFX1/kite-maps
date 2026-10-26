@@ -41,18 +41,9 @@ enum SearchParser {
             ?? atThisPlaceEntries(root)
             ?? singleEntry(root)
             ?? []
-        var places = entries.compactMap { toPlace($0, near: near) }
+        // Google's own order (its best match first), as Google Maps lists them; the Sort menu has Distance.
         var seen = Set<String>()
-        places = places.filter { seen.insert($0.featureId ?? $0.id).inserted }
-        guard near != nil else { return places }
-        // Nearest first, but inside the same ~120 m (one mall, one address) the busier place leads.
-        return places.sorted { a, b in
-            let ba = a.distanceMeters.map { Int($0 / 120) } ?? Int.max
-            let bb = b.distanceMeters.map { Int($0 / 120) } ?? Int.max
-            if ba != bb { return ba < bb }
-            if (a.reviewCount ?? 0) != (b.reviewCount ?? 0) { return (a.reviewCount ?? 0) > (b.reviewCount ?? 0) }
-            return (a.distanceMeters ?? 0) < (b.distanceMeters ?? 0)
-        }
+        return entries.compactMap { toPlace($0, near: near) }.filter { seen.insert($0.featureId ?? $0.id).inserted }
     }
 
     private static func nonEmpty(_ a: [Any]?) -> [Any]? {

@@ -30,15 +30,16 @@ final class SearchParserTests: XCTestCase {
             entry(name: "Near Pizza", lat: 40.7485, lng: -73.9857, status: "Open · Closes 10 PM"),
         ]
         let places = SearchParser.parse(root: root, near: LatLng(40.7484, -73.9857))
-        XCTAssertEqual(places.map(\.name), ["Near Pizza", "Far Pizza"])
-        let near = places[0]
+        // Google's order is kept (not re-sorted nearest first).
+        XCTAssertEqual(places.map(\.name), ["Far Pizza", "Near Pizza"])
+        let near = places[1]
         XCTAssertEqual(near.address, "1 Main St, Springfield")
         XCTAssertEqual(near.category, "Pizza restaurant")
         XCTAssertEqual(near.rating, 4.5)
         XCTAssertEqual(near.reviewCount, 120)
         XCTAssertEqual(near.openNow, true)
         XCTAssertEqual(near.hours, ["Monday: 11 AM–10 PM"])
-        XCTAssertEqual(places[1].openNow, false)
+        XCTAssertEqual(places[0].openNow, false)
     }
 
     func testOpensIsClosed() {
