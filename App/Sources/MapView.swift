@@ -39,6 +39,8 @@ struct VelaMapView: UIViewRepresentable {
 
         c.dark = dark
         model.map = map
+        // Reports found by the background sweep show on the heat map straight away.
+        WazeHistory.shared.onChange = { [weak c, weak map] in if let c, let map { c.render(map) } }
         // On a first launch, location is asked for after the welcome, not on top of it.
         if (settings.welcomed && !settings.needsWazeChoice) || DemoScript.active { model.location.start() }
         return map
@@ -256,7 +258,8 @@ struct VelaMapView: UIViewRepresentable {
                                                              0.4, "rgba(124,77,255,0.65)", 0.7, "rgba(233,30,99,0.8)",
                                                              1, "rgba(213,0,0,0.9)"])
             heat.isVisible = false
-            style.addLayer(heat)
+            // Under the routes, cameras and road names, so the glow never hides them.
+            if let under = style.layer(withIdentifier: "vela-route-alt-edge") { style.insertLayer(heat, below: under) } else { insert(heat) }
             let wazeSrc = MLNShapeSource(identifier: "vela-waze", shape: nil, options: nil)
             style.addSource(wazeSrc)
             let waze = MLNSymbolStyleLayer(identifier: "vela-waze", source: wazeSrc)

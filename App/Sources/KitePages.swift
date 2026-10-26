@@ -42,7 +42,7 @@ struct KiteDock: View {
     }
 }
 
-/** Bottom left of the map, with Waze on: the police risk here and how many live reports are in view. */
+/** Bottom left of the map, with Waze on: the heat map's key, the police risk here and how many live reports are in view. */
 struct WazeMapChips: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var settings = AppSettings.shared
@@ -51,6 +51,7 @@ struct WazeMapChips: View {
     var body: some View {
         if settings.wazeOn {
             VStack(alignment: .leading, spacing: 8) {
+                if settings.wazeHeatmap { HeatLegend() }
                 if settings.policeRisk, let risk = model.areaRisk {
                     let level = PoliceRisk.level(risk)
                     HStack(spacing: 8) {

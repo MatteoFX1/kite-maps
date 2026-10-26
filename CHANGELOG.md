@@ -11,6 +11,11 @@ the middle number for big milestones.
   said "Middle lanes". It was reading the lanes for a slip road just before the roundabout. Now
   it only uses lanes that really lead into the roundabout, and otherwise follows the Highway Code
   (1st exit: left lane).
+- **Police heat map fixes:** its key ("Police ... often") is back above the risk chip, the glow
+  now sits under your route, cameras and road names instead of covering them, and reports found
+  in the background show on it straight away.
+- **See what Waze sends:** Settings › Waze integration now has a "Last answer" line, like
+  "3 police · 5 hazards · 140 road closures", so it's easy to tell if Waze stops sending a kind.
 
 ## 0.7.1
 

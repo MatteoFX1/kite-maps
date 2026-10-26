@@ -43,10 +43,10 @@ struct ContentView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if DemoScript.step == "wazemap" {
+            if DemoScript.step == "wazemap" || DemoScript.step == "wazeuk" {
                 // Screenshot run only: what Waze answered, since the build's computers can't be trusted to get through.
                 TimelineView(.periodic(from: .now, by: 2)) { _ in
-                    Text((Waze.lastStatus.map { "Waze: HTTP \($0.code), \($0.count) reports\($0.viaPage ? " via page" : "")" } ?? "Waze: not asked yet")
+                    Text((Waze.lastStatus.map { "Waze: HTTP \($0.code), \($0.count) reports\($0.viaPage ? " via page" : ""): \($0.summary)" } ?? "Waze: not asked yet")
                          + "\n" + WazeWeb.shared.note)
                         .font(.caption.monospaced()).padding(6).background(Color.red).foregroundColor(.white)
                         .padding(.bottom, 120)
@@ -529,6 +529,15 @@ enum DemoScript {
             model.settings.wazeHeatmap = true
             model.settings.wazeKinds = Set(WazeAlert.Kind.allCases)
             model.map?.setCenter(CLLocationCoordinate2D(latitude: 51.507, longitude: -0.12), zoomLevel: 12.3, animated: false)
+            return
+        }
+        if step == "wazeuk" {
+            // The same over Southampton and the M27, to see what Waze sends for the UK outside London.
+            model.settings.waze = true
+            model.settings.wazeOnMap = true
+            model.settings.wazeHeatmap = true
+            model.settings.wazeKinds = Set(WazeAlert.Kind.allCases)
+            model.map?.setCenter(CLLocationCoordinate2D(latitude: 50.92, longitude: -1.40), zoomLevel: 10.6, animated: false)
             return
         }
         if step == "wazesettings" {

@@ -32,6 +32,15 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
     (function () {
       var k = window.__kite = { seen: 0, status: 0, headers: null };
       var isFeed = function (u) { return String(u || '').indexOf('/api/georss') >= 0; };
+      // What the page itself asked for and got, by type, to compare with what Kite gets.
+      var note = function (u, text) {
+        k.url = String(u || '').split('?')[1] || '';
+        try {
+          var t = {}, list = (JSON.parse(text).alerts || []);
+          list.forEach(function (a) { t[a.type] = (t[a.type] || 0) + 1; });
+          k.types = t;
+        } catch (e) {}
+      };
       var of = window.fetch;
       window.fetch = function (input, init) {
         var u = typeof input === 'string' ? input : (input && input.url);
@@ -42,17 +51,17 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
             if (src) { if (src.forEach) { src.forEach(function (v, n) { h[n] = v; }); } else { for (var n in src) { h[n] = src[n]; } } }
             k.headers = h; k.seen++;
           } catch (e) {}
-          p.then(function (r) { k.status = r.status; }, function () {});
+          p.then(function (r) { k.status = r.status; r.clone().text().then(function (t) { note(u, t); }, function () {}); }, function () {});
         }
         return p;
       };
       var X = XMLHttpRequest.prototype, oo = X.open, os = X.setRequestHeader, sd = X.send;
-      X.open = function (m, u) { this.__feed = isFeed(u); this.__h = {}; return oo.apply(this, arguments); };
+      X.open = function (m, u) { this.__feed = isFeed(u); this.__u = u; this.__h = {}; return oo.apply(this, arguments); };
       X.setRequestHeader = function (n, v) { if (this.__feed) { this.__h[n] = v; } return os.apply(this, arguments); };
       X.send = function () {
         if (this.__feed) {
           var x = this; k.headers = this.__h; k.seen++;
-          this.addEventListener('loadend', function () { k.status = x.status; });
+          this.addEventListener('loadend', function () { k.status = x.status; try { note(x.__u, x.responseText); } catch (e) {} });
         }
         return sd.apply(this, arguments);
       };
@@ -114,7 +123,8 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
                     note = "page: fetch \(text) · \(state)"
                     continue
                 }
-                note = "page: ok, \(text.count) chars"
+                let own = await pageOwn()
+                note = "page: ok, \(text.count) chars · \(own)"
                 return Data(text.utf8)
             } catch {
                 note = "page: \(error.localizedDescription)"
@@ -131,6 +141,12 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
         let js = "var k = window.__kite; return k ? 'page asked ' + k.seen + '× (' + k.status + ')' + (k.headers ? ' ' + Object.keys(k.headers).join('+') : '') + (k.key ? ' key ' + String(k.key).slice(0, 6) + ' ' + (k.action || '?') : ' no key') : 'no watcher';"
         let page = (try? await web?.callAsyncJavaScript(js, arguments: [:], contentWorld: .page)) as? String ?? "?"
         return "pass \(pass ? "yes" : "no"), \(page)"
+    }
+
+    /** What the live map page last asked for itself and how many of each type it got back. */
+    private func pageOwn() async -> String {
+        let js = "var k = window.__kite || {}; if (!k.url) { return 'page itself: not asked'; } var t = k.types || {}; return 'page itself (' + k.url.replace(/top=.*?&env=/, 'env=') + '): ' + (Object.keys(t).map(function (n) { return n + ' ' + t[n]; }).join(', ') || 'nothing');"
+        return (try? await web?.callAsyncJavaScript(js, arguments: [:], contentWorld: .page)) as? String ?? "?"
     }
 
     /** The page has asked for reports itself, or reCAPTCHA is ready to hand out tokens. */

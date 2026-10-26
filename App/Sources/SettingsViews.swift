@@ -213,6 +213,10 @@ struct WazeSettingsView: View {
                         Circle().fill(connection.color).frame(width: 10, height: 10)
                         Text(connection.text).font(.subheadline)
                     }
+                    if let s = Waze.lastStatus, s.code == 200 {
+                        // What Waze actually sent, so it's easy to see if a kind has gone missing.
+                        LabeledContent("Last answer", value: s.summary).font(.subheadline)
+                    }
                 } header: {
                     Text("Connection")
                 } footer: {
