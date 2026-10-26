@@ -15,10 +15,10 @@ the middle number for big milestones.
   the route, or when you're driving back along it the wrong way. The new route sets off the way
   you're facing, instead of telling you to turn round on the road you're on.
 - **Directions that match the blue line:** Kite takes its route from Google and its turn-by-turn
-  from the open map. Before, the open map only had to pass a few points of Google's route, and
-  between them it sometimes picked its own roads, so Kite called out turns the blue line never made
-  (or missed real ones). Now it follows Google's line point by point, and a route that strays is
-  never used for directions.
+  from the open map. Before, the open map's directions were used even where it drove a slightly
+  different way, so Kite could call out a turn the blue line never makes (like "Make a U-turn" leaving
+  Park Gate, where the line goes round the roundabout). Now they're only used when both run on the
+  very same roads, checked every 50 m both ways.
 - **No more "Continue on…" chatter:** when only the road's name changes, Kite stays quiet, like Waze.
 - **Google's lane advice:** where the open map has no lanes, Kite shows and says Google's own
   ("Use the right lane").

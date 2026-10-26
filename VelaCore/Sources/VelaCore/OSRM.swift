@@ -54,7 +54,7 @@ public enum OSRM {
     }
 
     /** Points along the line every 150 m or so (at most 100, the server's limit), first and last kept. */
-    static func matchURL(_ line: [LatLng], mode: TravelMode) -> URL? {
+    public static func matchURL(_ line: [LatLng], mode: TravelMode) -> URL? {
         let cum = Geo.cumulative(line)
         let total = cum.last ?? 0
         let n = min(99, max(1, Int(total / 150)))
@@ -479,14 +479,14 @@ public enum Directions {
                 // One at a time: the FOSSGIS server turns away bursts.
                 var vias: [Int: Route] = [:]
                 for i in g.indices {
-                    if let r = try? await OSRM.match(g[i].polyline, mode: mode) { vias[i] = r }
-                    else if let r = try? await OSRM.routeVia(g[i].polyline, mode: mode) { vias[i] = r }
+                    if let r = try? await OSRM.routeVia(g[i].polyline, mode: mode) { vias[i] = r }
                 }
                 let plain = (try? await osrmTask.value) ?? []
                 var spare = plain
                 for i in g.indices {
                     if var steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
-                        StepMerge.addGoogleLaneHints(&steps, from: g[i].maneuvers)
+                        // Google's step positions are only trustworthy when its steps cover the whole line.
+                        if g[i].stepsComplete { StepMerge.addGoogleLaneHints(&steps, from: g[i].maneuvers) }
                         g[i].maneuvers = steps
                         g[i].stepsComplete = true
                     } else if !g[i].stepsComplete, !spare.isEmpty {
@@ -534,9 +534,10 @@ public enum StepMerge {
         var best: [Maneuver]?
         var bestScore = 0.0
         for o in candidates {
-            // Only a route on the same roads all the way: one that strays (its own way round
-            // somewhere) would call out turns the blue line never makes.
-            guard follows(o.polyline, line, cumulative: cum) else { continue }
+            // Only a route on the same roads all the way, checked both ways: one that strays (its own
+            // way round somewhere), or skips a bit of the line (a U-turn where the line goes round a
+            // roundabout), would call out turns the blue line never makes.
+            guard follows(o.polyline, line, cumulative: cum), follows(line, o.polyline, cumulative: Geo.cumulative(o.polyline)) else { continue }
             let mids = o.maneuvers.filter { $0.type != .depart && $0.type != .arrive }
             var placed: [Maneuver] = []
             var last = 0.0

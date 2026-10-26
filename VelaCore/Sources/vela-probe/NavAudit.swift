@@ -33,7 +33,13 @@ func navAudit() async {
                 if let mt = try await OSRM.match(g.polyline, mode: .drive) {
                     print("--- Open router matched to Google's line (\(Int(mt.distanceMeters)) m):")
                     mt.maneuvers.forEach { print(row($0)) }
-                } else { print("--- Open router matched to Google's line: NO SINGLE MATCH") }
+                } else {
+                    var why = "?"
+                    if let u = OSRM.matchURL(g.polyline, mode: .drive), let (d, _) = try? await URLSession.shared.data(from: u) {
+                        why = String(decoding: d.prefix(300), as: UTF8.self)
+                    }
+                    print("--- Open router matched to Google's line: NO SINGLE MATCH: \(why)")
+                }
             } catch { print("--- Open router match FAILED: \(error)") }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             if let v = try? await OSRM.routeVia(g.polyline, mode: .drive) {

@@ -108,6 +108,10 @@ final class RoutingTests: XCTestCase {
         let cum = Geo.cumulative(line)
         XCTAssertTrue(StepMerge.follows([LatLng(0, 0.0001), LatLng(0.02, 0.0001)], line, cumulative: cum))
         XCTAssertFalse(StepMerge.follows([LatLng(0, 0), LatLng(0.01, 0), LatLng(0.01, 0.001), LatLng(0.02, 0.001)], line, cumulative: cum))
+        // Checked both ways: the line goes up to a roundabout and back, the other route turns round early.
+        let loop = [LatLng(0, 0), LatLng(0.01, 0), LatLng(0.01, 0.004), LatLng(0.01, 0), LatLng(0.02, 0)]
+        XCTAssertTrue(StepMerge.follows(line, loop, cumulative: Geo.cumulative(loop)))
+        XCTAssertFalse(StepMerge.follows(loop, line, cumulative: cum))
         // Matching asks for a point about every 150 m, never more than 100.
         let url = OSRM.matchURL(line, mode: .drive)!.absoluteString
         XCTAssertTrue(url.contains("/match/v1/driving/"))
