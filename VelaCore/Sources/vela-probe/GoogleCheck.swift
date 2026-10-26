@@ -111,6 +111,17 @@ func googleCheck() async {
             walk(r0, [0, 1, 0])
         }
         line("  (\(found) strings)")
+        // The step groups themselves, raw: some steps have no <step> text and the gap is in them.
+        if let r0 = ((root as? [Any])?.first as? [Any]).flatMap({ $0.count > 1 ? $0[1] as? [Any] : nil })?.first,
+           let groups = (((r0 as? [Any])?[1] as? [Any])?[0] as? [Any]).flatMap({ $0.count > 1 ? $0[1] as? [Any] : nil }) {
+            for (gi, g) in groups.enumerated() {
+                let d = (try? JSONSerialization.data(withJSONObject: g, options: [.fragmentsAllowed])) ?? Data()
+                let t = String(decoding: d, as: UTF8.self).replacingOccurrences(of: "//maps.gstatic.com/tactile/directions/text_mode/maneuvers-2x.png", with: "IMG")
+                line("  group \(gi) (\(t.count) chars): \(t.prefix(2500))")
+            }
+        } else {
+            line("  groups: not where expected")
+        }
     } catch {
         line("Raw steps: FAILED \(error)")
     }
