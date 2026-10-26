@@ -20,6 +20,22 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(m.instruction, "Turn left onto Elm St")
     }
 
+    func testFoldedMotorwayStep() {
+        // Google's long motorway stretch inside a folded group has no <step> text (Park Gate to Southampton, M27).
+        let json = #"[0,"",[12553,"7.8 mi",1],[486,"8 min"],null,null,null,[[[2612.7,-1.2584,50.8754],[0,0,0],[1024,768],13.1]],null,null,null,null,null,null,[[2,["Merge onto "]],[2,["M27",1]]],null,["//maps.gstatic.com/tactile/directions/text_mode/maneuvers-2x.png","dir-tt dir-tt-merge"],null,null,"x",0]"#
+        let node = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [Any]
+        let m = DirectionsParser.foldedStep(node)
+        XCTAssertEqual(m?.type, .merge)
+        XCTAssertEqual(m?.distanceMeters, 12553)
+        XCTAssertEqual(m?.road, "M27")
+        XCTAssertEqual(m?.instruction, "Merge onto M27")
+        // A group header (no step text slot) and a normal step are left to the usual path.
+        let header = try! JSONSerialization.jsonObject(with: Data(#"[0,null,[12967,"8.1 mi",1],[511,"9 min"]]"#.utf8)) as! [Any]
+        XCTAssertNil(DirectionsParser.foldedStep(header))
+        XCTAssertEqual(DirectionsParser.parseStep("<step maneuver='ON_RAMP' meters='209'>Slight left onto the ramp to So&#39;ton</step>").instruction,
+                       "Slight left onto the ramp to So'ton")
+    }
+
     func testGeometryDeltas() {
         let g = DirectionsParser.decodeGeometry([[385_000_000, 10_000], [-1_217_000_000, -20_000]])
         XCTAssertEqual(g?.count, 2)

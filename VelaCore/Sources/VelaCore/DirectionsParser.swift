@@ -100,10 +100,45 @@ enum DirectionsParser {
 
     private static func collectSteps(_ n: Any, into out: inout [Maneuver]) {
         if let a = n as? [Any] {
+            if let folded = foldedStep(a) {
+                out.append(folded)
+                return
+            }
             for e in a { collectSteps(e, into: &out) }
         } else if let s = n as? String, s.contains("<step ") {
             out.append(parseStep(s))
         }
+    }
+
+    /**
+     * A step Google sends with no `<step>` text: the long motorway stretch inside a folded group
+     * ("Merge onto M27", 12.5 km). Its length is `[2][0]`, its words are pieces like
+     * `[[2,["Merge onto "]],[2,["M27",1]]]` and its kind is in the icon class ("dir-tt dir-tt-merge").
+     * Left out, the turns after it are counted back to the wrong places.
+     */
+    static func foldedStep(_ a: [Any]) -> Maneuver? {
+        guard a.count > 3, let markup = a[1] as? String, markup.isEmpty,
+              let meters = dbl(at(a, 2, 0)), str(at(a, 2, 1)) != nil,
+              let icon = a.lazy.compactMap({ str(at($0, 1)) }).first(where: { $0.hasPrefix("dir-tt") }) else { return nil }
+        var text = "", road: String?
+        for e in a {
+            guard let pieces = e as? [Any], !pieces.isEmpty,
+                  pieces.allSatisfy({ int(at($0, 0)) == 2 && str(at($0, 1, 0)) != nil }) else { continue }
+            for p in pieces {
+                let t = str(at(p, 1, 0)) ?? ""
+                if int(at(p, 1, 1)) == 1, road == nil { road = t }
+                text += t
+            }
+            break
+        }
+        let kind = icon.components(separatedBy: " ").last { $0.hasPrefix("dir-tt-") }.map { String($0.dropFirst(7)) } ?? ""
+        let token = kind.uppercased().replacingOccurrences(of: "-", with: "_")
+        let side = kind.contains("left") ? "LEFT" : (kind.contains("right") ? "RIGHT" : nil)
+        let severity = kind.contains("slight") ? "SLIGHT" : (kind.contains("sharp") ? "SHARP" : nil)
+        var m = parseStep("<step meters='\(Int(meters))'>\(text)</step>")
+        m.type = mapType(token.isEmpty ? nil : token, side: side, severity: severity)
+        m.road = road
+        return m
     }
 
     static func parseStep(_ s: String) -> Maneuver {
@@ -122,6 +157,9 @@ enum DirectionsParser {
         }
         var text = s.replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "&#39;", with: "'").replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&lt;", with: "<").replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&amp;", with: "&")
             .trimmingCharacters(in: .whitespaces)
         var lane: String?
         if let r = text.range(of: #"^(Use (the .+? lanes?|any lane)) to "#, options: [.regularExpression, .caseInsensitive]) {

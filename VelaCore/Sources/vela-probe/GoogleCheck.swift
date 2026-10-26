@@ -4,7 +4,7 @@ import VelaCore
 /**
  * Every Google feature Kite uses, checked live around Southampton and London: search, autocomplete,
  * place details, directions (traffic, alternates, avoid motorways and tolls, a stop), the traffic
- * tiles and Street View. Ends with a look at the raw steps of a route whose steps come back short.
+ * tiles and Street View.
  */
 func googleCheck() async {
     let soton = LatLng(50.9097, -1.4044)
@@ -86,43 +86,5 @@ func googleCheck() async {
         line("Street View Southampton: \(pano.id) at \(pano.location), \(pano.width)x\(pano.height), thumbnail HTTP \(code)")
     } else {
         line("Street View Southampton: none")
-    }
-
-    // A route whose steps came back short: every step-like string in Google's answer, with where it sits.
-    do {
-        let body = try await GoogleClient.shared.directionsBody(from: LatLng(50.8705, -1.2690), to: LatLng(50.9346, -1.3966), mode: .drive)
-        var text = body
-        for g in [")]}'\n", ")]}'"] where text.hasPrefix(g) { text = String(text.dropFirst(g.count)); break }
-        guard let root = try? JSONSerialization.jsonObject(with: Data(text.utf8), options: [.fragmentsAllowed]) else {
-            line("Raw steps: could not read the answer"); return
-        }
-        var found = 0
-        func walk(_ n: Any, _ path: [Int]) {
-            if let a = n as? [Any] {
-                for (i, e) in a.enumerated() { walk(e, path + [i]) }
-            } else if let s = n as? String, found < 80,
-                      s.contains("<step") || s.contains("maneuver") || s.contains("M27") || s.contains("meters=") {
-                found += 1
-                line("  \(path.map(String.init).joined(separator: ".")): \(s.prefix(220).replacingOccurrences(of: "\n", with: " "))")
-            }
-        }
-        line("Raw steps, Park Gate to the Uni (route 0 only):")
-        if let r0 = ((root as? [Any])?.first as? [Any]).flatMap({ $0.count > 1 ? $0[1] as? [Any] : nil })?.first {
-            walk(r0, [0, 1, 0])
-        }
-        line("  (\(found) strings)")
-        // The step groups themselves, raw: some steps have no <step> text and the gap is in them.
-        if let r0 = ((root as? [Any])?.first as? [Any]).flatMap({ $0.count > 1 ? $0[1] as? [Any] : nil })?.first,
-           let groups = (((r0 as? [Any])?[1] as? [Any])?[0] as? [Any]).flatMap({ $0.count > 1 ? $0[1] as? [Any] : nil }) {
-            for (gi, g) in groups.enumerated() {
-                let d = (try? JSONSerialization.data(withJSONObject: g, options: [.fragmentsAllowed])) ?? Data()
-                let t = String(decoding: d, as: UTF8.self).replacingOccurrences(of: "//maps.gstatic.com/tactile/directions/text_mode/maneuvers-2x.png", with: "IMG")
-                line("  group \(gi) (\(t.count) chars): \(t.prefix(2500))")
-            }
-        } else {
-            line("  groups: not where expected")
-        }
-    } catch {
-        line("Raw steps: FAILED \(error)")
     }
 }
