@@ -128,11 +128,12 @@ struct NavigationOverlay: View {
                 if nav.following, !nav.arrived, !chipShowing, let road = nav.currentRoad {
                     Text(road)
                         .font(.system(size: 17, weight: .bold))
-                        .lineLimit(1)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                         .padding(.horizontal, 14).frame(height: 36)
                         .foregroundColor(.white)
                         .background(Capsule().fill(Color.black.opacity(0.78)))
-                        .frame(maxWidth: g.size.width * 0.7)
+                        // Between the speed sign and the mute button, which sit level with it now the car is lower.
+                        .frame(maxWidth: g.size.width - 240)
                         .position(x: g.size.width / 2, y: NavGlide.carY(g.size.height) + 46)
                 }
             }
@@ -519,18 +520,19 @@ struct CameraCard: View {
         let over = alert.limitKmh.map { speedKmh > $0 + 3 } ?? false
         let left = min(max(alert.meters / alert.startMeters, 0), 1)
         let fill: Color = over ? Vela.closed : (alert.kind == .speed ? Vela.camera : Color(hex: 0x8E44AD))
-        VStack(spacing: 10) {
-            HStack(spacing: 14) {
-                CameraBadge(kind: alert.kind, size: 64)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(Fmt.distance(alert.meters)).font(.system(size: 40, weight: .heavy)).monospacedDigit()
+        // Compact, Waze-style: about half the old card's height and only as wide as it needs,
+        // so the road ahead stays in view; the bright color and pulses keep it hard to miss.
+        VStack(spacing: 7) {
+            HStack(spacing: 10) {
+                CameraBadge(kind: alert.kind, size: 42)
+                VStack(alignment: .leading, spacing: -2) {
+                    Text(Fmt.distance(alert.meters)).font(.system(size: 30, weight: .heavy)).monospacedDigit()
                         .lineLimit(1).minimumScaleFactor(0.7)
-                    Text(over ? "Slow down" : alert.kind == .speed ? "Speed camera" : (Fmt.yards ? "Number plate camera" : "License plate camera"))
-                        .font(.system(size: 20, weight: .bold))
+                    Text(over ? "Slow down" : alert.kind == .speed ? "Speed camera" : "Plate camera")
+                        .font(.system(size: 15, weight: .bold))
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
-                Spacer(minLength: 4)
-                if let limit = alert.limitKmh { SpeedLimitSign(kmh: limit, size: 70) }
+                if let limit = alert.limitKmh { SpeedLimitSign(kmh: limit, size: 50).padding(.leading, 4) }
             }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
@@ -538,15 +540,17 @@ struct CameraCard: View {
                     Capsule().fill(Color.white).frame(width: g.size.width * left)
                 }
             }
-            .frame(height: 8)
+            .frame(height: 5)
         }
         .foregroundColor(.white)
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(fill))
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Color.white.opacity(pulse ? 0.9 : 0), lineWidth: 4))
-        .shadow(color: fill.opacity(0.55), radius: pulse ? 22 : 10, y: 4)
-        .scaleEffect(pulse ? 1.03 : 1)
+        .padding(.horizontal, 12).padding(.top, 9).padding(.bottom, 10)
+        .fixedSize()
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(fill))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.white.opacity(pulse ? 0.9 : 0), lineWidth: 3))
+        .shadow(color: fill.opacity(0.55), radius: pulse ? 18 : 8, y: 3)
+        .scaleEffect(pulse ? 1.04 : 1)
         .animation(.easeOut(duration: 0.3), value: over)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .task(id: alert.startMeters) {
             // Two quick pulses when it first shows, so it catches the eye.

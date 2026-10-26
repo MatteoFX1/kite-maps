@@ -14,6 +14,10 @@ the middle number for big milestones.
 - **Faster rerouting after a wrong turn:** Kite now notices within a few seconds when you've left
   the route, or when you're driving back along it the wrong way. The new route sets off the way
   you're facing, instead of telling you to turn round on the road you're on.
+- **Smaller camera warning:** the speed camera card is about half the size, Waze-style, so it no
+  longer hides the road. It's still bright orange (red when you're too fast) and pulses when it appears.
+- **See more road ahead:** while driving, your arrow sits lower on the screen, so most of the map
+  shows what's coming instead of what you've already passed.
 - **Police heat map fixes:** its key ("Police ... often") is back above the risk chip, the glow
   now sits under your route, cameras and road names instead of covering them, and reports found
   in the background show on it straight away.
