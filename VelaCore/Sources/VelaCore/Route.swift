@@ -49,6 +49,8 @@ public struct Maneuver: Hashable, Sendable {
     public var roundabout: RoundaboutShape?
     /** The point where the route leaves a roundabout (the router's "exit roundabout" step), shown with that roundabout's picture. */
     public var leavesRoundabout = false
+    /** Only the road's name changes here ("Continue on Millbrook Flyover"): kept for the road name, never shown or said. */
+    public var silent = false
 
     public init(type: ManeuverType, instruction: String, location: LatLng, alongMeters: Double, distanceMeters: Double,
                 road: String? = nil, laneHint: String? = nil, lanes: [Lane] = [], exit: Int? = nil,

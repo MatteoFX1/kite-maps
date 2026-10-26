@@ -28,9 +28,10 @@ struct LayersSheet: View {
                 tile("Waze reports", waze: .police, on: settings.wazeOn && settings.wazeOnMap) {
                     if settings.waze && settings.wazeOnMap { settings.wazeOnMap = false } else { settings.waze = true; settings.wazeOnMap = true }
                 }
-                tile("Police heat map", icon: "flame.fill", on: settings.wazeOn && settings.wazeHeatmap) {
+                tile("Police heat map", icon: "flame.fill", on: settings.wazeOn && settings.wazeHeatmap && Waze.shares.contains(.police)) {
                     if settings.waze && settings.wazeHeatmap { settings.wazeHeatmap = false } else { settings.waze = true; settings.wazeHeatmap = true }
                 }
+                .disabled(!Waze.shares.contains(.police)).opacity(Waze.shares.contains(.police) ? 1 : 0.4)
             }
             Spacer()
         }
@@ -207,16 +208,30 @@ struct WazeSettingsView: View {
                      ? "Off while \"Use Kite without Google\" is on, since Waze belongs to Google."
                      : "Kite reads the public Waze live map, with no account. Waze sees the area you're looking at, anonymously. It doesn't officially allow other apps to do this, so it may stop working one day.")
             }
+            if !Waze.shares.contains(.police) {
+                Section {
+                    Label {
+                        Text("Barely working right now. Waze's live map has stopped sharing drivers' reports, so police, crashes and hazards can't reach Kite. Only road closures still come through. The greyed-out switches come back if Waze shares them again.")
+                            .font(.subheadline)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
+                    }
+                }
+            }
             if settings.wazeOn {
                 Section {
                     HStack(spacing: 8) {
                         Circle().fill(connection.color).frame(width: 10, height: 10)
                         Text(connection.text).font(.subheadline)
                     }
+                    if let s = Waze.lastStatus, s.code == 200 {
+                        // What Waze actually sent, so it's easy to see if a kind has gone missing.
+                        LabeledContent("Last answer", value: s.summary).font(.subheadline)
+                    }
                 } header: {
                     Text("Connection")
                 } footer: {
-                    if let s = Waze.lastStatus, s.code != 200 {
+                    if Waze.lastStatus != nil {
                         // What the hidden live map page saw, to send to whoever looks into it.
                         Text("Details: " + WazeWeb.shared.note).font(.caption2.monospaced())
                     }
@@ -233,6 +248,7 @@ struct WazeSettingsView: View {
                                 Text(item.1)
                             }
                         }
+                        .disabled(!Waze.shares.contains(k)).opacity(Waze.shares.contains(k) ? 1 : 0.4)
                     }
                 }
                 Section {
@@ -247,8 +263,11 @@ struct WazeSettingsView: View {
                     Text("While navigating, a card pops up for reports on your route, only ones made by drivers going your way.")
                 }
                 Section {
-                    Toggle("Police heat map", isOn: $settings.wazeHeatmap)
-                    Toggle("Police risk score while driving", isOn: $settings.policeRisk)
+                    Group {
+                        Toggle("Police heat map", isOn: $settings.wazeHeatmap)
+                        Toggle("Police risk score while driving", isOn: $settings.policeRisk)
+                    }
+                    .disabled(!Waze.shares.contains(.police)).opacity(Waze.shares.contains(.police) ? 1 : 0.4)
                     LabeledContent("Police reports remembered", value: "\(remembered)")
                     if remembered > 0 {
                         Button("Forget them all", role: .destructive) { confirmClear = true }

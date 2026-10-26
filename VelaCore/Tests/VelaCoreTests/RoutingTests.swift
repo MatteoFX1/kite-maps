@@ -20,6 +20,30 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(m.instruction, "Turn left onto Elm St")
     }
 
+    func testFoldedMotorwayStep() {
+        // Google's long motorway stretch inside a folded group has no <step> text (Park Gate to Southampton, M27).
+        let json = #"[[0,"",[12553,"7.8 mi",1],[486,"8 min"],null,null,null,[[[2612.7,-1.2584,50.8754],[0,0,0],[1024,768],13.1]],null,null,null,null,null,null,[[2,["Merge onto "]],[2,["M27",1]]]],null,["//maps.gstatic.com/tactile/directions/text_mode/maneuvers-2x.png","dir-tt dir-tt-merge"],null,null,"x",0]"#
+        let entry = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [Any]
+        let m = DirectionsParser.foldedStep(entry[0] as! [Any], icon: "dir-tt dir-tt-merge")
+        XCTAssertEqual(m?.type, .merge)
+        XCTAssertEqual(m?.distanceMeters, 12553)
+        XCTAssertEqual(m?.road, "M27")
+        XCTAssertEqual(m?.instruction, "Merge onto M27")
+        let keep = #"[0,"",[900,"0.6 mi",1],[30,"30 sec"],null,null,null,null,null,null,null,null,null,null,[[2,["Keep "]],[2,["right",1]],[2,[" to stay on "]],[2,["M3",1]]]]"#
+        let k = DirectionsParser.foldedStep(try! JSONSerialization.jsonObject(with: Data(keep.utf8)) as! [Any], icon: "dir-tt dir-tt-keep-right")
+        XCTAssertEqual(k?.type, .keepRight)
+        XCTAssertEqual(k?.road, "M3")
+        // Found when reading a whole route's steps too.
+        var steps: [Maneuver] = []
+        DirectionsParser.collectSteps([[entry]], into: &steps)
+        XCTAssertEqual(steps.map(\.distanceMeters), [12553])
+        // A group header (no step text slot) and a normal step are left to the usual path.
+        let header = try! JSONSerialization.jsonObject(with: Data(#"[0,null,[12967,"8.1 mi",1],[511,"9 min"]]"#.utf8)) as! [Any]
+        XCTAssertNil(DirectionsParser.foldedStep(header, icon: nil))
+        XCTAssertEqual(DirectionsParser.parseStep("<step maneuver='ON_RAMP' meters='209'>Slight left onto the ramp to So&#39;ton</step>").instruction,
+                       "Slight left onto the ramp to So'ton")
+    }
+
     func testGeometryDeltas() {
         let g = DirectionsParser.decodeGeometry([[385_000_000, 10_000], [-1_217_000_000, -20_000]])
         XCTAssertEqual(g?.count, 2)
@@ -59,6 +83,83 @@ final class RoutingTests: XCTestCase {
         _ = t.update(LatLng(0.006, 0.01))
         XCTAssertTrue(t.update(LatLng(0.006, 0.01)).offRoute)
         XCTAssertTrue(t.update(LatLng(0.00999, 0)).arrived)
+    }
+
+    func testWrongWayIsOffRoute() {
+        // Matteo's wrong turn: back on the route's road but driving south down a route going north.
+        // It used to snap him onto the route the wrong way and never reroute.
+        let line = [LatLng(0, 0), LatLng(0.005, 0), LatLng(0.01, 0)]
+        let total = Geo.length(line)
+        let route = Route(mode: .drive, polyline: line, distanceMeters: total, typicalSeconds: 100, trafficSeconds: nil,
+                          summary: nil, maneuvers: [
+                            Maneuver(type: .depart, instruction: "Go", location: line[0], alongMeters: 0, distanceMeters: total),
+                            Maneuver(type: .arrive, instruction: "Arrive", location: line[2], alongMeters: total, distanceMeters: 0),
+                          ], source: "osm")
+        let t = RouteTracker(route: route)
+        XCTAssertFalse(t.update(LatLng(0.004, 0), heading: 2).offRoute, "going the right way")
+        var lat = 0.004
+        var off = false
+        for _ in 0..<4 { lat -= 0.0001; off = t.update(LatLng(lat, 0), heading: 180).offRoute }
+        XCTAssertTrue(off, "four fixes driving the wrong way down the route")
+        // Without a heading (standing still, or no compass course) nothing changes.
+        let t2 = RouteTracker(route: route)
+        for _ in 0..<6 { XCTAssertFalse(t2.update(LatLng(0.004, 0)).offRoute) }
+    }
+
+    func testNoMergeWhenTheLaneRunsToTheExit() {
+        // Matteo near Redbridge: the slip road joins Redbridge Road from the left, then leaves at
+        // the next exit on the left. No "Merge onto", and "left lane" for the exit instead.
+        let p = LatLng(50.92, -1.47)
+        let steps = [
+            Maneuver(type: .depart, instruction: "Head out", location: p, alongMeters: 0, distanceMeters: 300),
+            Maneuver(type: .merge, instruction: "Merge onto Redbridge Road", location: p, alongMeters: 300, distanceMeters: 400),
+            Maneuver(type: .rampLeft, instruction: "Take the exit onto A33", location: p, alongMeters: 700, distanceMeters: 500),
+            Maneuver(type: .arrive, instruction: "Arrive", location: p, alongMeters: 1200, distanceMeters: 0),
+        ]
+        let out = OSRM.keepLaneThroughMerges(steps, mergeSides: [1: "slight right"])
+        XCTAssertEqual(out.map(\.type), [.depart, .rampLeft, .arrive])
+        XCTAssertEqual(out[0].distanceMeters, 700)
+        XCTAssertEqual(out[1].lanes.map(\.valid), [true, false], "left lane lit")
+        // Exiting on the far side: the merge is real and stays.
+        var far = steps
+        far[2].type = .rampRight
+        XCTAssertEqual(OSRM.keepLaneThroughMerges(far, mergeSides: [1: "slight right"]).count, 4)
+    }
+
+    func testStepsOnlyFromARouteOnTheSameRoads() {
+        // About 2.2 km north; the other route leaves the line halfway for a parallel road 100 m east.
+        let line = [LatLng(0, 0), LatLng(0.02, 0)]
+        let cum = Geo.cumulative(line)
+        XCTAssertTrue(StepMerge.follows([LatLng(0, 0.0001), LatLng(0.02, 0.0001)], line, cumulative: cum))
+        XCTAssertFalse(StepMerge.follows([LatLng(0, 0), LatLng(0.01, 0), LatLng(0.01, 0.001), LatLng(0.02, 0.001)], line, cumulative: cum))
+        // Checked both ways: the line goes up to a roundabout and back, the other route turns round early.
+        let loop = [LatLng(0, 0), LatLng(0.01, 0), LatLng(0.01, 0.004), LatLng(0.01, 0), LatLng(0.02, 0)]
+        XCTAssertTrue(StepMerge.follows(line, loop, cumulative: Geo.cumulative(loop)))
+        XCTAssertFalse(StepMerge.follows(loop, line, cumulative: cum))
+        // Matching asks for a point about every 150 m, never more than 100.
+        let url = OSRM.matchURL(line, mode: .drive)!.absoluteString
+        XCTAssertTrue(url.contains("/match/v1/driving/"))
+        XCTAssertEqual(url.components(separatedBy: "radiuses=")[1].components(separatedBy: "&")[0].split(separator: ";").count, 15)
+        let long = OSRM.matchURL([LatLng(0, 0), LatLng(1, 0)], mode: .drive)!.absoluteString
+        XCTAssertTrue(long.hasSuffix("&waypoints=0;99"), long)
+    }
+
+    func testGoogleLaneHintOnTheSameStep() {
+        let p = LatLng(0, 0)
+        var steps = [Maneuver(type: .merge, instruction: "Merge onto Redbridge Road", location: p, alongMeters: 1000, distanceMeters: 300)]
+        let google = [Maneuver(type: .merge, instruction: "Merge onto Redbridge Rd", location: p, alongMeters: 1060, distanceMeters: 300, laneHint: "Use the right lane")]
+        StepMerge.addGoogleLaneHints(&steps, from: google)
+        XCTAssertEqual(steps[0].laneHint, "Use the right lane")
+    }
+
+    func testRerouteKeepsHeading() {
+        let url = OSRM.routeURL(from: LatLng(50.9, -1.4), to: LatLng(50.8, -1.3), mode: .drive, heading: 271.6).absoluteString
+        XCTAssertTrue(url.hasSuffix("&bearings=272,60;"), url)
+        XCTAssertFalse(OSRM.routeURL(from: LatLng(50.9, -1.4), to: LatLng(50.8, -1.3), mode: .drive).absoluteString.contains("bearings"))
+        // A route that sets off south while the car heads north starts behind it.
+        let south = [LatLng(0.01, 0), LatLng(0.009, 0), LatLng(0, 0)]
+        XCTAssertTrue(Directions.startsBehind(south, heading: 0))
+        XCTAssertFalse(Directions.startsBehind(south, heading: 175))
     }
 
     func testStepsPlacedFromTheEnd() {
@@ -119,6 +220,27 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(lanes[2].indications, ["straight", "right"])
         let allValid: [String: Any] = ["intersections": [["lanes": [["indications": ["straight"], "valid": true], ["indications": ["straight"], "valid": true]]]]]
         XCTAssertTrue(OSRM.lanes(allValid).isEmpty, "every lane fine says nothing")
+    }
+
+    func testRoundaboutApproachLanes() {
+        // M271 southbound, 70 m before Redbridge roundabout: a slip road leaves on the left there,
+        // so those lanes aren't the roundabout's (the app once said "Middle lanes" for the 1st exit).
+        let redbridge = LatLng(50.922617, -1.469691)
+        let lanes: [[String: Any]] = [["indications": ["left"], "valid": false],
+                                      ["indications": ["straight"], "valid": true],
+                                      ["indications": ["straight"], "valid": true]]
+        let slip: [String: Any] = ["location": [-1.4697, 50.9232], "in": 0, "out": 2,
+                                   "entry": [false, true, true], "bearings": [0, 150, 180], "lanes": lanes]
+        XCTAssertTrue(OSRM.approachLanes(slip, roundabout: redbridge, modifier: "slight left", leftTraffic: true).isEmpty)
+        // The same lanes where nothing else leaves are the roundabout's, marked for its 1st exit.
+        let plain: [String: Any] = ["location": [-1.4697, 50.9232], "in": 0, "out": 1,
+                                    "entry": [false, true], "bearings": [0, 180], "lanes": lanes]
+        let first = OSRM.approachLanes(plain, roundabout: redbridge, modifier: "slight left", leftTraffic: true)
+        XCTAssertEqual(first.map(\.valid), [true, false, false])
+        // Too far back to say anything about the roundabout.
+        var far = plain
+        far["location"] = [-1.4697, 50.9300]
+        XCTAssertTrue(OSRM.approachLanes(far, roundabout: redbridge, modifier: "slight left", leftTraffic: true).isEmpty)
     }
 
     func testSlipRoadWording() {

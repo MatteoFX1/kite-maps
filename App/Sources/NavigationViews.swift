@@ -89,10 +89,7 @@ struct NavigationOverlay: View {
                     // A Waze police card already says it louder; the chip comes back when it's gone.
                     // Only worth a look while driving when it isn't low; it would otherwise sit by the road name.
                     if showRiskChip, let risk = nav.policeRisk { PoliceRiskChip(score: risk) }
-                    HStack(spacing: 10) {
-                        SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
-                        if let limit = nav.speedLimitKmh { SpeedLimitSign(kmh: limit, size: 70) }
-                    }
+                    SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
                 }
                 Spacer()
                 MapFab(icon: nav.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 64) { nav.muted.toggle() }
@@ -131,11 +128,12 @@ struct NavigationOverlay: View {
                 if nav.following, !nav.arrived, !chipShowing, let road = nav.currentRoad {
                     Text(road)
                         .font(.system(size: 17, weight: .bold))
-                        .lineLimit(1)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                         .padding(.horizontal, 14).frame(height: 36)
                         .foregroundColor(.white)
                         .background(Capsule().fill(Color.black.opacity(0.78)))
-                        .frame(maxWidth: g.size.width * 0.7)
+                        // Between the speed sign and the mute button, which sit level with it now the car is lower.
+                        .frame(maxWidth: g.size.width - 240)
                         .position(x: g.size.width / 2, y: NavGlide.carY(g.size.height) + 46)
                 }
             }
@@ -302,10 +300,18 @@ enum LaneGuide {
             let n = m.lanes.count
             let words: String
             if valid.count == n { return nil }
-            if last < n / 2 || (last == 0) { words = valid.count == 1 && n > 2 && first > 0 ? "Lane \(first + 1) from left" : (valid.count > 1 ? "Left lanes" : "Left lane") }
-            else if first >= (n + 1) / 2 { words = valid.count > 1 ? "Right lanes" : "Right lane" }
-            else { words = valid.count > 1 ? "Middle lanes" : "Middle lane" }
+            // By the edge they touch: two good lanes of three on the left are "Left 2 lanes", not "Middle".
+            let count = valid.count, many = count > 1 ? "\(count) lanes" : "lane"
+            if first == 0 { words = "Left \(many)" }
+            else if last == n - 1 { words = "Right \(many)" }
+            else if count == 1 && n > 3 { words = "Lane \(first + 1) from left" }
+            else { words = count > 1 ? "Middle lanes" : "Middle lane" }
             return (m.lanes, words)
+        }
+        // Google's own advice ("Use the right lane") where the open map has no lanes: words only.
+        if let hint = m.laneHint, !hint.localizedCaseInsensitiveContains("any lane"), m.type != .roundabout {
+            let words = hint.replacingOccurrences(of: "use the ", with: "", options: .caseInsensitive)
+            return ([], words.prefix(1).uppercased() + words.dropFirst())
         }
         guard m.type == .roundabout, !m.leavesRoundabout, let shape = m.roundabout else { return nil }
         // Two lanes, the near-side one for left and straight on, the far one for right.
@@ -317,6 +323,7 @@ enum LaneGuide {
     }
 }
 
+/** Speed and limit as one sign, the way Waze does it: the limit on top, your speed under it, all red when over. */
 struct SpeedBadge: View {
     let mps: Double
     var limitKmh: Double?
@@ -327,15 +334,30 @@ struct SpeedBadge: View {
         let v = Int((mps * (metric ? 3.6 : 2.23694)).rounded())
         // Red once more than a little over the limit.
         let over = limitKmh.map { mps * 3.6 > $0 + 5 } ?? false
-        VStack(spacing: -2) {
+        let speed = VStack(spacing: -2) {
             Text("\(v)").font(.system(size: 36, weight: .heavy)).monospacedDigit()
                 .foregroundColor(over ? .white : .primary)
             Text(metric ? "km/h" : "mph").font(.system(size: 14, weight: .semibold))
                 .foregroundColor(over ? .white.opacity(0.85) : Vela.muted(scheme))
         }
-        .frame(width: 84, height: 84)
-        .background(Circle().fill(over ? Vela.closed : Color.clear))
-        .glass(Circle())
+        Group {
+            if let limitKmh {
+                VStack(spacing: 6) {
+                    SpeedLimitSign(kmh: limitKmh, size: 76)
+                    speed
+                }
+                .padding(.top, 8).padding(.bottom, 12)
+                .frame(width: 92)
+                .background(Capsule().fill(over ? Vela.closed : Color.clear))
+                .glass(Capsule())
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(v) \(metric ? "kilometres" : "miles") an hour" + (over ? ", over the limit" : ""))
+            } else {
+                speed
+                    .frame(width: 84, height: 84)
+                    .glass(Circle())
+            }
+        }
         .animation(.easeOut(duration: 0.25), value: over)
     }
 }
@@ -506,18 +528,19 @@ struct CameraCard: View {
         let over = alert.limitKmh.map { speedKmh > $0 + 3 } ?? false
         let left = min(max(alert.meters / alert.startMeters, 0), 1)
         let fill: Color = over ? Vela.closed : (alert.kind == .speed ? Vela.camera : Color(hex: 0x8E44AD))
-        VStack(spacing: 10) {
-            HStack(spacing: 14) {
-                CameraBadge(kind: alert.kind, size: 64)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(Fmt.distance(alert.meters)).font(.system(size: 40, weight: .heavy)).monospacedDigit()
+        // Compact, Waze-style: about half the old card's height and only as wide as it needs,
+        // so the road ahead stays in view; the bright color and pulses keep it hard to miss.
+        VStack(spacing: 7) {
+            HStack(spacing: 10) {
+                CameraBadge(kind: alert.kind, size: 42)
+                VStack(alignment: .leading, spacing: -2) {
+                    Text(Fmt.distance(alert.meters)).font(.system(size: 30, weight: .heavy)).monospacedDigit()
                         .lineLimit(1).minimumScaleFactor(0.7)
-                    Text(over ? "Slow down" : alert.kind == .speed ? "Speed camera" : (Fmt.yards ? "Number plate camera" : "License plate camera"))
-                        .font(.system(size: 20, weight: .bold))
+                    Text(over ? "Slow down" : alert.kind == .speed ? "Speed camera" : "Plate camera")
+                        .font(.system(size: 15, weight: .bold))
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
-                Spacer(minLength: 4)
-                if let limit = alert.limitKmh { SpeedLimitSign(kmh: limit, size: 70) }
+                if let limit = alert.limitKmh { SpeedLimitSign(kmh: limit, size: 50).padding(.leading, 4) }
             }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
@@ -525,15 +548,17 @@ struct CameraCard: View {
                     Capsule().fill(Color.white).frame(width: g.size.width * left)
                 }
             }
-            .frame(height: 8)
+            .frame(height: 5)
         }
         .foregroundColor(.white)
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(fill))
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Color.white.opacity(pulse ? 0.9 : 0), lineWidth: 4))
-        .shadow(color: fill.opacity(0.55), radius: pulse ? 22 : 10, y: 4)
-        .scaleEffect(pulse ? 1.03 : 1)
+        .padding(.horizontal, 12).padding(.top, 9).padding(.bottom, 10)
+        .fixedSize()
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(fill))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.white.opacity(pulse ? 0.9 : 0), lineWidth: 3))
+        .shadow(color: fill.opacity(0.55), radius: pulse ? 18 : 8, y: 3)
+        .scaleEffect(pulse ? 1.04 : 1)
         .animation(.easeOut(duration: 0.3), value: over)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .task(id: alert.startMeters) {
             // Two quick pulses when it first shows, so it catches the eye.

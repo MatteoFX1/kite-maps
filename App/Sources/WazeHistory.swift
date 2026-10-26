@@ -20,6 +20,8 @@ final class WazeHistory {
     private var ids: Set<String> = []
     private let file: URL? = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
         .appendingPathComponent("waze-police.json")
+    /** Called after new reports are added, so the map can redraw the heat map. */
+    var onChange: (() -> Void)?
     /** Kept for 90 days, at most this many. */
     private let limit = 6000
 
@@ -51,6 +53,7 @@ final class WazeHistory {
             ids = Set(sightings.map(\.id))
         }
         save()
+        onChange?()
         return true
     }
 

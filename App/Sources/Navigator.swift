@@ -94,7 +94,7 @@ final class Navigator: ObservableObject {
 
     /** The posted limit where the user is now, in km/h. */
     var speedLimitKmh: Double? {
-        route.speedLimit(at: progress?.alongMeters ?? 0)
+        demoLimitKmh ?? route.speedLimit(at: progress?.alongMeters ?? 0)
     }
 
     var nextManeuver: Maneuver? {
@@ -105,15 +105,16 @@ final class Navigator: ObservableObject {
 
     /** The road being driven now, for the name under the arrow. */
     var currentRoad: String? {
-        guard let i = progress?.nextIndex, i > 0, i - 1 < route.maneuvers.count else { return nil }
-        let road = route.maneuvers[i - 1].road?.trimmingCharacters(in: .whitespaces)
+        // The last step passed, a name change included.
+        guard let along = progress?.alongMeters, let i = route.maneuvers.lastIndex(where: { $0.alongMeters <= along + 8 }) else { return nil }
+        let road = route.maneuvers[i].road?.trimmingCharacters(in: .whitespaces)
         return road?.isEmpty == false ? road : nil
     }
 
     /** The one after next, for the "Then" line when two turns come close together. */
     var thenManeuver: Maneuver? {
-        guard let i = progress?.nextIndex, i + 1 < route.maneuvers.count else { return nil }
-        let a = route.maneuvers[i], b = route.maneuvers[i + 1]
+        guard let i = progress?.nextIndex, let j = route.maneuvers[(i + 1)...].firstIndex(where: { !$0.silent }) else { return nil }
+        let a = route.maneuvers[i], b = route.maneuvers[j]
         // Leaving a roundabout is part of the roundabout, not a turn of its own.
         if b.leavesRoundabout { return nil }
         return b.alongMeters - a.alongMeters < 300 ? b : nil
@@ -122,9 +123,10 @@ final class Navigator: ObservableObject {
     func handle(_ loc: CLLocation) {
         guard !arrived else { return }
         lastFix = loc
-        speedMps = max(0, loc.speed)
+        // The build's screenshots keep their made-up speed.
+        if !demoAlerts { speedMps = max(0, loc.speed) }
         let p = tracker.update(LatLng(loc.coordinate.latitude, loc.coordinate.longitude),
-                               accuracy: max(loc.horizontalAccuracy, 5))
+                               accuracy: max(loc.horizontalAccuracy, 5), heading: Self.heading(loc))
         progress = p
         if p.arrived {
             arrived = true
@@ -287,7 +289,7 @@ final class Navigator: ObservableObject {
     private func checkRisk(_ p: RouteTracker.Progress) {
         guard !demoAlerts else { return }
         let s = AppSettings.shared
-        guard route.mode == .drive, s.wazeOn, s.policeRisk else { policeRisk = nil; return }
+        guard route.mode == .drive, s.wazeOn, s.policeRisk, s.wazePolice else { policeRisk = nil; return }
         guard Date().timeIntervalSince(riskAt) > 20 else { return }
         riskAt = Date()
         if riskPast == nil { riskPast = WazeHistory.shared.reports }
@@ -360,6 +362,7 @@ final class Navigator: ObservableObject {
     /** For the build's screenshots: a camera coming up and an average speed check. */
     /** For the build's screenshots: the next turn swapped for a made-up one. */
     private(set) var demoManeuver: Maneuver?
+    private var demoLimitKmh: Double?
 
     /** For the build's screenshots: the M27 roundabout at Park Gate, 6th exit, with its seven roads. */
     func showDemoRoundabout() {
@@ -376,6 +379,15 @@ final class Navigator: ObservableObject {
         demoAlerts = true
         cameraAhead = CameraAlert(kind: .speed, meters: 180, startMeters: 400, limitKmh: 48.3)
         averageCheck = AverageCheck(limitKmh: 80.5, averageKmh: 77, metersLeft: 2400)
+        // 38 in a 30, so the screenshots show the speed sign gone red.
+        showDemoSpeed(limitKmh: 48.3, mph: 38)
+    }
+
+    /** For the build's screenshots: a made-up speed and limit. */
+    func showDemoSpeed(limitKmh: Double, mph: Double) {
+        demoAlerts = true
+        demoLimitKmh = limitKmh
+        speedMps = mph / 2.23694
     }
 
     /** Tapping the Waze card puts it away; the report still won't be warned about again. */
@@ -409,6 +421,8 @@ final class Navigator: ObservableObject {
         let far = drive ? max(1000, speedMps * 40) : 250
         if d <= now && stage < 3 {
             spokenStage[i] = 3
+            // Arriving is said once, with the place's name, when it's reached.
+            if m.type == .arrive { return }
             // The turn itself matters more than whatever is still being said.
             speak(m.instruction, urgent: true)
         } else if d <= near && d > now + 30 && stage < 2 {
@@ -425,6 +439,11 @@ final class Navigator: ObservableObject {
         }
     }
 
+    /** The way the phone is moving, once it's fast enough (about 9 mph) for that to be trusted. */
+    private static func heading(_ loc: CLLocation) -> Double? {
+        loc.course >= 0 && loc.speed >= 4 && loc.courseAccuracy >= 0 && loc.courseAccuracy < 45 ? loc.course : nil
+    }
+
     private func reroute(from loc: CLLocation, quiet: Bool = false) {
         rerouting = true
         lastReroute = Date()
@@ -439,6 +458,8 @@ final class Navigator: ObservableObject {
             speak("Rerouting.")
         }
         let from = LatLng(loc.coordinate.latitude, loc.coordinate.longitude)
+        // Only while driving: on foot or a bike, turning round is fine.
+        let heading = route.mode == .drive ? Self.heading(loc) : nil
         let mode = route.mode
         let to = destination.location
         let hw = avoidHighways, tolls = avoidTolls
@@ -446,7 +467,8 @@ final class Navigator: ObservableObject {
         let req = rerouteRequest
         Task {
             let r = await Directions.routes(from: from, to: to, mode: mode, avoidHighways: hw, avoidTolls: tolls,
-                                            useGoogle: !AppSettings.shared.noGoogle, via: self.stops.map(\.location))
+                                            useGoogle: !AppSettings.shared.noGoogle, via: self.stops.map(\.location),
+                                            heading: heading)
             guard !self.stopped, req == self.rerouteRequest else { return }
             self.rerouting = false
             guard let fresh = r.routes.first else { return }

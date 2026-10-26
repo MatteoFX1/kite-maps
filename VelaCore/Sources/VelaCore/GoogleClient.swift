@@ -41,16 +41,16 @@ public actor GoogleClient {
         try await warm()
         let first = try await page(query, center: center, spanMeters: spanMeters, offset: 0)
         guard pages > 1, first.count >= 18 else { return first }
-        var more: [Place] = []
-        await withTaskGroup(of: [Place].self) { group in
+        var more: [Int: [Place]] = [:]
+        await withTaskGroup(of: (Int, [Place]).self) { group in
             for i in 1..<pages {
-                group.addTask { (try? await self.page(query, center: center, spanMeters: spanMeters, offset: 20 * i)) ?? [] }
+                group.addTask { (i, (try? await self.page(query, center: center, spanMeters: spanMeters, offset: 20 * i)) ?? []) }
             }
-            for await p in group { more += p }
+            for await (i, p) in group { more[i] = p }
         }
+        // Pages in Google's order, as they'd come scrolling down Google Maps' list.
         var seen = Set(first.map(\.id))
-        let extra = more.filter { seen.insert($0.id).inserted }
-            .sorted { ($0.distanceMeters ?? 0) < ($1.distanceMeters ?? 0) }
+        let extra = (1..<pages).flatMap { more[$0] ?? [] }.filter { seen.insert($0.id).inserted }
         return first + extra
     }
 
@@ -80,13 +80,20 @@ public actor GoogleClient {
     /** Driving, cycling or walking routes with live traffic times, alternates first-to-last. */
     public func directions(from origin: LatLng, to destination: LatLng, mode: TravelMode,
                            avoidHighways: Bool = false, avoidTolls: Bool = false, via: [LatLng] = []) async throws -> [Route] {
+        let body = try await directionsBody(from: origin, to: destination, mode: mode,
+                                            avoidHighways: avoidHighways, avoidTolls: avoidTolls, via: via)
+        guard let root = GoogleJSON.parse(body) else { throw VelaError.unexpectedResponse(String(body.prefix(200))) }
+        return DirectionsParser.parse(root: root, mode: mode)
+    }
+
+    /** Google's raw answer for a route, before parsing: for the probe looking into what else it holds. */
+    public func directionsBody(from origin: LatLng, to destination: LatLng, mode: TravelMode,
+                               avoidHighways: Bool = false, avoidTolls: Bool = false, via: [LatLng] = []) async throws -> String {
         try await warm()
         let pb = DirectionsPb.build(origin: origin, destination: destination, mode: mode,
                                     avoidHighways: avoidHighways, avoidTolls: avoidTolls, waypoints: via)
         let url = URL(string: Self.directionsEndpoint + "&pb=" + enc(pb))!
-        let body = try await get(url, referer: "https://www.google.com/", xhr: true)
-        guard let root = GoogleJSON.parse(body) else { throw VelaError.unexpectedResponse(String(body.prefix(200))) }
-        return DirectionsParser.parse(root: root, mode: mode)
+        return try await get(url, referer: "https://www.google.com/", xhr: true)
     }
 
     private func warm() async throws {

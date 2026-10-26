@@ -84,6 +84,12 @@ public struct WazeAlert: Hashable, Sendable, Identifiable {
 }
 
 public enum Waze {
+    /**
+     * The kinds Waze's live map still hands out. Since October 2026 it keeps drivers' reports
+     * (police, crashes, hazards and the rest) to its own app and shares only road closures, so
+     * Settings greys out the others. Add kinds back here if Waze shares them again.
+     */
+    public static let shares: Set<WazeAlert.Kind> = [.closure]
     /** Waze keeps the Americas, Israel and the rest of the world on separate servers. */
     public static func env(for p: LatLng) -> String {
         if p.lat > 29, p.lat < 33.6, p.lng > 34, p.lng < 36 { return "il" }
@@ -118,6 +124,44 @@ public enum Waze {
         public var count: Int
         /** Answered through the hidden web view rather than directly. */
         public var viaPage = false
+        /** What the answer held, by Waze's own type: ["POLICE": 3, "ROAD_CLOSED": 140]. */
+        public var types: [String: Int] = [:]
+
+        public init(at: Date, code: Int, count: Int, viaPage: Bool = false, types: [String: Int] = [:]) {
+            self.at = at
+            self.code = code
+            self.count = count
+            self.viaPage = viaPage
+            self.types = types
+        }
+
+        /** "3 police · 140 road closures", most first, for the status line. */
+        public var summary: String {
+            guard !types.isEmpty else { return "nothing" }
+            return types.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+                .map { "\($0.value) \(Waze.typeName($0.key, $0.value))" }.joined(separator: " · ")
+        }
+    }
+
+    /** Waze's type in plain words: "police", "crashes", "road closures". */
+    public static func typeName(_ type: String, _ n: Int) -> String {
+        switch type {
+        case "POLICE", "POLICEMAN": return "police"
+        case "ACCIDENT": return n == 1 ? "crash" : "crashes"
+        case "HAZARD", "WEATHERHAZARD": return n == 1 ? "hazard" : "hazards"
+        case "ROAD_CLOSED": return n == 1 ? "road closure" : "road closures"
+        case "JAM": return n == 1 ? "jam" : "jams"
+        case "CONSTRUCTION": return "roadworks"
+        default: return type.lowercased()
+        }
+    }
+
+    /** How many reports of each Waze type an answer holds, including types Kite doesn't show. */
+    public static func types(_ data: Data) -> [String: Int] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+        var out: [String: Int] = [:]
+        for a in root["alerts"] as? [[String: Any]] ?? [] { out[a["type"] as? String ?? "?", default: 0] += 1 }
+        return out
     }
     /** Asks for [url] the way the live map page itself would, when Waze turns plain requests away. */
     nonisolated(unsafe) public static var fallback: (@Sendable (URL) async -> Data?)?
@@ -133,7 +177,7 @@ public enum Waze {
         let u = url(south: south, west: west, north: north, east: east)
         // Once the page route has worked, go straight to it: the plain one will only be refused.
         if lastStatus?.viaPage == true, let fallback, let data = await fallback(u), let list = parse(data) {
-            lastStatus = Status(at: Date(), code: 200, count: list.count, viaPage: true)
+            lastStatus = Status(at: Date(), code: 200, count: list.count, viaPage: true, types: types(data))
             return list
         }
         var status = 0
@@ -148,13 +192,13 @@ public enum Waze {
             status = (resp as? HTTPURLResponse)?.statusCode ?? 0
             if status == 200 {
                 let list = parse(data)
-                lastStatus = Status(at: Date(), code: list == nil ? -1 : 200, count: list?.count ?? 0)
+                lastStatus = Status(at: Date(), code: list == nil ? -1 : 200, count: list?.count ?? 0, types: types(data))
                 return list
             }
             if status != 403 && status != 401 { break }
         }
         if status == 403 || status == 401, let fallback, let data = await fallback(u), let list = parse(data) {
-            lastStatus = Status(at: Date(), code: 200, count: list.count, viaPage: true)
+            lastStatus = Status(at: Date(), code: 200, count: list.count, viaPage: true, types: types(data))
             return list
         }
         lastStatus = Status(at: Date(), code: status, count: 0)

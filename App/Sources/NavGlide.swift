@@ -12,8 +12,11 @@ import VelaCore
 @MainActor
 final class NavGlide: NSObject {
     weak var map: MLNMapView?
-    /** Where the car sits on screen while following: below the turn cards, clear of the speed and trip bar. */
-    nonisolated static let topFraction: CGFloat = 0.45
+    /**
+     * Where the car sits on screen while following: low down, about 70% of the way, so most of the
+     * screen shows the road ahead rather than what's already behind, but still above the trip bar.
+     */
+    nonisolated static let topFraction: CGFloat = 0.6
     nonisolated static let bottomInset: CGFloat = 170
     /** The car's height on a screen [height] tall, for things drawn next to it. */
     nonisolated static func carY(_ height: CGFloat) -> CGFloat { (height * topFraction + height - bottomInset) / 2 }

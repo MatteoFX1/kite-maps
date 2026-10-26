@@ -3,6 +3,60 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.2
+
+- **One speed sign:** your speed and the speed limit are now one sign in the bottom left, like
+  Waze: the limit on top, your speed under it, and the whole sign turns red when you're over.
+- **Right lane at roundabouts:** coming off the M271 into Redbridge roundabout for the A33, Kite
+  said "Middle lanes". It was reading the lanes for a slip road just before the roundabout. Now
+  it only uses lanes that really lead into the roundabout, and otherwise follows the Highway Code
+  (1st exit: left lane).
+- **Faster rerouting after a wrong turn:** Kite now notices within a few seconds when you've left
+  the route, or when you're driving back along it the wrong way. The new route sets off the way
+  you're facing, instead of telling you to turn round on the road you're on.
+- **Directions that match the blue line:** Kite takes its route from Google and its turn-by-turn
+  from the open map. Before, the open map's directions were used even where it drove a slightly
+  different way, so Kite could call out a turn the blue line never makes (like "Make a U-turn" leaving
+  Park Gate, where the line goes round the roundabout). Now they're only used when both run on the
+  very same roads, checked every 50 m both ways.
+- **No more "Continue on…" chatter:** when only the road's name changes, Kite stays quiet, like Waze.
+- **Google's lane advice:** where the open map has no lanes, Kite shows and says Google's own
+  ("Use the right lane").
+- **No pointless "Merge onto…":** when a slip road joins a road and its lane carries straight on
+  to your next exit (like the A33 into Redbridge Road and off again), Kite no longer tells you to
+  merge, and says which lane to stay in for the exit instead.
+- **Clearer lane words:** two good lanes out of three on the left now say "Left 2 lanes" instead
+  of "Middle lanes" (and the same on the right).
+- **Fixes from a last check of the basics:**
+  - Kite no longer says "You have arrived" twice at the end of a trip.
+  - The step list shows the full length of each step, now that quiet name changes are hidden.
+  - The wrong-way check looks at the road over about 30 m, so a tiny kink in the line can't make
+    it think you're going backwards.
+- **Smaller camera warning:** the speed camera card is about half the size, Waze-style, so it no
+  longer hides the road. It's still bright orange (red when you're too fast) and pulses when it appears.
+- **See more road ahead:** while driving, your arrow sits lower on the screen, so most of the map
+  shows what's coming instead of what you've already passed.
+- **Police heat map fixes:** its key ("Police ... often") is back above the risk chip, the glow
+  now sits under your route, cameras and road names instead of covering them, and reports found
+  in the background show on it straight away.
+- **Waze is barely working, and Kite says so:** Waze's live map has stopped sharing drivers'
+  reports (police, crashes, hazards); only road closures still come through. Settings › Waze
+  integration now says this, greys out the switches that can't work, and the police heat map and
+  risk score stay off until Waze shares reports again.
+- **See what Waze sends:** Settings › Waze integration now has a "Last answer" line, like
+  "3 police · 5 hazards · 140 road closures", so it's easy to tell if Waze stops sending a kind.
+- **Google's route on motorway drives:** Google folds the long motorway part of a trip ("Merge
+  onto M27", 12 km) into a step with no words, and Kite missed it. Its turns then looked out of
+  place, so Kite dropped Google's traffic-aware route for the open map's. Now it reads that step,
+  so drives like Park Gate to Southampton on the M27 follow Google's route.
+- **"Open in Google Maps" for any place:** a dropped pin, a postcode or a shared spot opened
+  OpenStreetMap's website instead. It now opens Google Maps at that spot, and Share sends a Google
+  Maps link too.
+- **Tidier step words:** "So'ton" instead of "So&#39;ton".
+- **Search results in Google's order:** results now come in the same order as Google Maps, best
+  match first, instead of nearest first (which could put a fuel company's office above real petrol
+  stations). Sort › Distance still lists them nearest first.
+
 ## 0.7.1
 
 - **Waze-style driving map:** while you navigate, the map drops shop and bin icons, footpaths,

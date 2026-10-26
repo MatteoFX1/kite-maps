@@ -27,11 +27,25 @@ jobs:
         continue-on-error: true
         timeout-minutes: 4
         run: python3 .github/probe/roundabouts.py
+      - name: Live roundabout lanes check
+        continue-on-error: true
+        timeout-minutes: 2
+        run: python3 .github/probe/lanes.py
       - name: Live UK turn-by-turn check
         working-directory: VelaCore
         continue-on-error: true
         timeout-minutes: 4
         run: swift run vela-probe uk
+      - name: Live turn-by-turn audit (Southampton)
+        working-directory: VelaCore
+        continue-on-error: true
+        timeout-minutes: 4
+        run: swift run vela-probe audit
+      - name: Live Google check (UK)
+        working-directory: VelaCore
+        continue-on-error: true
+        timeout-minutes: 4
+        run: swift run vela-probe google
       - name: Live Google search check
         working-directory: VelaCore
         continue-on-error: true

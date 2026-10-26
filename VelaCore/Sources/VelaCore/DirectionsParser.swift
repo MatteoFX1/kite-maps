@@ -98,11 +98,70 @@ enum DirectionsParser {
         }
     }
 
-    private static func collectSteps(_ n: Any, into out: inout [Maneuver]) {
+    static func collectSteps(_ n: Any, into out: inout [Maneuver]) {
         if let a = n as? [Any] {
+            // A step entry is [step, _, [icon, class], ...].
+            if let node = a.first as? [Any], let folded = foldedStep(node, icon: str(at(a, 2, 1))) {
+                out.append(folded)
+                return
+            }
             for e in a { collectSteps(e, into: &out) }
         } else if let s = n as? String, s.contains("<step ") {
             out.append(parseStep(s))
+        }
+    }
+
+    /**
+     * A step Google sends with no `<step>` text: the long motorway stretch inside a folded group
+     * ("Merge onto M27", 12.5 km). Its length is `[2][0]`, its words are pieces like
+     * `[[2,["Merge onto "]],[2,["M27",1]]]`, its time `[3]`, and its kind is in the entry's icon class
+     * ("dir-tt dir-tt-merge"). Left out, the turns after it are counted back to the wrong places.
+     */
+    static func foldedStep(_ a: [Any], icon: String?) -> Maneuver? {
+        guard a.count > 3, int(at(a, 0)) == 0, let markup = a[1] as? String, markup.isEmpty,
+              let meters = dbl(at(a, 2, 0)), str(at(a, 2, 1)) != nil,
+              dbl(at(a, 3, 0)) != nil, str(at(a, 3, 1)) != nil else { return nil }
+        var text = "", road: String?
+        for e in a {
+            guard let pieces = e as? [Any], !pieces.isEmpty,
+                  pieces.allSatisfy({ int(at($0, 0)) != nil && str(at($0, 1, 0)) != nil }) else { continue }
+            for p in pieces {
+                let t = str(at(p, 1, 0)) ?? ""
+                // Bold pieces are road names, and also the turn's direction ("Keep <b>right</b>").
+                if int(at(p, 1, 1)) == 1, road == nil,
+                   t.range(of: #"^\s*((slight|sharp)\s+)?(left|right)\s*$"#, options: [.regularExpression, .caseInsensitive]) == nil { road = t }
+                text += t
+            }
+            break
+        }
+        let kind = (icon ?? "").components(separatedBy: " ").last { $0.hasPrefix("dir-tt-") }.map { String($0.dropFirst(7)) } ?? ""
+        let token = kind.uppercased().replacingOccurrences(of: "-", with: "_")
+        let side = kind.contains("left") ? "LEFT" : (kind.contains("right") ? "RIGHT" : nil)
+        let severity = kind.contains("slight") ? "SLIGHT" : (kind.contains("sharp") ? "SHARP" : nil)
+        var m = parseStep("<step meters='\(Int(meters))'>\(text)</step>")
+        m.type = mapType(token.isEmpty ? nil : token, side: side, severity: severity)
+        m.road = road
+        // No words at all: say what the icon shows rather than "Continue" at a turn.
+        if text.trimmingCharacters(in: .whitespaces).isEmpty { m.instruction = phrase(m.type) }
+        return m
+    }
+
+    static func phrase(_ t: ManeuverType) -> String {
+        switch t {
+        case .turnLeft: return "Turn left"
+        case .turnRight: return "Turn right"
+        case .slightLeft: return "Slight left"
+        case .slightRight: return "Slight right"
+        case .sharpLeft: return "Sharp left"
+        case .sharpRight: return "Sharp right"
+        case .uturn: return "Make a U-turn"
+        case .merge: return "Merge"
+        case .rampLeft: return "Take the slip road on the left"
+        case .rampRight: return "Take the slip road on the right"
+        case .forkLeft, .keepLeft: return "Keep left"
+        case .forkRight, .keepRight: return "Keep right"
+        case .roundabout: return "At the roundabout, continue"
+        default: return "Continue"
         }
     }
 
@@ -122,6 +181,9 @@ enum DirectionsParser {
         }
         var text = s.replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "&#39;", with: "'").replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&lt;", with: "<").replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&amp;", with: "&")
             .trimmingCharacters(in: .whitespaces)
         var lane: String?
         if let r = text.range(of: #"^(Use (the .+? lanes?|any lane)) to "#, options: [.regularExpression, .caseInsensitive]) {
