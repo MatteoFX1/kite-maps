@@ -340,7 +340,7 @@ struct StepsList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(route.maneuvers.enumerated()), id: \.offset) { _, m in
+            ForEach(Array(route.maneuvers.filter { !$0.silent }.enumerated()), id: \.offset) { _, m in
                 HStack(alignment: .top, spacing: 14) {
                     Image(systemName: maneuverSymbol(m.type))
                         .font(.system(size: 22, weight: .bold))

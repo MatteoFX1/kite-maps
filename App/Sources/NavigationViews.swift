@@ -305,6 +305,11 @@ enum LaneGuide {
             else { words = valid.count > 1 ? "Middle lanes" : "Middle lane" }
             return (m.lanes, words)
         }
+        // Google's own advice ("Use the right lane") where the open map has no lanes: words only.
+        if let hint = m.laneHint, !hint.localizedCaseInsensitiveContains("any lane"), m.type != .roundabout {
+            let words = hint.replacingOccurrences(of: "use the ", with: "", options: .caseInsensitive)
+            return ([], words.prefix(1).uppercased() + words.dropFirst())
+        }
         guard m.type == .roundabout, !m.leavesRoundabout, let shape = m.roundabout else { return nil }
         // Two lanes, the near-side one for left and straight on, the far one for right.
         let farSide = shape.ruleLane == 1

@@ -105,15 +105,16 @@ final class Navigator: ObservableObject {
 
     /** The road being driven now, for the name under the arrow. */
     var currentRoad: String? {
-        guard let i = progress?.nextIndex, i > 0, i - 1 < route.maneuvers.count else { return nil }
-        let road = route.maneuvers[i - 1].road?.trimmingCharacters(in: .whitespaces)
+        // The last step passed, a name change included.
+        guard let along = progress?.alongMeters, let i = route.maneuvers.lastIndex(where: { $0.alongMeters <= along + 8 }) else { return nil }
+        let road = route.maneuvers[i].road?.trimmingCharacters(in: .whitespaces)
         return road?.isEmpty == false ? road : nil
     }
 
     /** The one after next, for the "Then" line when two turns come close together. */
     var thenManeuver: Maneuver? {
-        guard let i = progress?.nextIndex, i + 1 < route.maneuvers.count else { return nil }
-        let a = route.maneuvers[i], b = route.maneuvers[i + 1]
+        guard let i = progress?.nextIndex, let j = route.maneuvers[(i + 1)...].firstIndex(where: { !$0.silent }) else { return nil }
+        let a = route.maneuvers[i], b = route.maneuvers[j]
         // Leaving a roundabout is part of the roundabout, not a turn of its own.
         if b.leavesRoundabout { return nil }
         return b.alongMeters - a.alongMeters < 300 ? b : nil

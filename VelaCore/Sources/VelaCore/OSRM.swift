@@ -33,6 +33,40 @@ public enum OSRM {
     }
 
     /**
+     * The open router's turn-by-turn for exactly [line] (Google's route): its map matching follows the
+     * line point by point, so every step is on a road the blue line really takes. Routing through a
+     * few points instead (routeVia) let it pick its own roads between them, and Kite then called out
+     * turns the line never made and missed ones it did.
+     */
+    public static func match(_ line: [LatLng], mode: TravelMode) async throws -> Route? {
+        guard line.count >= 2, let url = matchURL(line, mode: mode) else { return nil }
+        var r = URLRequest(url: url)
+        r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        r.timeoutInterval = 20
+        let (data, _) = try await URLSession.shared.data(for: r)
+        // One unbroken match only: a gap means part of the line couldn't be followed.
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let matchings = root["matchings"] as? [[String: Any]], matchings.count == 1 else { return nil }
+        let routes = try JSONSerialization.data(withJSONObject: ["routes": matchings])
+        guard let m = parse(routes, mode: mode).first else { return nil }
+        let total = Geo.length(line)
+        return abs(m.distanceMeters - total) < max(150, total * 0.04) ? m : nil
+    }
+
+    /** Points along the line every 150 m or so (at most 100, the server's limit), first and last kept. */
+    static func matchURL(_ line: [LatLng], mode: TravelMode) -> URL? {
+        let cum = Geo.cumulative(line)
+        let total = cum.last ?? 0
+        let n = min(99, max(1, Int(total / 150)))
+        let pts = (0...n).map { Geo.point(along: line, meters: total * Double($0) / Double(n), cumulative: cum) }
+        let profile = mode == .drive ? "driving" : (mode == .bike ? "bike" : "foot")
+        let coords = pts.map { String(format: "%.6f,%.6f", $0.lng, $0.lat) }.joined(separator: ";")
+        let radii = Array(repeating: "25", count: pts.count).joined(separator: ";")
+        return URL(string: "https://routing.openstreetmap.de/\(mode.osrmBackend)/match/v1/\(profile)/\(coords)" +
+                   "?overview=full&geometries=polyline6&steps=true&tidy=true&gaps=ignore&radiuses=\(radii)&waypoints=0;\(pts.count - 1)")
+    }
+
+    /**
      * The open router forced through points sampled off [line] (Google's route), so its
      * turn-by-turn follows the same roads, the way Vela gets readable steps for Google routes.
      */
@@ -82,6 +116,7 @@ public enum OSRM {
             let cum = Geo.cumulative(line)
             var maneuvers: [Maneuver] = []
             var mergeSides: [Int: String] = [:]
+            var nameOnly: Set<Int> = []
             var along = 0.0
             var roads: [String: Double] = [:]
             let legs = (r["legs"] as? [[String: Any]]) ?? []
@@ -130,10 +165,12 @@ public enum OSRM {
                         }
                     }
                     if type == "merge", let modifier { mergeSides[maneuvers.count] = modifier }
+                    if type == "new name" || type == "continue", (modifier ?? "straight") == "straight" { nameOnly.insert(maneuvers.count) }
                     maneuvers.append(man)
                     along += dist
                 }
             }
+            for i in nameOnly where i > 0 && maneuvers[i].lanes.isEmpty { maneuvers[i].silent = true }
             maneuvers = keepLaneThroughMerges(maneuvers, mergeSides: mergeSides)
             if let last = maneuvers.indices.last {
                 maneuvers[last].alongMeters = cum.last ?? along
@@ -229,8 +266,8 @@ public enum OSRM {
         var out: [Maneuver] = []
         var dropped = false
         for (i, m) in steps.enumerated() {
-            if let side = mergeSides[i], i > 0, i + 1 < steps.count {
-                let next = steps[i + 1]
+            if let side = mergeSides[i], i > 0, let n = steps[(i + 1)...].firstIndex(where: { !$0.silent }) {
+                let next = steps[n]
                 // Merging to the right means joining from the left, so the lane is the left one.
                 let fromLeft = side.hasSuffix("right")
                 let exitSameSide = fromLeft ? [ManeuverType.rampLeft, .forkLeft, .keepLeft].contains(next.type)
@@ -242,6 +279,7 @@ public enum OSRM {
                 }
             }
             var m = m
+            if dropped, m.silent { out.append(m); continue }
             if dropped, m.lanes.isEmpty {
                 // The merge before this exit was dropped: show its lane.
                 let left = [ManeuverType.rampLeft, .forkLeft, .keepLeft].contains(m.type)
@@ -441,12 +479,14 @@ public enum Directions {
                 // One at a time: the FOSSGIS server turns away bursts.
                 var vias: [Int: Route] = [:]
                 for i in g.indices {
-                    if let r = try? await OSRM.routeVia(g[i].polyline, mode: mode) { vias[i] = r }
+                    if let r = try? await OSRM.match(g[i].polyline, mode: mode) { vias[i] = r }
+                    else if let r = try? await OSRM.routeVia(g[i].polyline, mode: mode) { vias[i] = r }
                 }
                 let plain = (try? await osrmTask.value) ?? []
                 var spare = plain
                 for i in g.indices {
-                    if let steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
+                    if var steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
+                        StepMerge.addGoogleLaneHints(&steps, from: g[i].maneuvers)
                         g[i].maneuvers = steps
                         g[i].stepsComplete = true
                     } else if !g[i].stepsComplete, !spare.isEmpty {
@@ -494,6 +534,9 @@ public enum StepMerge {
         var best: [Maneuver]?
         var bestScore = 0.0
         for o in candidates {
+            // Only a route on the same roads all the way: one that strays (its own way round
+            // somewhere) would call out turns the blue line never makes.
+            guard follows(o.polyline, line, cumulative: cum) else { continue }
             let mids = o.maneuvers.filter { $0.type != .depart && $0.type != .arrive }
             var placed: [Maneuver] = []
             var last = 0.0
@@ -523,5 +566,29 @@ public enum StepMerge {
             best = all
         }
         return bestScore >= 0.7 ? best : nil
+    }
+
+    /** Whether [route] keeps within 30 m of [line] everywhere (checked every 50 m), ends aside. */
+    static func follows(_ route: [LatLng], _ line: [LatLng], cumulative cum: [Double]) -> Bool {
+        guard route.count >= 2 else { return false }
+        let rc = Geo.cumulative(route)
+        let total = rc.last ?? 0
+        var m = 60.0
+        while m < total - 60 {
+            if Geo.project(Geo.point(along: route, meters: m, cumulative: rc), on: line, cumulative: cum).offset > 30 { return false }
+            m += 50
+        }
+        return true
+    }
+
+    /**
+     * Google's own lane advice ("Use the right lane to merge onto Redbridge Rd") on the step at the
+     * same place, where the open map has no lanes mapped.
+     */
+    public static func addGoogleLaneHints(_ steps: inout [Maneuver], from google: [Maneuver]) {
+        for i in steps.indices where !steps[i].silent && steps[i].lanes.isEmpty && steps[i].laneHint == nil {
+            let near = google.filter { $0.laneHint != nil && abs($0.alongMeters - steps[i].alongMeters) < 150 }
+            steps[i].laneHint = near.min { abs($0.alongMeters - steps[i].alongMeters) < abs($1.alongMeters - steps[i].alongMeters) }?.laneHint
+        }
     }
 }

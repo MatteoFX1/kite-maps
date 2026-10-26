@@ -102,6 +102,28 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(OSRM.keepLaneThroughMerges(far, mergeSides: [1: "slight right"]).count, 4)
     }
 
+    func testStepsOnlyFromARouteOnTheSameRoads() {
+        // About 2.2 km north; the other route leaves the line halfway for a parallel road 100 m east.
+        let line = [LatLng(0, 0), LatLng(0.02, 0)]
+        let cum = Geo.cumulative(line)
+        XCTAssertTrue(StepMerge.follows([LatLng(0, 0.0001), LatLng(0.02, 0.0001)], line, cumulative: cum))
+        XCTAssertFalse(StepMerge.follows([LatLng(0, 0), LatLng(0.01, 0), LatLng(0.01, 0.001), LatLng(0.02, 0.001)], line, cumulative: cum))
+        // Matching asks for a point about every 150 m, never more than 100.
+        let url = OSRM.matchURL(line, mode: .drive)!.absoluteString
+        XCTAssertTrue(url.contains("/match/v1/driving/"))
+        XCTAssertEqual(url.components(separatedBy: "radiuses=")[1].components(separatedBy: "&")[0].split(separator: ";").count, 15)
+        let long = OSRM.matchURL([LatLng(0, 0), LatLng(1, 0)], mode: .drive)!.absoluteString
+        XCTAssertTrue(long.hasSuffix("&waypoints=0;99"), long)
+    }
+
+    func testGoogleLaneHintOnTheSameStep() {
+        let p = LatLng(0, 0)
+        var steps = [Maneuver(type: .merge, instruction: "Merge onto Redbridge Road", location: p, alongMeters: 1000, distanceMeters: 300)]
+        let google = [Maneuver(type: .merge, instruction: "Merge onto Redbridge Rd", location: p, alongMeters: 1060, distanceMeters: 300, laneHint: "Use the right lane")]
+        StepMerge.addGoogleLaneHints(&steps, from: google)
+        XCTAssertEqual(steps[0].laneHint, "Use the right lane")
+    }
+
     func testRerouteKeepsHeading() {
         let url = OSRM.routeURL(from: LatLng(50.9, -1.4), to: LatLng(50.8, -1.3), mode: .drive, heading: 271.6).absoluteString
         XCTAssertTrue(url.hasSuffix("&bearings=272,60;"), url)

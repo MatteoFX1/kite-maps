@@ -17,6 +17,7 @@ func navAudit() async {
         var extra: [String] = []
         if let e = m.exit { extra.append("exit \(e)") }
         if let h = m.laneHint { extra.append("hint '\(h)'") }
+        if m.silent { extra.append("silent") }
         if !m.lanes.isEmpty { extra.append("lanes " + m.lanes.map { ($0.valid ? "*" : "") + $0.indications.joined(separator: "/") }.joined(separator: " | ")) }
         return String(format: "  %6.0f m  %-11@ %@  %@", m.alongMeters, m.type.rawValue as NSString,
                       m.instruction as NSString, (extra.isEmpty ? "" : "[" + extra.joined(separator: ", ") + "]") as NSString)
@@ -27,6 +28,13 @@ func navAudit() async {
         if let g {
             print("--- Google's own steps (\(Int(g.distanceMeters)) m, complete \(g.stepsComplete)):")
             g.maneuvers.forEach { print(row($0)) }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            do {
+                if let mt = try await OSRM.match(g.polyline, mode: .drive) {
+                    print("--- Open router matched to Google's line (\(Int(mt.distanceMeters)) m):")
+                    mt.maneuvers.forEach { print(row($0)) }
+                } else { print("--- Open router matched to Google's line: NO SINGLE MATCH") }
+            } catch { print("--- Open router match FAILED: \(error)") }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             if let v = try? await OSRM.routeVia(g.polyline, mode: .drive) {
                 print("--- Open router forced along Google's line (\(Int(v.distanceMeters)) m):")

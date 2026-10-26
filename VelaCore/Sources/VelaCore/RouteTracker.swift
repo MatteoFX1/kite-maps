@@ -62,7 +62,7 @@ public final class RouteTracker {
         } else {
             wrongWayCount = 0
         }
-        let next = route.maneuvers.firstIndex { $0.alongMeters > along + 8 }
+        let next = route.maneuvers.firstIndex { !$0.silent && $0.alongMeters > along + 8 }
         let toNext = next.map { route.maneuvers[$0].alongMeters - along } ?? (total - along)
         let remaining = max(0, total - along)
         return Progress(
