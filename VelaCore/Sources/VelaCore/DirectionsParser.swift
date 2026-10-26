@@ -124,7 +124,7 @@ enum DirectionsParser {
         var text = "", road: String?
         for e in a {
             guard let pieces = e as? [Any], !pieces.isEmpty,
-                  pieces.allSatisfy({ int(at($0, 0)) == 2 && str(at($0, 1, 0)) != nil }) else { continue }
+                  pieces.allSatisfy({ int(at($0, 0)) != nil && str(at($0, 1, 0)) != nil }) else { continue }
             for p in pieces {
                 let t = str(at(p, 1, 0)) ?? ""
                 if int(at(p, 1, 1)) == 1, road == nil { road = t }
@@ -139,7 +139,28 @@ enum DirectionsParser {
         var m = parseStep("<step meters='\(Int(meters))'>\(text)</step>")
         m.type = mapType(token.isEmpty ? nil : token, side: side, severity: severity)
         m.road = road
+        // No words at all: say what the icon shows rather than "Continue" at a turn.
+        if text.trimmingCharacters(in: .whitespaces).isEmpty { m.instruction = phrase(m.type) }
         return m
+    }
+
+    static func phrase(_ t: ManeuverType) -> String {
+        switch t {
+        case .turnLeft: return "Turn left"
+        case .turnRight: return "Turn right"
+        case .slightLeft: return "Slight left"
+        case .slightRight: return "Slight right"
+        case .sharpLeft: return "Sharp left"
+        case .sharpRight: return "Sharp right"
+        case .uturn: return "Make a U-turn"
+        case .merge: return "Merge"
+        case .rampLeft: return "Take the slip road on the left"
+        case .rampRight: return "Take the slip road on the right"
+        case .forkLeft, .keepLeft: return "Keep left"
+        case .forkRight, .keepRight: return "Keep right"
+        case .roundabout: return "At the roundabout, continue"
+        default: return "Continue"
+        }
     }
 
     static func parseStep(_ s: String) -> Maneuver {
