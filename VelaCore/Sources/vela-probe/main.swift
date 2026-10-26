@@ -8,6 +8,10 @@ if args.count > 1, args[1] == "audit" {
     await navAudit()
     exit(0)
 }
+if args.count > 1, args[1] == "incidents" {
+    await googleIncidents()
+    exit(0)
+}
 if args.count > 1, args[1] == "uk" {
     await ukRoutes()
     exit(0)
@@ -257,3 +261,4 @@ for base in Aircraft.endpoints {
 }
 
 exit(exitCode)
+
