@@ -2,8 +2,9 @@ import MapLibre
 import UIKit
 
 /**
- * Paints OpenFreeMap Liberty in Vela's colors: the navy "Modern" night palette sampled from
- * the Google app, and Vela's classic day look (white streets, yellow motorways).
+ * Paints OpenFreeMap Liberty in Kite's colors: a calm Waze-like night palette (slate land,
+ * soft blue-grey roads with no dark edges, green parks) and the classic day look (white
+ * streets, yellow motorways). While driving, [drive] strips the map down to roads and names.
  * Layer ids are Liberty's; anything not named here keeps Liberty's own style.
  */
 enum MapStyler {
@@ -21,16 +22,16 @@ enum MapStyler {
     }
 
     static let dark = Palette(
-        land: UIColor(hex: 0x111D30), water: UIColor(hex: 0x07122A), park: UIColor(hex: 0x0F3140),
-        pitch: UIColor(hex: 0x0F4150), landuse: UIColor(hex: 0x24304A), landuseOpacity: 0.5,
-        building: UIColor(hex: 0x1B2D4A), buildingOutline: UIColor(hex: 0x26395A),
-        minor: UIColor(hex: 0x34506E), major: UIColor(hex: 0x46668C), motorway: UIColor(hex: 0x5A7CA6),
-        service: UIColor(hex: 0x263A52), path: UIColor(hex: 0x263A52),
-        casing: UIColor(hex: 0x070B14), motorwayCasing: UIColor(hex: 0x070B14),
-        rail: UIColor(hex: 0x384868),
-        airport: UIColor(hex: 0x1A2436), runway: UIColor(hex: 0x263A52),
-        label: UIColor(hex: 0xC8D1DE), halo: UIColor(hex: 0x111D30),
-        roadLabel: UIColor(hex: 0xD3DAE5), roadHalo: UIColor(hex: 0x111D30),
+        land: UIColor(hex: 0x262E3B), water: UIColor(hex: 0x253F5C), park: UIColor(hex: 0x24563F),
+        pitch: UIColor(hex: 0x24563F), landuse: UIColor(hex: 0x2B3442), landuseOpacity: 0.5,
+        building: UIColor(hex: 0x2D3644), buildingOutline: UIColor(hex: 0x313B4A),
+        minor: UIColor(hex: 0x3B4C5B), major: UIColor(hex: 0x46606F), motorway: UIColor(hex: 0x587689),
+        service: UIColor(hex: 0x333F4D), path: UIColor(hex: 0x2F3947),
+        casing: UIColor(hex: 0x262E3B), motorwayCasing: UIColor(hex: 0x262E3B),
+        rail: UIColor(hex: 0x3A4655),
+        airport: UIColor(hex: 0x2B3442), runway: UIColor(hex: 0x3B4C5B),
+        label: UIColor(hex: 0xC9D1DC), halo: UIColor(hex: 0x262E3B),
+        roadLabel: UIColor(hex: 0xE2E8F0), roadHalo: UIColor(hex: 0x262E3B),
         border: UIColor(hex: 0x8C95A3))
 
     static let light = Palette(
@@ -63,6 +64,8 @@ enum MapStyler {
                 case "park":
                     f.fillColor = c(p.park); f.fillOutlineColor = c(p.park); f.fillOpacity = NSExpression(forConstantValue: 1)
                 case "landcover_grass", "landcover_wood", "landcover_wetland":
+                    // Liberty draws marshes with a bright grass pattern: plain green instead.
+                    f.fillPattern = nil
                     f.fillColor = c(p.park); f.fillOutlineColor = c(p.park); f.fillOpacity = NSExpression(forConstantValue: 0.9)
                 case "landuse_pitch", "landuse_track": f.fillColor = c(p.pitch)
                 case "building":
@@ -103,6 +106,28 @@ enum MapStyler {
                     s.textColor = c(label); s.textHaloColor = c(halo)
                     s.textHaloWidth = NSExpression(forConstantValue: 1.1)
                 }
+            }
+        }
+    }
+
+    /** Layers that only get in the way while driving: shop and bin icons, footpaths, buildings, one-way arrows. */
+    private static func clutter(_ id: String) -> Bool {
+        id.hasPrefix("poi_") || id == "building" || id == "building-3d" || id.contains("path_pedestrian")
+            || id == "highway-name-path" || id.hasPrefix("road_one_way_arrow") || id.hasSuffix("_hatching")
+            || ["landuse_pitch", "landuse_track", "landuse_cemetery", "landuse_hospital", "landuse_school",
+                "aeroway_fill", "aeroway_runway", "aeroway_taxiway", "airport"].contains(id)
+    }
+
+    private static var savedLabelSizes: [String: NSExpression] = [:]
+
+    /** Strips the map to roads, water, parks and big road names while navigating, and puts it back after. */
+    static func drive(_ style: MLNStyle, on: Bool) {
+        for layer in style.layers where !layer.identifier.hasPrefix("vela") {
+            let id = layer.identifier
+            if clutter(id) { layer.isVisible = !on; continue }
+            if let s = layer as? MLNSymbolStyleLayer, id == "highway-name-major" || id == "highway-name-minor" {
+                if savedLabelSizes[id] == nil { savedLabelSizes[id] = s.textFontSize }
+                s.textFontSize = on ? NSExpression(forConstantValue: id == "highway-name-major" ? 17 : 15) : savedLabelSizes[id]!
             }
         }
     }

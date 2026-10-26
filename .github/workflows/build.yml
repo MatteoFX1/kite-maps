@@ -88,14 +88,28 @@ jobs:
         with:
           name: Kite-ipa
           path: Kite.ipa
+      - name: Release notes
+        id: notes
+        # The version from project.yml, and its "What's new" from CHANGELOG.md.
+        run: |
+          VERSION=$(sed -n 's/.*MARKETING_VERSION: "\(.*\)"/\1/p' project.yml | head -1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "## What's new in $VERSION"
+            echo
+            awk -v v="## $VERSION" '$0 ~ "^## " { if (on) exit; if (index($0, v) == 1) { on = 1; next } } on' CHANGELOG.md
+            echo
+            echo "---"
+            echo "Unsigned app for sideloading. Download **Kite.ipa** below and install it with AltStore or Sideloadly. Kite Maps is an unofficial iPhone port of [Vela Maps](https://github.com/PimpinPumpkin/Vela). Every version is listed in [CHANGELOG.md](CHANGELOG.md)."
+          } > notes.md
+          cat notes.md
       - name: Publish release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}
-          name: Kite Maps (build ${{ github.run_number }})
-          body: |
-            Unsigned app for sideloading. Download **Kite.ipa** below and install it with AltStore or Sideloadly. Kite Maps is an unofficial iPhone port of [Vela Maps](https://github.com/PimpinPumpkin/Vela).
+          tag_name: v${{ steps.notes.outputs.version }}
+          name: Kite Maps ${{ steps.notes.outputs.version }}
+          body_path: notes.md
           files: Kite.ipa
       - name: Update the AltStore source
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -105,7 +119,7 @@ jobs:
           codesign -d --entitlements :- "$APP" > ents.plist 2>/dev/null || : > ents.plist
           mkdir -p source
           python3 .github/altstore/make_source.py "$APP" Kite.ipa ents.plist \
-            build-${{ github.run_number }} "${{ github.repository }}" source/apps.json
+            v${{ steps.notes.outputs.version }} "${{ github.repository }}" source/apps.json
           cd source
           git init -q -b altstore
           git config user.name "github-actions"
@@ -141,9 +155,9 @@ jobs:
           xcrun simctl install "$DEV" simbuild/Build/Products/Debug-iphonesimulator/Kite.app
           xcrun simctl privacy "$DEV" grant location app.vela.ios || true
           mkdir -p shots
-          for step in browse search place directions nav cameras layers transit board mine stops rail welcome camalert streetview svtest svtest90 lookaround copy wazelink googlelink listscroll wazealert wazedemo wazetap wazeroute wazesettings wazemap wazeintro searchfocus settings saved pickhome locationoff longname longdir addstop allalerts; do
+          for step in browse search place directions nav cameras layers transit board mine stops rail welcome camalert streetview svtest svtest90 lookaround copy wazelink googlelink listscroll wazealert wazedemo wazetap wazeroute wazesettings wazemap wazeintro searchfocus settings saved pickhome locationoff longname longdir addstop allalerts endtrip; do
             xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo "$step"
-            case $step in browse) t=16;; search) t=24;; place) t=28;; directions) t=38;; nav) t=44;; cameras) t=110;; layers) t=12;; transit) t=40;; board) t=24;; mine) t=14;; stops) t=40;; rail) t=30;; welcome) t=10;; camalert) t=52;; streetview) t=40;; svtest) t=12;; svtest90) t=12;; lookaround) t=40;; copy) t=34;; wazelink) t=16;; googlelink) t=24;; listscroll) t=30;; wazealert) t=44;; wazedemo) t=16;; wazemap) t=55;; wazeintro) t=10;; wazetap) t=18;; wazeroute) t=40;; wazesettings) t=12;; searchfocus) t=14;; settings) t=10;; saved) t=10;; pickhome) t=12;; locationoff) t=14;; longname) t=20;; longdir) t=32;; addstop) t=34;; allalerts) t=48;; esac
+            case $step in browse) t=16;; search) t=24;; place) t=28;; directions) t=38;; nav) t=44;; cameras) t=110;; layers) t=12;; transit) t=40;; board) t=24;; mine) t=14;; stops) t=40;; rail) t=30;; welcome) t=10;; camalert) t=52;; streetview) t=40;; svtest) t=12;; svtest90) t=12;; lookaround) t=40;; copy) t=34;; wazelink) t=16;; googlelink) t=24;; listscroll) t=30;; wazealert) t=44;; wazedemo) t=16;; wazemap) t=55;; wazeintro) t=10;; wazetap) t=18;; wazeroute) t=40;; wazesettings) t=12;; searchfocus) t=14;; settings) t=10;; saved) t=10;; pickhome) t=12;; locationoff) t=14;; longname) t=20;; longdir) t=32;; addstop) t=34;; allalerts) t=48;; endtrip) t=44;; esac
             sleep $t
             xcrun simctl io "$DEV" screenshot "shots/$step.png"
           done

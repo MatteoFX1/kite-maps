@@ -98,6 +98,12 @@ final class Navigator: ObservableObject {
         return route.maneuvers[i]
     }
 
+    /** The road being driven now, for the name under the arrow. */
+    var currentRoad: String? {
+        guard let i = progress?.nextIndex, i > 0, i - 1 < route.maneuvers.count else { return nil }
+        return route.maneuvers[i - 1].road
+    }
+
     /** The one after next, for the "Then" line when two turns come close together. */
     var thenManeuver: Maneuver? {
         guard let i = progress?.nextIndex, i + 1 < route.maneuvers.count else { return nil }

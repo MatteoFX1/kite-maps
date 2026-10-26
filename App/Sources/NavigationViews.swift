@@ -100,11 +100,42 @@ struct NavigationOverlay: View {
                 }
                 .buttonStyle(.plain)
             }
-            TripBar(nav: nav, onEnd: { if nav.arrived { model.endNavigation() } else { confirmEnd = true } }, onSteps: { showSteps = true })
-                .confirmationDialog("End this trip?", isPresented: $confirmEnd, titleVisibility: .visible) {
-                    Button("End trip", role: .destructive) { model.endNavigation() }
-                    Button("Keep going", role: .cancel) {}
+            if confirmEnd {
+                EndTripCard(destination: nav.destination.name,
+                            onKeep: { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { confirmEnd = false } },
+                            onEnd: { model.endNavigation() })
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                TripBar(nav: nav, onEnd: {
+                    if nav.arrived { model.endNavigation() } else {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { confirmEnd = true }
+                    }
+                }, onSteps: { showSteps = true })
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .background(
+            // The road you're on, just under the arrow (the map keeps the arrow at this height while following).
+            GeometryReader { g in
+                if nav.following, !nav.arrived, let road = nav.currentRoad {
+                    Text(road)
+                        .font(.system(size: 17, weight: .bold))
+                        .lineLimit(1)
+                        .padding(.horizontal, 14).frame(height: 36)
+                        .foregroundColor(.white)
+                        .background(Capsule().fill(Color.black.opacity(0.78)))
+                        .frame(maxWidth: g.size.width * 0.7)
+                        .position(x: g.size.width / 2, y: (g.size.height * 0.45 + g.size.height - 120) / 2 + 52)
                 }
+            }
+            .ignoresSafeArea()
+        )
+        .task {
+            // Screenshot run: the end trip question.
+            if DemoScript.step == "endtrip" {
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                withAnimation { confirmEnd = true }
+            }
         }
         .sheet(isPresented: $showAlong) {
             AlongRouteSheet(nav: nav).kiteType()
@@ -330,6 +361,44 @@ struct SpeedLimitSign: View {
 }
 
 /** The bottom card while driving: end, time left (big), and the trip menu. */
+/** Asks before ending a trip, in place of the trip bar: two big buttons, easy to hit in a phone holder. */
+struct EndTripCard: View {
+    let destination: String
+    let onKeep: () -> Void
+    let onEnd: () -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(spacing: 14) {
+            VStack(spacing: 2) {
+                Text("End this trip?").font(.system(size: 24, weight: .heavy))
+                Text("to \(destination)").font(.system(size: 16, weight: .medium))
+                    .foregroundColor(Vela.muted(scheme)).lineLimit(1)
+            }
+            HStack(spacing: 12) {
+                Button(action: onKeep) {
+                    Text("Keep going").font(.system(size: 20, weight: .bold))
+                        .frame(maxWidth: .infinity).frame(height: 60)
+                        .foregroundColor(Vela.onAccent(scheme))
+                        .background(Capsule().fill(Vela.accent(scheme)))
+                }
+                Button(action: onEnd) {
+                    Text("End trip").font(.system(size: 20, weight: .bold))
+                        .frame(maxWidth: .infinity).frame(height: 60)
+                        .foregroundColor(.white)
+                        .background(Capsule().fill(Vela.closed))
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .foregroundColor(.primary)
+        .padding(18)
+        .glass(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 4)
+    }
+}
+
 struct TripBar: View {
     @ObservedObject var nav: Navigator
     let onEnd: () -> Void
