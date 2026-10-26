@@ -125,7 +125,7 @@ final class Navigator: ObservableObject {
         // The build's screenshots keep their made-up speed.
         if !demoAlerts { speedMps = max(0, loc.speed) }
         let p = tracker.update(LatLng(loc.coordinate.latitude, loc.coordinate.longitude),
-                               accuracy: max(loc.horizontalAccuracy, 5))
+                               accuracy: max(loc.horizontalAccuracy, 5), heading: Self.heading(loc))
         progress = p
         if p.arrived {
             arrived = true
@@ -436,6 +436,11 @@ final class Navigator: ObservableObject {
         }
     }
 
+    /** The way the phone is moving, once it's fast enough (about 9 mph) for that to be trusted. */
+    private static func heading(_ loc: CLLocation) -> Double? {
+        loc.course >= 0 && loc.speed >= 4 && loc.courseAccuracy >= 0 && loc.courseAccuracy < 45 ? loc.course : nil
+    }
+
     private func reroute(from loc: CLLocation, quiet: Bool = false) {
         rerouting = true
         lastReroute = Date()
@@ -450,6 +455,8 @@ final class Navigator: ObservableObject {
             speak("Rerouting.")
         }
         let from = LatLng(loc.coordinate.latitude, loc.coordinate.longitude)
+        // Only while driving: on foot or a bike, turning round is fine.
+        let heading = route.mode == .drive ? Self.heading(loc) : nil
         let mode = route.mode
         let to = destination.location
         let hw = avoidHighways, tolls = avoidTolls
@@ -457,7 +464,8 @@ final class Navigator: ObservableObject {
         let req = rerouteRequest
         Task {
             let r = await Directions.routes(from: from, to: to, mode: mode, avoidHighways: hw, avoidTolls: tolls,
-                                            useGoogle: !AppSettings.shared.noGoogle, via: self.stops.map(\.location))
+                                            useGoogle: !AppSettings.shared.noGoogle, via: self.stops.map(\.location),
+                                            heading: heading)
             guard !self.stopped, req == self.rerouteRequest else { return }
             self.rerouting = false
             guard let fresh = r.routes.first else { return }

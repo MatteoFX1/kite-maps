@@ -26,4 +26,16 @@ func ukRoutes() async {
         }
         try? await Task.sleep(nanoseconds: 1_500_000_000)
     }
+    // A reroute while driving north up The Avenue (A33) in Southampton, to somewhere behind the car:
+    // the new route must carry on north and turn round properly, never start with "head south".
+    let here = LatLng(50.9260, -1.4035), behind = LatLng(50.9050, -1.4045)
+    for heading in [0.0, 180.0] {
+        let r = await Directions.routes(from: here, to: behind, mode: .drive, heading: heading)
+        guard let route = r.routes.first else { print("=== Reroute heading \(Int(heading)): NO ROUTE"); continue }
+        let bad = Directions.startsBehind(route.polyline, heading: heading)
+        print("=== Reroute heading \(Int(heading)): \(Int(route.distanceMeters)) m, source \(route.source)" +
+              (bad ? "  FAIL: starts back the way the car came" : "  OK: sets off the way the car faces"))
+        for m in route.maneuvers.prefix(4) { print("    \(m.instruction)") }
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+    }
 }

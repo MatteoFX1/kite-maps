@@ -11,6 +11,9 @@ the middle number for big milestones.
   said "Middle lanes". It was reading the lanes for a slip road just before the roundabout. Now
   it only uses lanes that really lead into the roundabout, and otherwise follows the Highway Code
   (1st exit: left lane).
+- **Faster rerouting after a wrong turn:** Kite now notices within a few seconds when you've left
+  the route, or when you're driving back along it the wrong way. The new route sets off the way
+  you're facing, instead of telling you to turn round on the road you're on.
 - **Police heat map fixes:** its key ("Police ... often") is back above the risk chip, the glow
   now sits under your route, cameras and road names instead of covering them, and reports found
   in the background show on it straight away.

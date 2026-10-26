@@ -61,6 +61,37 @@ final class RoutingTests: XCTestCase {
         XCTAssertTrue(t.update(LatLng(0.00999, 0)).arrived)
     }
 
+    func testWrongWayIsOffRoute() {
+        // Matteo's wrong turn: back on the route's road but driving south down a route going north.
+        // It used to snap him onto the route the wrong way and never reroute.
+        let line = [LatLng(0, 0), LatLng(0.005, 0), LatLng(0.01, 0)]
+        let total = Geo.length(line)
+        let route = Route(mode: .drive, polyline: line, distanceMeters: total, typicalSeconds: 100, trafficSeconds: nil,
+                          summary: nil, maneuvers: [
+                            Maneuver(type: .depart, instruction: "Go", location: line[0], alongMeters: 0, distanceMeters: total),
+                            Maneuver(type: .arrive, instruction: "Arrive", location: line[2], alongMeters: total, distanceMeters: 0),
+                          ], source: "osm")
+        let t = RouteTracker(route: route)
+        XCTAssertFalse(t.update(LatLng(0.004, 0), heading: 2).offRoute, "going the right way")
+        var lat = 0.004
+        var off = false
+        for _ in 0..<4 { lat -= 0.0001; off = t.update(LatLng(lat, 0), heading: 180).offRoute }
+        XCTAssertTrue(off, "four fixes driving the wrong way down the route")
+        // Without a heading (standing still, or no compass course) nothing changes.
+        let t2 = RouteTracker(route: route)
+        for _ in 0..<6 { XCTAssertFalse(t2.update(LatLng(0.004, 0)).offRoute) }
+    }
+
+    func testRerouteKeepsHeading() {
+        let url = OSRM.routeURL(from: LatLng(50.9, -1.4), to: LatLng(50.8, -1.3), mode: .drive, heading: 271.6).absoluteString
+        XCTAssertTrue(url.hasSuffix("&bearings=272,60;"), url)
+        XCTAssertFalse(OSRM.routeURL(from: LatLng(50.9, -1.4), to: LatLng(50.8, -1.3), mode: .drive).absoluteString.contains("bearings"))
+        // A route that sets off south while the car heads north starts behind it.
+        let south = [LatLng(0.01, 0), LatLng(0.009, 0), LatLng(0, 0)]
+        XCTAssertTrue(Directions.startsBehind(south, heading: 0))
+        XCTAssertFalse(Directions.startsBehind(south, heading: 175))
+    }
+
     func testStepsPlacedFromTheEnd() {
         // About 1,113 m due north; Google gave only the last turn (300 m), not the "Head north" step.
         let line = [LatLng(0, 0), LatLng(0.01, 0)]

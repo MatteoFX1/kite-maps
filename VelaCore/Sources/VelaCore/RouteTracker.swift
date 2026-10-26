@@ -25,6 +25,7 @@ public final class RouteTracker {
     private let total: Double
     private var segment = 0
     private var offCount = 0
+    private var wrongWayCount = 0
 
     public init(route: Route) {
         self.route = route
@@ -32,7 +33,11 @@ public final class RouteTracker {
         total = cum.last ?? 0
     }
 
-    public func update(_ fix: LatLng, accuracy: Double = 10) -> Progress {
+    /**
+     * [heading] is the way the car is moving (degrees from north), only when it's moving fast enough
+     * for the phone's compass course to mean something.
+     */
+    public func update(_ fix: LatLng, accuracy: Double = 10, heading: Double? = nil) -> Progress {
         let line = route.polyline
         // Look near the last match first (cheap, and avoids jumping to a parallel leg of the route),
         // then the whole line if nothing near fits.
@@ -46,7 +51,17 @@ public final class RouteTracker {
         let snapped = LatLng(line[best.seg].lat + (line[best.seg + 1].lat - line[best.seg].lat) * best.t,
                              line[best.seg].lng + (line[best.seg + 1].lng - line[best.seg].lng) * best.t)
         let limit = max(40, min(accuracy, 60) + 25)
-        offCount = best.dist > limit ? offCount + 1 : 0
+        // Well clear of the route counts double, so a wrong turn is noticed in a couple of seconds.
+        offCount = best.dist > limit * 2 ? offCount + 2 : (best.dist > limit ? offCount + 1 : 0)
+        let routeBearing = Geo.bearing(line[best.seg], line[best.seg + 1])
+        // On the route's road but driving back along it (after turning round, or snapped onto the
+        // route the wrong way): that's off the route too, or it would never reroute.
+        if let heading, best.dist <= limit {
+            let diff = abs((heading - routeBearing + 540).truncatingRemainder(dividingBy: 360) - 180)
+            wrongWayCount = diff > 120 ? wrongWayCount + 1 : 0
+        } else {
+            wrongWayCount = 0
+        }
         let next = route.maneuvers.firstIndex { $0.alongMeters > along + 8 }
         let toNext = next.map { route.maneuvers[$0].alongMeters - along } ?? (total - along)
         let remaining = max(0, total - along)
@@ -54,12 +69,12 @@ public final class RouteTracker {
             snapped: snapped,
             alongMeters: along,
             offsetMeters: best.dist,
-            routeBearing: Geo.bearing(line[best.seg], line[best.seg + 1]),
+            routeBearing: routeBearing,
             nextIndex: next,
             distanceToNext: max(0, toNext),
             remainingMeters: remaining,
             remainingSeconds: total > 0 ? route.durationSeconds * remaining / total : 0,
-            offRoute: offCount >= 3,
+            offRoute: offCount >= 3 || wrongWayCount >= 4,
             // Only on the road to it: passing close by on a parallel street isn't arriving.
             arrived: remaining < 25 && best.dist < limit
         )

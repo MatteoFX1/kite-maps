@@ -7,16 +7,29 @@ import Foundation
 public enum OSRM {
     static let userAgent = "VelaMaps-iOS/0.2 (+https://github.com/matteofx1/vela-ios)"
 
-    public static func route(from a: LatLng, to b: LatLng, mode: TravelMode, via: [LatLng] = []) async throws -> [Route] {
-        let profile = mode == .drive ? "driving" : (mode == .bike ? "bike" : "foot")
-        let coords = ([a] + via + [b]).map { "\($0.lng),\($0.lat)" }.joined(separator: ";")
-        let s = "https://routing.openstreetmap.de/\(mode.osrmBackend)/route/v1/\(profile)/\(coords)" +
-            "?overview=full&geometries=polyline6&steps=true&alternatives=\(mode == .drive && via.isEmpty)"
-        var r = URLRequest(url: URL(string: s)!)
+    public static func route(from a: LatLng, to b: LatLng, mode: TravelMode, via: [LatLng] = [],
+                             heading: Double? = nil) async throws -> [Route] {
+        var r = URLRequest(url: routeURL(from: a, to: b, mode: mode, via: via, heading: heading))
         r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         r.timeoutInterval = 20
         let (data, _) = try await URLSession.shared.data(for: r)
         return parse(data, mode: mode)
+    }
+
+    /**
+     * With [heading] (the way the car is moving), the route starts off that way, the way Google and
+     * Waze reroute: never a U-turn back down the road you're already on.
+     */
+    static func routeURL(from a: LatLng, to b: LatLng, mode: TravelMode, via: [LatLng] = [], heading: Double? = nil) -> URL {
+        let profile = mode == .drive ? "driving" : (mode == .bike ? "bike" : "foot")
+        let pts = [a] + via + [b]
+        let coords = pts.map { "\($0.lng),\($0.lat)" }.joined(separator: ";")
+        var s = "https://routing.openstreetmap.de/\(mode.osrmBackend)/route/v1/\(profile)/\(coords)" +
+            "?overview=full&geometries=polyline6&steps=true&alternatives=\(mode == .drive && via.isEmpty)"
+        if let heading {
+            s += "&bearings=\(Int(heading.rounded()) % 360),60" + String(repeating: ";", count: pts.count - 1)
+        }
+        return URL(string: s)!
     }
 
     /**
@@ -372,14 +385,19 @@ public enum Directions {
 
     public static func routes(from a: LatLng, to b: LatLng, mode: TravelMode,
                               avoidHighways: Bool = false, avoidTolls: Bool = false,
-                              useGoogle: Bool = true, via: [LatLng] = []) async -> Result {
+                              useGoogle: Bool = true, via: [LatLng] = [], heading: Double? = nil) async -> Result {
         // Ask both at once: Google's route knows traffic, OSRM's steps read better (Vela puts
         // the open router's turn-by-turn on Google's line the same way).
-        let osrmTask = Task { try await OSRM.route(from: a, to: b, mode: mode, via: via) }
+        let osrmTask = Task { try await OSRM.route(from: a, to: b, mode: mode, via: via, heading: heading) }
         var err: String?
         if useGoogle { do {
             var g = try await GoogleClient.shared.directions(from: a, to: b, mode: mode,
                                                               avoidHighways: avoidHighways, avoidTolls: avoidTolls, via: via)
+            if let heading {
+                // A reroute while driving: Google doesn't know which way the car faces, so drop its
+                // routes that start back the way the car came; only the first one is driven, so skip the rest.
+                g = Array(g.filter { !startsBehind($0.polyline, heading: heading) }.prefix(1))
+            }
             if !g.isEmpty {
                 // One at a time: the FOSSGIS server turns away bursts.
                 var vias: [Int: Route] = [:]
@@ -412,6 +430,18 @@ public enum Directions {
             err = error.localizedDescription
         }
         return Result(routes: [], error: err ?? "No route found.")
+    }
+}
+
+extension Directions {
+    /** Whether [line] sets off more than a right angle away from [heading]: back the way the car came. */
+    public static func startsBehind(_ line: [LatLng], heading: Double) -> Bool {
+        guard line.count >= 2 else { return false }
+        let cum = Geo.cumulative(line)
+        let end = Geo.point(along: line, meters: min(40, cum.last ?? 0), cumulative: cum)
+        guard line[0].distance(to: end) > 5 else { return false }
+        let diff = abs((Geo.bearing(line[0], end) - heading + 540).truncatingRemainder(dividingBy: 360) - 180)
+        return diff > 100
     }
 }
 
