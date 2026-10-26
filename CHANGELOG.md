@@ -22,7 +22,8 @@ the middle number for big milestones.
   afterwards; adding a stop while rerouting could lose the stop; picking a suggestion while a
   search was still loading could swap the place for the search results; the "End this trip?"
   card now steps aside when you arrive; the road name no longer hides under the police
-  helicopter or police risk chip; opening Kite with no signal no longer leaves Google
+  helicopter or police risk chip; the trip sheet pulled up to full height no longer slides under the
+  from/to box; opening Kite with no signal no longer leaves Google
   search half set up once signal is back.
 
 ## 0.7.0
