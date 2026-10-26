@@ -78,7 +78,8 @@ struct NavigationOverlay: View {
                         AircraftChip(aircraft: air.aircraft, meters: air.meters)
                     }
                     // A Waze police card already says it louder; the chip comes back when it's gone.
-                    if let risk = nav.policeRisk, !nav.arrived, mainCards < 2 { PoliceRiskChip(score: risk) }
+                    // Only worth a look while driving when it isn't low; it would otherwise sit by the road name.
+                    if let risk = nav.policeRisk, PoliceRisk.level(risk) != .low, !nav.arrived, mainCards < 2 { PoliceRiskChip(score: risk) }
                     HStack(spacing: 10) {
                         SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
                         if let limit = nav.speedLimitKmh { SpeedLimitSign(kmh: limit, size: 70) }
@@ -125,7 +126,7 @@ struct NavigationOverlay: View {
                         .foregroundColor(.white)
                         .background(Capsule().fill(Color.black.opacity(0.78)))
                         .frame(maxWidth: g.size.width * 0.7)
-                        .position(x: g.size.width / 2, y: (g.size.height * 0.45 + g.size.height - 120) / 2 + 52)
+                        .position(x: g.size.width / 2, y: NavGlide.carY(g.size.height) + 46)
                 }
             }
             .ignoresSafeArea()

@@ -12,6 +12,8 @@ the middle number for big milestones.
 - **New car arrow:** a chunky 3D-style teal chevron replaces the old blue dot arrow.
 - **Road name under the arrow:** the road you're on is shown just under the car.
 - **Bolder route line** while driving.
+- **Less on the driving screen:** the police risk chip only shows when risk is medium or high.
+- **Arriving only counts on the route:** driving past close by on a parallel street no longer ends the trip.
 - **Kite-style "End this trip?":** two big buttons in place of the grey iPhone pop-up.
 - **Cleaner map screen:** the two big tiles under "Where to?" are gone. Home, Work and recent
   places are one tap away in "Where to?", and everything else is in Saved.
