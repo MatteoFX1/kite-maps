@@ -54,10 +54,14 @@ public final class RouteTracker {
         // Well clear of the route counts double, so a wrong turn is noticed in a couple of seconds.
         offCount = best.dist > limit * 2 ? offCount + 2 : (best.dist > limit ? offCount + 1 : 0)
         let routeBearing = Geo.bearing(line[best.seg], line[best.seg + 1])
+        // The road's way over about 30 m, so a tiny kink or doubled point in the line isn't "backwards".
+        let a = Geo.point(along: line, meters: max(0, along - 10), cumulative: cum)
+        let b = Geo.point(along: line, meters: min(total, along + 20), cumulative: cum)
+        let roadBearing = a.distance(to: b) > 5 ? Geo.bearing(a, b) : routeBearing
         // On the route's road but driving back along it (after turning round, or snapped onto the
         // route the wrong way): that's off the route too, or it would never reroute.
         if let heading, best.dist <= limit {
-            let diff = abs((heading - routeBearing + 540).truncatingRemainder(dividingBy: 360) - 180)
+            let diff = abs((heading - roadBearing + 540).truncatingRemainder(dividingBy: 360) - 180)
             wrongWayCount = diff > 120 ? wrongWayCount + 1 : 0
         } else {
             wrongWayCount = 0

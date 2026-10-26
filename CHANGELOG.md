@@ -25,6 +25,13 @@ the middle number for big milestones.
 - **No pointless "Merge onto…":** when a slip road joins a road and its lane carries straight on
   to your next exit (like the A33 into Redbridge Road and off again), Kite no longer tells you to
   merge, and says which lane to stay in for the exit instead.
+- **Clearer lane words:** two good lanes out of three on the left now say "Left 2 lanes" instead
+  of "Middle lanes" (and the same on the right).
+- **Fixes from a last check of the basics:**
+  - Kite no longer says "You have arrived" twice at the end of a trip.
+  - The step list shows the full length of each step, now that quiet name changes are hidden.
+  - The wrong-way check looks at the road over about 30 m, so a tiny kink in the line can't make
+    it think you're going backwards.
 - **Smaller camera warning:** the speed camera card is about half the size, Waze-style, so it no
   longer hides the road. It's still bright orange (red when you're too fast) and pulses when it appears.
 - **See more road ahead:** while driving, your arrow sits lower on the screen, so most of the map

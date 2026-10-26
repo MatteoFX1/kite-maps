@@ -421,6 +421,8 @@ final class Navigator: ObservableObject {
         let far = drive ? max(1000, speedMps * 40) : 250
         if d <= now && stage < 3 {
             spokenStage[i] = 3
+            // Arriving is said once, with the place's name, when it's reached.
+            if m.type == .arrive { return }
             // The turn itself matters more than whatever is still being said.
             speak(m.instruction, urgent: true)
         } else if d <= near && d > now + 30 && stage < 2 {

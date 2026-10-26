@@ -338,9 +338,19 @@ struct TripBody: View {
 struct StepsList: View {
     let route: Route
 
+    /** The steps worth saying, each with the length of the quiet name changes after it added on. */
+    private var shown: [Maneuver] {
+        var out: [Maneuver] = []
+        for m in route.maneuvers {
+            if m.silent, !out.isEmpty { out[out.count - 1].distanceMeters += m.distanceMeters }
+            else if !m.silent { out.append(m) }
+        }
+        return out
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(route.maneuvers.filter { !$0.silent }.enumerated()), id: \.offset) { _, m in
+            ForEach(Array(shown.enumerated()), id: \.offset) { _, m in
                 HStack(alignment: .top, spacing: 14) {
                     Image(systemName: maneuverSymbol(m.type))
                         .font(.system(size: 22, weight: .bold))

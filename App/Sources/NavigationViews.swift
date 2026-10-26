@@ -300,9 +300,12 @@ enum LaneGuide {
             let n = m.lanes.count
             let words: String
             if valid.count == n { return nil }
-            if last < n / 2 || (last == 0) { words = valid.count == 1 && n > 2 && first > 0 ? "Lane \(first + 1) from left" : (valid.count > 1 ? "Left lanes" : "Left lane") }
-            else if first >= (n + 1) / 2 { words = valid.count > 1 ? "Right lanes" : "Right lane" }
-            else { words = valid.count > 1 ? "Middle lanes" : "Middle lane" }
+            // By the edge they touch: two good lanes of three on the left are "Left 2 lanes", not "Middle".
+            let count = valid.count, many = count > 1 ? "\(count) lanes" : "lane"
+            if first == 0 { words = "Left \(many)" }
+            else if last == n - 1 { words = "Right \(many)" }
+            else if count == 1 && n > 3 { words = "Lane \(first + 1) from left" }
+            else { words = count > 1 ? "Middle lanes" : "Middle lane" }
             return (m.lanes, words)
         }
         // Google's own advice ("Use the right lane") where the open map has no lanes: words only.
