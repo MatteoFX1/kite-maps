@@ -4,6 +4,10 @@ import VelaCore
 // Live check of the Google search and parser, run by the build workflow.
 // Usage: swift run vela-probe "pizza" 40.7484 -73.9857
 let args = CommandLine.arguments
+if args.count > 1, args[1] == "audit" {
+    await navAudit()
+    exit(0)
+}
 if args.count > 1, args[1] == "uk" {
     await ukRoutes()
     exit(0)
