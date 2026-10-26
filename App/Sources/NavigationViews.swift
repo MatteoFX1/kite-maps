@@ -26,6 +26,15 @@ struct NavigationOverlay: View {
      *  stack doesn't run into the map buttons. */
     private var aircraftAsChip: Bool { mainCards >= 2 }
 
+    /** The police risk chip, only worth a look while driving when it isn't low. */
+    private var showRiskChip: Bool {
+        guard let risk = nav.policeRisk, !nav.arrived, mainCards < 2 else { return false }
+        return PoliceRisk.level(risk) != .low
+    }
+
+    /** A chip above the speed badge sits where the road name goes, so the name steps aside for it. */
+    private var chipShowing: Bool { showRiskChip || (nav.aircraftNear != nil && !nav.arrived && aircraftAsChip) }
+
     /** With a camera and a Waze report both up, the average check waits its turn: there's only so much screen. */
     private var showAverage: Bool { !(nav.cameraAhead != nil && nav.wazeAhead != nil) }
 
@@ -79,7 +88,7 @@ struct NavigationOverlay: View {
                     }
                     // A Waze police card already says it louder; the chip comes back when it's gone.
                     // Only worth a look while driving when it isn't low; it would otherwise sit by the road name.
-                    if let risk = nav.policeRisk, PoliceRisk.level(risk) != .low, !nav.arrived, mainCards < 2 { PoliceRiskChip(score: risk) }
+                    if showRiskChip, let risk = nav.policeRisk { PoliceRiskChip(score: risk) }
                     HStack(spacing: 10) {
                         SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
                         if let limit = nav.speedLimitKmh { SpeedLimitSign(kmh: limit, size: 70) }
@@ -119,7 +128,7 @@ struct NavigationOverlay: View {
         .background(
             // The road you're on, just under the arrow (the map keeps the arrow at this height while following).
             GeometryReader { g in
-                if nav.following, !nav.arrived, let road = nav.currentRoad {
+                if nav.following, !nav.arrived, !chipShowing, let road = nav.currentRoad {
                     Text(road)
                         .font(.system(size: 17, weight: .bold))
                         .lineLimit(1)

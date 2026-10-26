@@ -21,7 +21,8 @@ the middle number for big milestones.
 - **Fixes:** ending a trip while Kite was finding a new route could make it talk again
   afterwards; adding a stop while rerouting could lose the stop; picking a suggestion while a
   search was still loading could swap the place for the search results; the "End this trip?"
-  card now steps aside when you arrive; opening Kite with no signal no longer leaves Google
+  card now steps aside when you arrive; the road name no longer hides under the police
+  helicopter or police risk chip; opening Kite with no signal no longer leaves Google
   search half set up once signal is back.
 
 ## 0.7.0
