@@ -121,6 +121,27 @@ final class RoutingTests: XCTestCase {
         XCTAssertTrue(OSRM.lanes(allValid).isEmpty, "every lane fine says nothing")
     }
 
+    func testRoundaboutApproachLanes() {
+        // M271 southbound, 70 m before Redbridge roundabout: a slip road leaves on the left there,
+        // so those lanes aren't the roundabout's (the app once said "Middle lanes" for the 1st exit).
+        let redbridge = LatLng(50.922617, -1.469691)
+        let lanes: [[String: Any]] = [["indications": ["left"], "valid": false],
+                                      ["indications": ["straight"], "valid": true],
+                                      ["indications": ["straight"], "valid": true]]
+        let slip: [String: Any] = ["location": [-1.4697, 50.9232], "in": 0, "out": 2,
+                                   "entry": [false, true, true], "bearings": [0, 150, 180], "lanes": lanes]
+        XCTAssertTrue(OSRM.approachLanes(slip, roundabout: redbridge, modifier: "slight left", leftTraffic: true).isEmpty)
+        // The same lanes where nothing else leaves are the roundabout's, marked for its 1st exit.
+        let plain: [String: Any] = ["location": [-1.4697, 50.9232], "in": 0, "out": 1,
+                                    "entry": [false, true], "bearings": [0, 180], "lanes": lanes]
+        let first = OSRM.approachLanes(plain, roundabout: redbridge, modifier: "slight left", leftTraffic: true)
+        XCTAssertEqual(first.map(\.valid), [true, false, false])
+        // Too far back to say anything about the roundabout.
+        var far = plain
+        far["location"] = [-1.4697, 50.9300]
+        XCTAssertTrue(OSRM.approachLanes(far, roundabout: redbridge, modifier: "slight left", leftTraffic: true).isEmpty)
+    }
+
     func testSlipRoadWording() {
         let off = OSRM.instruction(type: "off ramp", modifier: "slight left", road: "M27", exit: nil, mode: .drive,
                                    signs: .init(destinations: "A335: Eastleigh, Southampton", exits: "5", from: "M27"))

@@ -7,6 +7,10 @@ the middle number for big milestones.
 
 - **One speed sign:** your speed and the speed limit are now one sign in the bottom left, like
   Waze: the limit on top, your speed under it, and the whole sign turns red when you're over.
+- **Right lane at roundabouts:** coming off the M271 into Redbridge roundabout for the A33, Kite
+  said "Middle lanes". It was reading the lanes for a slip road just before the roundabout. Now
+  it only uses lanes that really lead into the roundabout, and otherwise follows the Highway Code
+  (1st exit: left lane).
 
 ## 0.7.1
 

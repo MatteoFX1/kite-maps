@@ -98,9 +98,9 @@ public enum OSRM {
                     man.lanes = lanes(step)
                     man.exit = m["exit"] as? Int
                     if type == "roundabout" || type == "rotary" {
-                        // The lanes for a roundabout are mapped on the road leading up to it.
+                        // The lanes for a roundabout are sometimes mapped on the road leading up to it.
                         if man.lanes.isEmpty, si > 0, let last = (steps[si - 1]["intersections"] as? [[String: Any]])?.last {
-                            man.lanes = lanes(["intersections": [last]])
+                            man.lanes = approachLanes(last, roundabout: loc, modifier: modifier, leftTraffic: Geo.drivesOnLeft(loc))
                         }
                         // A first sketch from the router; OpenStreetMap fills in the whole circle later.
                         man.roundabout = roundaboutSketch(step, next: si + 1 < steps.count ? steps[si + 1] : nil,
@@ -201,6 +201,35 @@ public enum OSRM {
         let lanes = raw.map { Lane(indications: $0["indications"] as? [String] ?? ["none"], valid: $0["valid"] as? Bool ?? false) }
         // All lanes valid tells the driver nothing.
         return lanes.allSatisfy(\.valid) ? [] : lanes
+    }
+
+    /**
+     * Lanes mapped at a junction just before a roundabout, marked again for the way round it.
+     * They only belong to the roundabout when that junction has no other road to take: where one
+     * leaves (a slip road off the M271 before Redbridge, say), they're that junction's lanes, and
+     * the lane to be in at the roundabout is left to the Highway Code instead.
+     */
+    static func approachLanes(_ x: [String: Any], roundabout: LatLng, modifier: String?, leftTraffic: Bool) -> [Lane] {
+        guard let raw = x["lanes"] as? [[String: Any]], raw.count > 1,
+              let at = (x["location"] as? [Double]).map({ LatLng($0[1], $0[0]) }), at.distance(to: roundabout) < 200,
+              let out = x["out"] as? Int else { return [] }
+        let entry = x["entry"] as? [Bool] ?? []
+        let into = x["in"] as? Int
+        if entry.indices.contains(where: { $0 != out && $0 != into && entry[$0] }) { return [] }
+        // The router marked them for going straight on at that junction; mark them for the roundabout exit.
+        let way: String
+        switch modifier ?? "straight" {
+        case let m where m.hasSuffix("left"): way = "left"
+        case let m where m.hasSuffix("right"): way = "right"
+        case "uturn": way = leftTraffic ? "right" : "left"
+        default: way = "straight"
+        }
+        let lanes = raw.map { r -> Lane in
+            let ind = r["indications"] as? [String] ?? ["none"]
+            return Lane(indications: ind, valid: ind.contains { $0 == way || $0.hasSuffix(" " + way) })
+        }
+        let valid = lanes.filter(\.valid).count
+        return valid == 0 || valid == lanes.count ? [] : lanes
     }
 
     /**

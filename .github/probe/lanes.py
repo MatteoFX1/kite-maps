@@ -39,4 +39,5 @@ for name, a, b in drives:
             print("   step before: %s %r, %.0f m" % (p["maneuver"]["type"], p.get("name") or p.get("ref"), p["distance"]))
             for x in p["intersections"]:
                 if "lanes" in x:
-                    print("     %5.0f m before: %s" % (dist(x["location"], at), lanes(x)))
+                    print("     %5.0f m before: %s  (bearings %s, can enter %s, in %s, out %s)" % (
+                        dist(x["location"], at), lanes(x), x.get("bearings"), x.get("entry"), x.get("in"), x.get("out")))
