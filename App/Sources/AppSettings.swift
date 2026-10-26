@@ -139,6 +139,9 @@ final class AppSettings: ObservableObject {
     /** Ask about Waze once: not to someone who chose no Google, since Waze is Google's. */
     var needsWazeChoice: Bool { !wazeAsked && !noGoogle }
 
+    /** Waze still shares police reports, for the heat map and risk score (or the screenshot run's made-up ones). */
+    var wazePolice: Bool { Waze.shares.contains(.police) || DemoScript.active }
+
     func wants(_ k: WazeAlert.Kind) -> Bool { wazeOn && wazeKinds.contains(k) }
 
     /** Whether this report should show and warn: a wanted kind, and not too old. */

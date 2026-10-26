@@ -464,7 +464,7 @@ struct VelaMapView: UIViewRepresentable {
                 return f
             }
             (style.source(withIdentifier: "vela-waze") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
-            let heatOn = s.wazeOn && s.wazeHeatmap
+            let heatOn = s.wazeOn && s.wazeHeatmap && s.wazePolice
             style.layer(withIdentifier: "vela-waze-heat")?.isVisible = heatOn
             guard heatOn else { return }
             var seen = Set(history.map(\.id))

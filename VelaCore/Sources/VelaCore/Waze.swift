@@ -84,6 +84,12 @@ public struct WazeAlert: Hashable, Sendable, Identifiable {
 }
 
 public enum Waze {
+    /**
+     * The kinds Waze's live map still hands out. Since October 2026 it keeps drivers' reports
+     * (police, crashes, hazards and the rest) to its own app and shares only road closures, so
+     * Settings greys out the others. Add kinds back here if Waze shares them again.
+     */
+    public static let shares: Set<WazeAlert.Kind> = [.closure]
     /** Waze keeps the Americas, Israel and the rest of the world on separate servers. */
     public static func env(for p: LatLng) -> String {
         if p.lat > 29, p.lat < 33.6, p.lng > 34, p.lng < 36 { return "il" }

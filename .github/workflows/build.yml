@@ -41,11 +41,6 @@ jobs:
         continue-on-error: true
         timeout-minutes: 4
         run: swift run vela-probe audit
-      - name: Live Google incidents check
-        working-directory: VelaCore
-        continue-on-error: true
-        timeout-minutes: 3
-        run: swift run vela-probe incidents
       - name: Live Google search check
         working-directory: VelaCore
         continue-on-error: true
@@ -169,9 +164,9 @@ jobs:
           xcrun simctl install "$DEV" simbuild/Build/Products/Debug-iphonesimulator/Kite.app
           xcrun simctl privacy "$DEV" grant location app.vela.ios || true
           mkdir -p shots
-          for step in browse search place directions nav cameras layers transit board mine stops rail welcome camalert streetview svtest svtest90 lookaround copy wazelink googlelink listscroll wazealert wazedemo wazetap wazeroute wazesettings wazemap wazeuk wazesizes wazeintro searchfocus settings saved pickhome locationoff longname longdir addstop allalerts endtrip; do
+          for step in browse search place directions nav cameras layers transit board mine stops rail welcome camalert streetview svtest svtest90 lookaround copy wazelink googlelink listscroll wazealert wazedemo wazetap wazeroute wazesettings wazemap wazeintro searchfocus settings saved pickhome locationoff longname longdir addstop allalerts endtrip; do
             xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo "$step"
-            case $step in browse) t=16;; search) t=24;; place) t=28;; directions) t=38;; nav) t=44;; cameras) t=110;; layers) t=12;; transit) t=40;; board) t=24;; mine) t=14;; stops) t=40;; rail) t=30;; welcome) t=10;; camalert) t=52;; streetview) t=40;; svtest) t=12;; svtest90) t=12;; lookaround) t=40;; copy) t=34;; wazelink) t=16;; googlelink) t=24;; listscroll) t=30;; wazealert) t=44;; wazedemo) t=16;; wazemap) t=55;; wazeuk) t=55;; wazesizes) t=110;; wazeintro) t=10;; wazetap) t=18;; wazeroute) t=40;; wazesettings) t=12;; searchfocus) t=14;; settings) t=10;; saved) t=10;; pickhome) t=12;; locationoff) t=14;; longname) t=20;; longdir) t=32;; addstop) t=34;; allalerts) t=48;; endtrip) t=44;; esac
+            case $step in browse) t=16;; search) t=24;; place) t=28;; directions) t=38;; nav) t=44;; cameras) t=110;; layers) t=12;; transit) t=40;; board) t=24;; mine) t=14;; stops) t=40;; rail) t=30;; welcome) t=10;; camalert) t=52;; streetview) t=40;; svtest) t=12;; svtest90) t=12;; lookaround) t=40;; copy) t=34;; wazelink) t=16;; googlelink) t=24;; listscroll) t=30;; wazealert) t=44;; wazedemo) t=16;; wazemap) t=55;; wazeintro) t=10;; wazetap) t=18;; wazeroute) t=40;; wazesettings) t=12;; searchfocus) t=14;; settings) t=10;; saved) t=10;; pickhome) t=12;; locationoff) t=14;; longname) t=20;; longdir) t=32;; addstop) t=34;; allalerts) t=48;; endtrip) t=44;; esac
             sleep $t
             xcrun simctl io "$DEV" screenshot "shots/$step.png"
           done

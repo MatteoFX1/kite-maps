@@ -32,6 +32,10 @@ the middle number for big milestones.
 - **Police heat map fixes:** its key ("Police ... often") is back above the risk chip, the glow
   now sits under your route, cameras and road names instead of covering them, and reports found
   in the background show on it straight away.
+- **Waze is barely working, and Kite says so:** Waze's live map has stopped sharing drivers'
+  reports (police, crashes, hazards); only road closures still come through. Settings › Waze
+  integration now says this, greys out the switches that can't work, and the police heat map and
+  risk score stay off until Waze shares reports again.
 - **See what Waze sends:** Settings › Waze integration now has a "Last answer" line, like
   "3 police · 5 hazards · 140 road closures", so it's easy to tell if Waze stops sending a kind.
 

@@ -51,7 +51,7 @@ struct WazeMapChips: View {
     var body: some View {
         if settings.wazeOn {
             VStack(alignment: .leading, spacing: 8) {
-                if settings.wazeHeatmap { HeatLegend() }
+                if settings.wazeHeatmap, settings.wazePolice { HeatLegend() }
                 if settings.policeRisk, let risk = model.areaRisk {
                     let level = PoliceRisk.level(risk)
                     HStack(spacing: 8) {

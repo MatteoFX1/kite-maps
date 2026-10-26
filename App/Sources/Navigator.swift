@@ -289,7 +289,7 @@ final class Navigator: ObservableObject {
     private func checkRisk(_ p: RouteTracker.Progress) {
         guard !demoAlerts else { return }
         let s = AppSettings.shared
-        guard route.mode == .drive, s.wazeOn, s.policeRisk else { policeRisk = nil; return }
+        guard route.mode == .drive, s.wazeOn, s.policeRisk, s.wazePolice else { policeRisk = nil; return }
         guard Date().timeIntervalSince(riskAt) > 20 else { return }
         riskAt = Date()
         if riskPast == nil { riskPast = WazeHistory.shared.reports }
