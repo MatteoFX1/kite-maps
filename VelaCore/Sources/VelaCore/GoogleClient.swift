@@ -91,8 +91,8 @@ public actor GoogleClient {
 
     private func warm() async throws {
         if warmed { return }
-        _ = try? await get(URL(string: Self.sessionWarmUrl)!, referer: nil, xhr: false)
-        warmed = true
+        // Only counts once Google answered: opened with no signal, try again on the next search.
+        if (try? await get(URL(string: Self.sessionWarmUrl)!, referer: nil, xhr: false)) != nil { warmed = true }
     }
 
     private func get(_ url: URL, referer: String?, xhr: Bool) async throws -> String {
