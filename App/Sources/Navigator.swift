@@ -122,7 +122,8 @@ final class Navigator: ObservableObject {
     func handle(_ loc: CLLocation) {
         guard !arrived else { return }
         lastFix = loc
-        speedMps = max(0, loc.speed)
+        // The build's screenshots keep their made-up speed.
+        if !demoAlerts { speedMps = max(0, loc.speed) }
         let p = tracker.update(LatLng(loc.coordinate.latitude, loc.coordinate.longitude),
                                accuracy: max(loc.horizontalAccuracy, 5))
         progress = p
@@ -376,6 +377,8 @@ final class Navigator: ObservableObject {
         demoAlerts = true
         cameraAhead = CameraAlert(kind: .speed, meters: 180, startMeters: 400, limitKmh: 48.3)
         averageCheck = AverageCheck(limitKmh: 80.5, averageKmh: 77, metersLeft: 2400)
+        // A little over the limit, so the screenshots show the speed sign gone red.
+        speedMps = ((speedLimitKmh ?? 48.3) + 13) / 3.6
     }
 
     /** Tapping the Waze card puts it away; the report still won't be warned about again. */

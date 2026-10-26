@@ -3,6 +3,11 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.2
+
+- **One speed sign:** your speed and the speed limit are now one sign in the bottom left, like
+  Waze: the limit on top, your speed under it, and the whole sign turns red when you're over.
+
 ## 0.7.1
 
 - **Waze-style driving map:** while you navigate, the map drops shop and bin icons, footpaths,

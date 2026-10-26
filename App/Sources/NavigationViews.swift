@@ -89,10 +89,7 @@ struct NavigationOverlay: View {
                     // A Waze police card already says it louder; the chip comes back when it's gone.
                     // Only worth a look while driving when it isn't low; it would otherwise sit by the road name.
                     if showRiskChip, let risk = nav.policeRisk { PoliceRiskChip(score: risk) }
-                    HStack(spacing: 10) {
-                        SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
-                        if let limit = nav.speedLimitKmh { SpeedLimitSign(kmh: limit, size: 70) }
-                    }
+                    SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
                 }
                 Spacer()
                 MapFab(icon: nav.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 64) { nav.muted.toggle() }
@@ -317,6 +314,7 @@ enum LaneGuide {
     }
 }
 
+/** Speed and limit as one sign, the way Waze does it: the limit on top, your speed under it, all red when over. */
 struct SpeedBadge: View {
     let mps: Double
     var limitKmh: Double?
@@ -327,15 +325,30 @@ struct SpeedBadge: View {
         let v = Int((mps * (metric ? 3.6 : 2.23694)).rounded())
         // Red once more than a little over the limit.
         let over = limitKmh.map { mps * 3.6 > $0 + 5 } ?? false
-        VStack(spacing: -2) {
+        let speed = VStack(spacing: -2) {
             Text("\(v)").font(.system(size: 36, weight: .heavy)).monospacedDigit()
                 .foregroundColor(over ? .white : .primary)
             Text(metric ? "km/h" : "mph").font(.system(size: 14, weight: .semibold))
                 .foregroundColor(over ? .white.opacity(0.85) : Vela.muted(scheme))
         }
-        .frame(width: 84, height: 84)
-        .background(Circle().fill(over ? Vela.closed : Color.clear))
-        .glass(Circle())
+        Group {
+            if let limitKmh {
+                VStack(spacing: 6) {
+                    SpeedLimitSign(kmh: limitKmh, size: 76)
+                    speed
+                }
+                .padding(.top, 8).padding(.bottom, 12)
+                .frame(width: 92)
+                .background(Capsule().fill(over ? Vela.closed : Color.clear))
+                .glass(Capsule())
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(v) \(metric ? "kilometres" : "miles") an hour" + (over ? ", over the limit" : ""))
+            } else {
+                speed
+                    .frame(width: 84, height: 84)
+                    .glass(Circle())
+            }
+        }
         .animation(.easeOut(duration: 0.25), value: over)
     }
 }
