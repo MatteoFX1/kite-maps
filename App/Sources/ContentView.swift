@@ -669,6 +669,8 @@ enum DemoScript {
             model.startNavigation()
             await wait(5)
             model.nav?.showDemoAlerts()
+            // Under the limit here: the speed sign stays plain.
+            model.nav?.showDemoSpeed(limitKmh: 96.6, mph: 57)
             return
         }
         if step == "transit" {

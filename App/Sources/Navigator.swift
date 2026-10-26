@@ -94,7 +94,7 @@ final class Navigator: ObservableObject {
 
     /** The posted limit where the user is now, in km/h. */
     var speedLimitKmh: Double? {
-        route.speedLimit(at: progress?.alongMeters ?? 0)
+        demoLimitKmh ?? route.speedLimit(at: progress?.alongMeters ?? 0)
     }
 
     var nextManeuver: Maneuver? {
@@ -361,6 +361,7 @@ final class Navigator: ObservableObject {
     /** For the build's screenshots: a camera coming up and an average speed check. */
     /** For the build's screenshots: the next turn swapped for a made-up one. */
     private(set) var demoManeuver: Maneuver?
+    private var demoLimitKmh: Double?
 
     /** For the build's screenshots: the M27 roundabout at Park Gate, 6th exit, with its seven roads. */
     func showDemoRoundabout() {
@@ -377,8 +378,15 @@ final class Navigator: ObservableObject {
         demoAlerts = true
         cameraAhead = CameraAlert(kind: .speed, meters: 180, startMeters: 400, limitKmh: 48.3)
         averageCheck = AverageCheck(limitKmh: 80.5, averageKmh: 77, metersLeft: 2400)
-        // A little over the limit, so the screenshots show the speed sign gone red.
-        speedMps = ((speedLimitKmh ?? 48.3) + 13) / 3.6
+        // 38 in a 30, so the screenshots show the speed sign gone red.
+        showDemoSpeed(limitKmh: 48.3, mph: 38)
+    }
+
+    /** For the build's screenshots: a made-up speed and limit. */
+    func showDemoSpeed(limitKmh: Double, mph: Double) {
+        demoAlerts = true
+        demoLimitKmh = limitKmh
+        speedMps = mph / 2.23694
     }
 
     /** Tapping the Waze card puts it away; the report still won't be warned about again. */
