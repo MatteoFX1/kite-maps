@@ -230,6 +230,10 @@ final class AppModel: ObservableObject {
             if useGoogle {
                 r = (try? await GoogleClient.shared.suggest(q, near: vp.center, spanMeters: vp.span ?? 20_000)) ?? r
             }
+            if r.places.isEmpty && r.queries.isEmpty, let pc = await Postcodes.lookup(q) {
+                // A UK postcode, like the Set home box finds: the open geocoder often misses them.
+                r.places = [pc]
+            }
             if r.places.isEmpty && r.queries.isEmpty {
                 r.places = (try? await Photon.search(q, near: vp.center, limit: 8)) ?? []
             }

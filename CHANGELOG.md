@@ -27,6 +27,7 @@ the middle number for big milestones.
   - The trip sheet pulled up to full height no longer slides under the from/to box.
   - Search filters that hide every result say so, instead of showing an empty list.
   - Other routes that take the same time say "Same time", not "+1 min".
+  - UK postcodes typed in "Where to?" show up as you type, even without Google.
   - Opening Kite with no signal no longer leaves Google search half set up once signal is back.
 
 ## 0.7.0
