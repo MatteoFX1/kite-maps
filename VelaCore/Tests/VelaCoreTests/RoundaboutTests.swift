@@ -136,10 +136,34 @@ final class RoundaboutTests: XCTestCase {
         let s2 = try XCTUnwrap(Roundabouts.settle(r2).maneuvers[0].roundabout)
         XCTAssertLessThan(Roundabouts.angleGap(s2.exits[s2.taken], 270), 15)
 
-        // A sketch that already agrees with the line is kept.
+        // A sketch that roughly agrees with the line keeps its exits, turned to match it.
         var sketched = route
         sketched.maneuvers[0].roundabout = RoundaboutShape(exits: [265, 5], taken: 1, clockwise: true, complete: false)
-        XCTAssertEqual(Roundabouts.settle(sketched).maneuvers[0].roundabout?.exits, [265, 5])
+        let kept = try XCTUnwrap(Roundabouts.settle(sketched).maneuvers[0].roundabout)
+        XCTAssertEqual(kept.exits.count, 2)
+        XCTAssertLessThan(Roundabouts.angleGap(kept.exits[0], 265), 10)
+        XCTAssertLessThan(Roundabouts.angleGap(kept.exits[1], 0), 15)
+    }
+
+    /**
+     * The map's picture of a big roundabout (Holbrook Road, Portsmouth): the 1st exit touches the
+     * ring just after you come on, so it was drawn pointing back down, but the road heads left.
+     * Your exit is turned to where the road goes and the others keep their order round.
+     */
+    func testMapPictureAimsWhereTheRoadGoes() {
+        let map = RoundaboutShape(exits: [195, 300, 12, 100], taken: 0, entriesOnly: [140], clockwise: true, complete: true)
+        let s = Roundabouts.aim(map, at: 290)
+        XCTAssertEqual(s.taken, 0)
+        XCTAssertEqual(s.exits[0], 290, accuracy: 0.01)
+        func round(_ a: Double) -> Double { (a - 180 + 360).truncatingRemainder(dividingBy: 360) }
+        XCTAssertEqual(s.exits.map(round), s.exits.map(round).sorted())
+        XCTAssertEqual(s.exits.count, 4)
+        XCTAssertGreaterThan(round(s.entriesOnly[0]), round(s.exits[3]))
+
+        // Already pointing the right way: hardly moves.
+        let fine = Roundabouts.aim(RoundaboutShape(exits: [270, 0, 90], taken: 1, clockwise: true, complete: true), at: 5)
+        XCTAssertEqual(fine.exits[0], 272.5, accuracy: 0.5)
+        XCTAssertEqual(fine.exits[1], 5, accuracy: 0.01)
     }
 
     /**

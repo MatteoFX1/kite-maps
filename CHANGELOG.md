@@ -19,7 +19,8 @@ the middle number for big milestones.
 - **Tidy-up:** a few bits of unused code removed.
 - **Roundabout picture points the right way:** a "1st exit" that goes straight on was drawn
   turning left (Chestnut Avenue, Eastleigh). The arrow now follows the way the route really
-  leaves every roundabout.
+  leaves every roundabout, big ones included (checked on 64 roundabouts in Hampshire, Wales,
+  London and Milton Keynes).
 - **Mini-roundabouts in the banner:** the small painted ones (Normandy Way, Marchwood) were
   skipped because neither Google nor the open map router mentions them. Kite now finds them on
   the map itself and shows which exit to take, with a picture, like the big ones.
