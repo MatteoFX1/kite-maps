@@ -13,10 +13,11 @@ import VelaCore
 final class NavGlide: NSObject {
     weak var map: MLNMapView?
     /**
-     * Where the car sits on screen while following: low down, about 70% of the way, so most of the
-     * screen shows the road ahead rather than what's already behind, but still above the trip bar.
+     * Where the car sits on screen while following: low down, about 75% of the way, so most of the
+     * screen shows the road ahead rather than what's already behind. That's as low as it goes with
+     * the road name under it still clear of the trip bar.
      */
-    nonisolated static let topFraction: CGFloat = 0.6
+    nonisolated static let topFraction: CGFloat = 0.7
     nonisolated static let bottomInset: CGFloat = 170
     /** The car's height on a screen [height] tall, for things drawn next to it. */
     nonisolated static func carY(_ height: CGFloat) -> CGFloat { (height * topFraction + height - bottomInset) / 2 }

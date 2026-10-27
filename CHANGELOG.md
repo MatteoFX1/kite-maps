@@ -3,6 +3,11 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.3
+
+- **Arrow lower on screen:** while driving, your arrow sits lower down, about three quarters of the
+  way, so even more of the screen shows the road ahead. The zoom is the same as before.
+
 ## 0.7.2
 
 - **One speed sign:** your speed and the speed limit are now one sign in the bottom left, like
