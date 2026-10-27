@@ -23,6 +23,9 @@ the middle number for big milestones.
 - **Roundabout arrow on the map** goes all the way round to your exit, like Waze, instead of
   stopping just inside the roundabout.
 - **Trip list while driving** starts at your next turn, not with the turns you've already made.
+- **Road names big in the turn banner:** long instructions are split like Waze, so "At the end of
+  the road, turn left" is small and "Burgess Road" big underneath, with no more cut-off names.
+- **Route time bubbles** are rounder and a little bigger.
 - **Exit number in the roundabout picture:** the number of your exit is back in the middle of the
   roundabout drawing, as well as "6th exit" next to it.
 

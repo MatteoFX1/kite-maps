@@ -222,10 +222,20 @@ struct InstructionBanner: View {
                             .monospacedDigit()
                             .lineLimit(1).minimumScaleFactor(0.6)
                     }
-                    Text(Self.headline(m))
-                        .font(.system(size: 23, weight: .bold))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.75)
+                    if let parts = Self.split(Self.headline(m)) {
+                        // "At the end of the road, turn left" small, the road you turn onto big, like Waze.
+                        Text(parts.0)
+                            .font(.system(size: 17, weight: .semibold)).opacity(0.9)
+                            .lineLimit(1).minimumScaleFactor(0.75)
+                        Text(parts.1)
+                            .font(.system(size: 25, weight: .heavy))
+                            .lineLimit(2).minimumScaleFactor(0.7)
+                    } else {
+                        Text(Self.headline(m))
+                            .font(.system(size: 23, weight: .bold))
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.75)
+                    }
                     if !refs.isEmpty {
                         HStack(spacing: 6) { ForEach(refs, id: \.self) { RoadShield(ref: $0) } }
                             .padding(.top, 2)
@@ -269,6 +279,23 @@ struct InstructionBanner: View {
                 Image(systemName: maneuverSymbol(then.type)).font(.system(size: 20, weight: .heavy))
             }
         }
+    }
+
+    /**
+     * A long instruction split into what to do and where: "At the end of the road, turn left onto
+     * Burgess Road" is "At the end of the road, turn left" and "Burgess Road". Short ones stay whole.
+     */
+    static func split(_ text: String) -> (String, String)? {
+        guard text.count > 26 else { return nil }
+        for word in [" onto ", " towards ", " toward "] {
+            guard let r = text.range(of: word, options: .backwards) else { continue }
+            let place = text[r.upperBound...].trimmingCharacters(in: .whitespaces)
+            // "Take the exit toward" keeps its last word, so it still reads as a sentence.
+            let action = word == " onto " ? String(text[..<r.lowerBound]) : String(text[..<r.upperBound]).trimmingCharacters(in: .whitespaces)
+            guard !place.isEmpty, action.count >= 4 else { continue }
+            return (action, place)
+        }
+        return nil
     }
 
     /** "6th exit" for a roundabout (the picture says the rest), else the instruction. */
