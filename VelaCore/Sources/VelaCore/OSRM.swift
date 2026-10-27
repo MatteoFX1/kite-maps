@@ -423,7 +423,10 @@ public enum OSRM {
             let base = signs.number.map { "Take exit \($0)" } ?? "Take the exit"
             if let t = signs.toward { return base + " toward \(t)" }
             return base + (newRoad.map { " onto \($0)" } ?? "")
-        case "fork": return "Keep \(dir.contains("left") ? "left" : "right") at the fork" + onto
+        case "fork":
+            // Leaving the M27 by a slip road that still carries its name isn't "onto M27".
+            let toward = signs.toward.map { " toward \($0)" } ?? ""
+            return "Keep \(dir.contains("left") ? "left" : "right") at the fork" + (newRoad.map { " onto \($0)" } ?? toward)
         case "end of road": return "At the end of the road, turn \(dir.replacingOccurrences(of: "slight ", with: ""))" + onto
         case "continue", "new name":
             let stay = road.map { " to stay on \($0)" } ?? ""

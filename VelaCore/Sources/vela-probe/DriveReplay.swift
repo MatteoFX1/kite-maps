@@ -7,6 +7,18 @@ import VelaCore
  * spoken-turn timing and reroutes the app uses. Prints what the driver would hear and when, how
  * long a wrong turn takes to notice and fix, and how long speed limits take to arrive.
  */
+/** `swift run vela-probe route lat lng lat lng`: every route Kite would offer, with its steps. */
+func routeCheck() async {
+    let a = CommandLine.arguments.dropFirst(2).compactMap(Double.init)
+    guard a.count == 4 else { print("usage: route lat lng lat lng"); return }
+    let r = await Directions.routes(from: LatLng(a[0], a[1]), to: LatLng(a[2], a[3]), mode: .drive)
+    for (k, x) in r.routes.enumerated() {
+        print(String(format: "== route %d: %.0f m, %.0f min, source %@", k, x.distanceMeters, x.durationSeconds / 60, x.source))
+        for m in x.maneuvers where !m.silent { print(String(format: "  %6.0f m  %@", m.alongMeters, m.instruction)) }
+    }
+    if let e = r.error { print("error: \(e)") }
+}
+
 func driveReplay() async {
     struct Drive {
         var name: String

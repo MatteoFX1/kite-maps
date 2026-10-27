@@ -44,6 +44,9 @@ final class Navigator: ObservableObject {
     private var rerouteSpokenAt = Date.distantPast
     private var toldNoSignal = false
     private var spokenStage: [Int: Int] = [:]
+    private var stoppedNearEnd: Date?
+    /** Called a few minutes after arriving, to end the trip. */
+    var onFinished: (() -> Void)?
     /** Steps already given a "Continue for 7 miles". */
     private var toldContinue: Set<Int> = []
     private var lastReroute = Date.distantPast
@@ -132,9 +135,24 @@ final class Navigator: ObservableObject {
         let p = tracker.update(LatLng(loc.coordinate.latitude, loc.coordinate.longitude),
                                accuracy: max(loc.horizontalAccuracy, 5), heading: Self.heading(loc))
         progress = p
-        if p.arrived {
+        // Parked in a car park short of the pin, or on the far side of the building: that's
+        // arriving too, or the trip (and full-power GPS) would never end.
+        if loc.speed >= 0 && loc.speed < 1, p.remainingMeters < 150 {
+            if stoppedNearEnd == nil { stoppedNearEnd = loc.timestamp }
+        } else {
+            stoppedNearEnd = nil
+        }
+        let parked = stoppedNearEnd.map { loc.timestamp.timeIntervalSince($0) > 20 } ?? false
+        if p.arrived || parked {
             arrived = true
             speak("You have arrived at \(destination.name).")
+            // Parked, the phone goes in a pocket: let the screen sleep, and a few minutes on, end
+            // the trip so full-power GPS doesn't run all day in the background.
+            UIApplication.shared.isIdleTimerDisabled = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 180) { [weak self] in
+                guard let self, self.arrived, !self.stopped else { return }
+                self.onFinished?()
+            }
             return
         }
         if p.offRoute && !rerouting && Date().timeIntervalSince(lastReroute) > 8 {

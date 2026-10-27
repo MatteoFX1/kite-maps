@@ -601,6 +601,10 @@ final class AppModel: ObservableObject {
         let n = Navigator(route: route, destination: d.destination, stops: d.stops, settings: settings)
         nav = n
         navSub = n.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        n.onFinished = { [weak self, weak n] in
+            guard let self, let n, self.nav === n else { return }
+            self.endNavigation()
+        }
         location.setNavigating(true, mode: route.mode.rawValue)
         map?.showsUserLocation = false
         if let loc = location.last { n.handle(loc); followCamera(n, loc, animated: false) }
