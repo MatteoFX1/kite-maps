@@ -101,6 +101,8 @@ final class Navigator: ObservableObject {
         loadWaze()
         loadRoundabouts()
         speak("Starting route to \(destination.name). " + (first.map { "\($0.instruction)." } ?? ""))
+        // That was the heads-up for the first step: don't say it again a moment later.
+        if let f = first, f.alongMeters < 1500, let i = route.maneuvers.firstIndex(of: f) { spokenStage[i] = f.alongMeters < 300 ? 2 : 1 }
     }
 
     func stop() {
