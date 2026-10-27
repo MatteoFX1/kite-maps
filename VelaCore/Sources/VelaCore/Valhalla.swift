@@ -65,7 +65,7 @@ public enum Valhalla {
             "shape": shape.map { ["lat": $0.lat, "lon": $0.lng] },
             "costing": "auto",
             "shape_match": "map_snap",
-            "filters": ["attributes": ["edge.speed_limit", "edge.way_id", "edge.length", "edge.begin_shape_index",
+            "filters": ["attributes": ["edge.speed_limit", "edge.way_id", "edge.names", "edge.length", "edge.begin_shape_index",
                                        "edge.end_shape_index", "shape"], "action": "include"],
         ]
         var r = URLRequest(url: endpoint)
@@ -84,15 +84,26 @@ public enum Valhalla {
         var limits: [SpeedLimit] = []
         var ways: [Overpass.LimitWay] = []
         var along = 0.0
+        // The last posted limit and the road it was on.
+        var carried: (kmh: Double, names: Set<String>)?
         for e in edges {
             // 0 is "not known"; Valhalla marks a variable or no limit with 255.
             let raw = (e["speed_limit"] as? NSNumber)?.doubleValue
-            let kmh = raw.flatMap { (1...200).contains($0) ? $0 : nil }
+            let mapped = raw.flatMap { (1...200).contains($0) ? $0 : nil }
+            let names = Set((e["names"] as? [String]) ?? [])
+            // A limit holds until a sign says otherwise: further along the same road with no limit
+            // mapped, the last one still applies (Normandy Way, Marchwood: 40 mph mapped by the
+            // roundabout, then a mile with none, 2026-10-27). A different road starts unknown.
+            if let m = mapped, !names.isEmpty { carried = (m, names) }
+            else if mapped == nil, let c = carried, names.isDisjoint(with: c.names) { carried = nil }
+            else if mapped != nil { carried = nil }
+            let kmh = mapped ?? carried?.kmh
             if limits.last.map({ $0.kmh != kmh }) ?? true { limits.append(SpeedLimit(startMeters: along, kmh: kmh)) }
             along += ((e["length"] as? NSNumber)?.doubleValue ?? 0) * 1000
             if let a = (e["begin_shape_index"] as? NSNumber)?.intValue, let b = (e["end_shape_index"] as? NSNumber)?.intValue,
                a >= 0, b < shape.count, b > a {
-                ways.append(Overpass.LimitWay(id: (e["way_id"] as? NSNumber)?.int64Value ?? 0, kmh: kmh, line: Array(shape[a...b])))
+                // The roads keep only what's mapped (they're remembered for later drives); the carried limit is in [limits].
+                ways.append(Overpass.LimitWay(id: (e["way_id"] as? NSNumber)?.int64Value ?? 0, kmh: mapped, line: Array(shape[a...b])))
             }
         }
         return (limits, ways, along)

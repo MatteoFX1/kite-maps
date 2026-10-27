@@ -69,6 +69,10 @@ if args.count > 1, args[1] == "route" {
     await routeCheck()
     exit(0)
 }
+if args.count > 1, args[1] == "rdebug" {
+    await roundaboutDebug()
+    exit(0)
+}
 if args.count > 1, args[1] == "drive" {
     await driveReplay()
     exit(0)

@@ -245,14 +245,39 @@ final class Navigator: ObservableObject {
     /** Cameras and speed limits along the route, from OpenStreetMap, in one query per route. */
     /** The real shape of each roundabout ahead, for the picture in the banner. */
     private func loadRoundabouts() {
-        guard route.mode != .walk, route.maneuvers.contains(where: { $0.type == .roundabout }) else { return }
-        let r = route
+        guard route.mode != .walk else { return }
+        let start = route
         Task {
-            guard let drawn = await Roundabouts.apply(to: r), self.route.id == r.id else { return }
+            var r = start
+            // Mini-roundabouts first: they add steps, so the layouts below line up with the steps as driven.
+            if let withMinis = await Roundabouts.addMinis(to: r), self.route.id == r.id {
+                self.useSteps(withMinis.maneuvers)
+                r = self.route
+            }
+            guard r.maneuvers.contains(where: { $0.type == .roundabout }),
+                  let drawn = await Roundabouts.apply(to: r), self.route.id == r.id, self.route.maneuvers.count == drawn.maneuvers.count else { return }
             // Only the roundabout layouts change; the line and steps are the same.
             for i in self.route.maneuvers.indices where i < drawn.maneuvers.count {
                 self.route.maneuvers[i].roundabout = drawn.maneuvers[i].roundabout
             }
+        }
+    }
+
+    /** New steps on the same route line: what was already said stays said, step by step. */
+    private func useSteps(_ steps: [Maneuver]) {
+        let old = route.maneuvers
+        func moved(_ i: Int) -> Int? {
+            guard i < old.count else { return nil }
+            return steps.firstIndex { $0.alongMeters == old[i].alongMeters }
+        }
+        spokenStage = Dictionary(spokenStage.compactMap { k, v in moved(k).map { ($0, v) } }, uniquingKeysWith: max)
+        toldContinue = Set(toldContinue.compactMap(moved))
+        route.maneuvers = steps
+        tracker = RouteTracker(route: route)
+        if let loc = lastFix {
+            var p = tracker.update(LatLng(loc.coordinate.latitude, loc.coordinate.longitude), accuracy: max(loc.horizontalAccuracy, 5))
+            p.remainingSeconds *= trafficScale
+            progress = p
         }
     }
 

@@ -53,6 +53,176 @@ public enum Roundabouts {
         return changed ? r : nil
     }
 
+    /**
+     * Makes every roundabout's picture point the way the route really leaves it. The router's sketch
+     * needs at least one exit passed to place the circle, so a 1st exit had none and was drawn
+     * spread evenly round, which put a straight-on 1st exit off to the left (Chestnut Avenue,
+     * Eastleigh, 2026-10-27). The route line itself says which way it goes out, so a picture whose
+     * exit doesn't agree with it is redrawn from the line.
+     */
+    public static func settle(_ route: Route) -> Route {
+        var r = route
+        let cum = Geo.cumulative(route.polyline)
+        for i in r.maneuvers.indices where r.maneuvers[i].type == .roundabout {
+            let m = r.maneuvers[i]
+            if m.leavesRoundabout {
+                if i > 0, r.maneuvers[i - 1].type == .roundabout { r.maneuvers[i].roundabout = r.maneuvers[i - 1].roundabout }
+                continue
+            }
+            guard let out = exitAngle(route.polyline, cumulative: cum, along: m.alongMeters) else { continue }
+            if let s = m.roundabout, s.exits.indices.contains(s.taken), angleGap(s.exits[s.taken], out) < 50 { continue }
+            r.maneuvers[i].roundabout = spread(to: out, exit: m.exit ?? 1, clockwise: Geo.drivesOnLeft(m.location))
+        }
+        return r
+    }
+
+    /** [exit] exits, the last one at [out] and the ones before it spaced evenly on the way round. */
+    static func spread(to out: Double, exit: Int, clockwise: Bool) -> RoundaboutShape {
+        let n = max(exit, 1)
+        let t = norm(clockwise ? out - 180 : 180 - out)
+        let travel = t < 15 ? t + 360 : t
+        let exits = (1...n).map { k -> Double in
+            let d = travel * Double(k) / Double(n)
+            return norm(clockwise ? 180 + d : 180 - d)
+        }
+        return RoundaboutShape(exits: exits, taken: n - 1, clockwise: clockwise, complete: false)
+    }
+
+    /**
+     * Which way [line] leaves the roundabout it reaches at [along], in the picture's terms: degrees
+     * clockwise from straight ahead, so 0 is straight on, 90 right, 270 left and 180 back the way
+     * it came. The way out is the first 40 m of steady road after the circle.
+     */
+    static func exitAngle(_ line: [LatLng], cumulative cum: [Double], along: Double) -> Double? {
+        let total = cum.last ?? 0
+        func heading(_ a: Double, _ b: Double) -> Double? {
+            let p = Geo.point(along: line, meters: max(0, a), cumulative: cum), q = Geo.point(along: line, meters: min(total, b), cumulative: cum)
+            return p.distance(to: q) > 3 ? Geo.bearing(p, q) : nil
+        }
+        guard let into = heading(along - 40, along - 6) else { return nil }
+        var d = along + 6
+        while d + 40 <= min(total, along + 400) {
+            if let a = heading(d, d + 20), let b = heading(d + 20, d + 40), angleGap(a, b) < 10, let h = heading(d, d + 40) {
+                return norm(h - into)
+            }
+            d += 4
+        }
+        // The route ends just after it: the last bit of road there is.
+        return heading(along + 10, total).map { norm($0 - into) }
+    }
+
+    /**
+     * Mini-roundabouts on the route, from OpenStreetMap: a painted circle mapped as a single point
+     * (highway=mini_roundabout). Neither the open router nor Google says anything when the route
+     * goes over one, so the banner skipped them (Normandy Way, Marchwood, 2026-10-27). Each one the
+     * route crosses becomes a roundabout step with its exit number and picture; a turn the router
+     * already gives there ("Turn left onto ...") becomes "At the roundabout, take the 1st exit".
+     * Nil when there are none, or OpenStreetMap didn't answer.
+     */
+    public static func addMinis(to route: Route) async -> Route? {
+        guard route.mode == .drive, route.polyline.count >= 2 else { return nil }
+        // A point every 40 m or so is close enough for "within 15 m of the line", and keeps a long drive's query small.
+        var line = [route.polyline[0]]
+        for p in route.polyline.dropFirst() where line[line.count - 1].distance(to: p) >= 40 { line.append(p) }
+        line.append(route.polyline[route.polyline.count - 1])
+        let coords = line.prefix(3000).map { String(format: "%.5f,%.5f", $0.lat, $0.lng) }.joined(separator: ",")
+        let q = "[out:json][timeout:25];node[\"highway\"=\"mini_roundabout\"](around:15," + coords + ")->.m;.m out;" +
+            "way(bn.m)[\"highway\"][\"highway\"!~\"^(footway|cycleway|path|pedestrian|steps|bridleway|corridor|construction|proposed|platform)$\"];out geom;"
+        guard let data = await Overpass.query(q) else { return nil }
+        let minis = parseNodes(data)
+        guard !minis.isEmpty else { return nil }
+        return withMinis(route, minis: minis, ways: parse(data))
+    }
+
+    /** The mini-roundabout points in an Overpass answer. */
+    static func parseNodes(_ data: Data) -> [(id: Int64, at: LatLng)] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let elements = root["elements"] as? [[String: Any]] else { return [] }
+        return elements.compactMap { e in
+            guard e["type"] as? String == "node", let id = (e["id"] as? NSNumber)?.int64Value,
+                  let lat = e["lat"] as? Double, let lon = e["lon"] as? Double else { return nil }
+            return (id, LatLng(lat, lon))
+        }
+    }
+
+    static func withMinis(_ route: Route, minis: [(id: Int64, at: LatLng)], ways: [Way]) -> Route? {
+        var r = route
+        let cum = Geo.cumulative(route.polyline)
+        let total = cum.last ?? 0
+        let clockwise = Geo.drivesOnLeft(route.polyline[0])
+        var changed = false
+        for mini in minis {
+            let p = Geo.project(mini.at, on: route.polyline, cumulative: cum)
+            guard p.offset < 15, p.along > 20, p.along < total - 30,
+                  let s = miniShape(mini.id, at: mini.at, ways: ways, line: route.polyline, cumulative: cum, along: p.along, clockwise: clockwise)
+            else { continue }
+            let n = s.shape.taken + 1
+            let near = r.maneuvers.indices.filter { abs(r.maneuvers[$0].alongMeters - p.along) < 30 && !r.maneuvers[$0].silent }
+            // The router already has a roundabout here.
+            if near.contains(where: { r.maneuvers[$0].type == .roundabout }) { continue }
+            if let i = near.first(where: { ![.depart, .arrive].contains(r.maneuvers[$0].type) }) {
+                // A turn at the mini-roundabout: said the roundabout way, onto the same road.
+                let road = r.maneuvers[i].road
+                r.maneuvers[i].type = .roundabout
+                r.maneuvers[i].exit = n
+                r.maneuvers[i].roundabout = s.shape
+                r.maneuvers[i].lanes = []
+                r.maneuvers[i].laneHint = nil
+                r.maneuvers[i].instruction = OSRM.instruction(type: "roundabout", modifier: nil, road: road, exit: n, mode: .drive)
+            } else {
+                // Over it with no step: a new one, with the road it leads onto when that's a different road.
+                let k = r.maneuvers.lastIndex { $0.alongMeters <= p.along } ?? 0
+                let current = r.maneuvers[...k].last { $0.road != nil }?.road
+                let onto = s.road.flatMap { $0 == current ? nil : $0 }
+                var m = Maneuver(type: .roundabout, instruction: OSRM.instruction(type: "roundabout", modifier: nil, road: onto, exit: n, mode: .drive),
+                                 location: Geo.point(along: route.polyline, meters: p.along, cumulative: cum), alongMeters: p.along,
+                                 distanceMeters: 0, road: s.road ?? current, exit: n, roundabout: s.shape)
+                if k + 1 < r.maneuvers.count { m.distanceMeters = r.maneuvers[k + 1].alongMeters - p.along }
+                r.maneuvers[k].distanceMeters = p.along - r.maneuvers[k].alongMeters
+                r.maneuvers.insert(m, at: k + 1)
+            }
+            changed = true
+        }
+        return changed ? r : nil
+    }
+
+    /** The picture of mini-roundabout [id]: every road meeting at the point, the way in at the bottom. */
+    static func miniShape(_ id: Int64, at center: LatLng, ways: [Way], line: [LatLng], cumulative cum: [Double], along: Double,
+                          clockwise: Bool) -> (shape: RoundaboutShape, road: String?)? {
+        var arms: [(angle: Double, canExit: Bool, name: String?)] = []
+        for w in ways {
+            let oneway = onewayDirection(w.tags)
+            for (i, n) in w.nodes.enumerated() where n == id {
+                for dir in [1, -1] {
+                    // Where the road heads, about 15 m out (the next node can sit right by the circle).
+                    var j = i + dir
+                    while j >= 0, j < w.points.count, w.points[j].distance(to: center) < 15, j + dir >= 0, j + dir < w.points.count { j += dir }
+                    guard j >= 0, j < w.points.count, w.points[j].distance(to: center) > 2 else { continue }
+                    arms.append((Geo.bearing(center, w.points[j]), oneway == 0 || oneway == dir, w.tags["name"] ?? w.tags["ref"]))
+                }
+            }
+        }
+        guard arms.count >= 3 else { return nil }
+        let back = Geo.point(along: line, meters: max(0, along - 20), cumulative: cum)
+        let ahead = Geo.point(along: line, meters: along + 20, cumulative: cum)
+        guard back.distance(to: center) > 5, ahead.distance(to: center) > 5 else { return nil }
+        let inAngle = Geo.bearing(center, back), outAngle = Geo.bearing(center, ahead)
+        guard let entry = arms.indices.min(by: { angleGap(arms[$0].angle, inAngle) < angleGap(arms[$1].angle, inAngle) }),
+              angleGap(arms[entry].angle, inAngle) < 45 else { return nil }
+        func rel(_ a: Double) -> Double { norm(a - arms[entry].angle + 180) }
+        func travel(_ r: Double) -> Double {
+            let t = norm(clockwise ? r - 180 : 180 - r)
+            return t < 15 ? t + 360 : t
+        }
+        let exits = arms.indices.filter { $0 != entry && arms[$0].canExit }.sorted { travel(rel(arms[$0].angle)) < travel(rel(arms[$1].angle)) }
+        guard let taken = exits.indices.min(by: { angleGap(arms[exits[$0]].angle, outAngle) < angleGap(arms[exits[$1]].angle, outAngle) }),
+              angleGap(arms[exits[taken]].angle, outAngle) < 45 else { return nil }
+        let inOnly = arms.indices.filter { $0 != entry && !arms[$0].canExit }.map { rel(arms[$0].angle) }
+        var shape = RoundaboutShape(exits: exits.map { rel(arms[$0].angle) }, taken: taken, entriesOnly: inOnly, clockwise: clockwise, complete: true)
+        shape.mini = true
+        return (shape, arms[exits[taken]].name)
+    }
+
     static func fetch(_ spots: [LatLng]) async -> Data? {
         // At most 40 roundabouts per drive; a long one rarely has more in the next stretch that matters.
         let around = spots.prefix(40).map {

@@ -196,4 +196,21 @@ final class ValhallaTests: XCTestCase {
         XCTAssertEqual(p.meters, 600, accuracy: 0.01)
         XCTAssertEqual(p.ways.map(\.id), [11, 12, 13])
     }
+
+    /** Normandy Way, Marchwood (2026-10-27): 40 mph mapped by the roundabout, nothing for the next mile, then another road. */
+    func testLimitCarriesAlongTheSameRoad() throws {
+        let json = """
+        {"shape":"_ibE_ibE_ibE?_ibE?_ibE?","edges":[
+         {"speed_limit":64,"way_id":1,"names":["Normandy Way"],"length":0.1,"begin_shape_index":0,"end_shape_index":1},
+         {"way_id":2,"names":["Normandy Way"],"length":1.5,"begin_shape_index":1,"end_shape_index":2},
+         {"way_id":3,"names":["Cracknore Hard Lane"],"length":0.4,"begin_shape_index":2,"end_shape_index":3},
+         {"way_id":4,"names":["Normandy Way"],"length":0.1,"begin_shape_index":3,"end_shape_index":4}]}
+        """
+        let p = try XCTUnwrap(Valhalla.parse(Data(json.utf8)))
+        // On along Normandy Way the 40 still holds; turning onto another road it's not known (and stays so).
+        XCTAssertEqual(p.limits.map(\.kmh), [64, nil])
+        XCTAssertEqual(p.limits.map { $0.startMeters.rounded() }, [0, 1600])
+        // Only what's mapped is remembered with the roads.
+        XCTAssertEqual(p.ways.map(\.kmh), [64, nil, nil])
+    }
 }

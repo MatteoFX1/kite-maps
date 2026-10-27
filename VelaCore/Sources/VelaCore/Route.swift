@@ -83,6 +83,8 @@ public struct RoundaboutShape: Hashable, Sendable {
     public var clockwise: Bool
     /** False when only the exits up to yours are known (the rest of the circle is left plain). */
     public var complete: Bool
+    /** A mini-roundabout (a painted circle, one lane): no "which lane" advice. */
+    public var mini = false
 
     public init(exits: [Double], taken: Int, entriesOnly: [Double] = [], clockwise: Bool, complete: Bool) {
         self.exits = exits

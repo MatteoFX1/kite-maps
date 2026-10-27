@@ -104,4 +104,80 @@ final class RoundaboutTests: XCTestCase {
         XCTAssertEqual(merged[0].angle, 90, accuracy: 0.5)
         XCTAssertTrue(merged[0].canExit && merged[0].canEnter)
     }
+
+    /**
+     * Chestnut Avenue, Eastleigh (2026-10-27): "1st exit" straight on over a small roundabout. With
+     * no exit passed the router has no sketch, and the picture used to put the 1st exit on the left.
+     */
+    func testFirstExitStraightOnPointsUp() throws {
+        let c = LatLng(50.97, -1.37)
+        let k = 111_320 * cos(50.97 * .pi / 180)
+        func at(_ deg: Double, _ r: Double) -> LatLng {
+            LatLng(c.lat + r * cos(deg * .pi / 180) / 110_540, c.lng + r * sin(deg * .pi / 180) / k)
+        }
+        // Up from the south, round the left side of a 12 m circle (clockwise), out to the north.
+        var line = [at(180, 300), at(180, 12)]
+        for d in stride(from: 200.0, through: 340, by: 20) { line.append(at(d, 12)) }
+        line += [at(0, 12), at(0, 300)]
+        let along = Geo.cumulative(line)[1]
+        let m = Maneuver(type: .roundabout, instruction: "At the roundabout, take the 1st exit", location: at(180, 12),
+                         alongMeters: along, distanceMeters: 300, exit: 1)
+        let route = Route(mode: .drive, polyline: line, distanceMeters: 600, typicalSeconds: 60, trafficSeconds: nil,
+                          summary: nil, maneuvers: [m], source: "osm")
+        let s = try XCTUnwrap(Roundabouts.settle(route).maneuvers[0].roundabout)
+        XCTAssertEqual(s.exits.count, 1)
+        XCTAssertLessThan(Roundabouts.angleGap(s.exits[s.taken], 0), 15)
+        XCTAssertEqual(s.ruleLane, 0)
+
+        // Going left instead (out to the west): the picture says left.
+        let west = [at(180, 300), at(180, 12), at(220, 12), at(250, 12), at(270, 12), at(270, 300)]
+        let r2 = Route(mode: .drive, polyline: west, distanceMeters: 600, typicalSeconds: 60, trafficSeconds: nil,
+                       summary: nil, maneuvers: [m], source: "osm")
+        let s2 = try XCTUnwrap(Roundabouts.settle(r2).maneuvers[0].roundabout)
+        XCTAssertLessThan(Roundabouts.angleGap(s2.exits[s2.taken], 270), 15)
+
+        // A sketch that already agrees with the line is kept.
+        var sketched = route
+        sketched.maneuvers[0].roundabout = RoundaboutShape(exits: [265, 5], taken: 1, clockwise: true, complete: false)
+        XCTAssertEqual(Roundabouts.settle(sketched).maneuvers[0].roundabout?.exits, [265, 5])
+    }
+
+    /**
+     * Normandy Way, Marchwood (2026-10-27): straight over a mini-roundabout (one mapped point, a
+     * side road off to the east) with no step from either router. It gets its own step.
+     */
+    func testMiniRoundaboutGetsAStep() throws {
+        let c = LatLng(50.8957, -1.4469)
+        let k = 111_320 * cos(50.8957 * .pi / 180)
+        func at(_ deg: Double, _ r: Double) -> LatLng {
+            LatLng(c.lat + r * cos(deg * .pi / 180) / 110_540, c.lng + r * sin(deg * .pi / 180) / k)
+        }
+        let ways = [
+            Roundabouts.Way(id: 1, nodes: [10, 99, 11], points: [at(180, 200), c, at(0, 200)], tags: ["highway": "tertiary", "name": "Normandy Way"]),
+            Roundabouts.Way(id: 2, nodes: [99, 12], points: [c, at(90, 150)], tags: ["highway": "service", "name": "Test Lane"]),
+        ]
+        let line = [at(180, 600), c, at(0, 600)]
+        let steps = [
+            Maneuver(type: .depart, instruction: "Drive along Normandy Way", location: line[0], alongMeters: 0, distanceMeters: 1000, road: "Normandy Way"),
+            Maneuver(type: .turnLeft, instruction: "Turn left onto Cracknore Hard", location: line[2], alongMeters: 1000, distanceMeters: 200, road: "Cracknore Hard"),
+            Maneuver(type: .arrive, instruction: "You have arrived", location: line[2], alongMeters: 1200, distanceMeters: 0),
+        ]
+        let route = Route(mode: .drive, polyline: line, distanceMeters: 1200, typicalSeconds: 120, trafficSeconds: nil,
+                          summary: nil, maneuvers: steps, source: "google")
+        let r = try XCTUnwrap(Roundabouts.withMinis(route, minis: [(99, c)], ways: ways))
+        XCTAssertEqual(r.maneuvers.count, 4)
+        let m = r.maneuvers[1]
+        XCTAssertEqual(m.type, .roundabout)
+        XCTAssertEqual(m.exit, 1)
+        XCTAssertEqual(m.alongMeters, 600, accuracy: 6)
+        XCTAssertEqual(m.instruction, "At the roundabout, take the 1st exit")
+        XCTAssertEqual(r.maneuvers[0].distanceMeters, 600, accuracy: 6)
+        XCTAssertEqual(m.distanceMeters, 400, accuracy: 6)
+        let s = try XCTUnwrap(m.roundabout)
+        XCTAssertTrue(s.mini)
+        // Straight on is the 1st exit going round clockwise; the side road east is the 2nd.
+        XCTAssertEqual(s.exits.count, 2)
+        XCTAssertLessThan(Roundabouts.angleGap(s.exits[s.taken], 0), 5)
+        XCTAssertEqual(s.exits[1], 90, accuracy: 5)
+    }
 }

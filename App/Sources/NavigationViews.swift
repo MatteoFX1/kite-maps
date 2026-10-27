@@ -346,7 +346,7 @@ enum LaneGuide {
             let words = hint.replacingOccurrences(of: "use the ", with: "", options: .caseInsensitive)
             return ([], words.prefix(1).uppercased() + words.dropFirst())
         }
-        guard m.type == .roundabout, !m.leavesRoundabout, let shape = m.roundabout else { return nil }
+        guard m.type == .roundabout, !m.leavesRoundabout, let shape = m.roundabout, !shape.mini else { return nil }
         // Two lanes, the near-side one for left and straight on, the far one for right.
         let farSide = shape.ruleLane == 1
         let rightLane = leftTraffic ? farSide : !farSide

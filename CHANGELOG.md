@@ -17,6 +17,17 @@ the middle number for big milestones.
 - **Road alerts says plainly where reports come from**, with separate lines for closures and
   drivers' reports.
 - **Tidy-up:** a few bits of unused code removed.
+- **Roundabout picture points the right way:** a "1st exit" that goes straight on was drawn
+  turning left (Chestnut Avenue, Eastleigh). The arrow now follows the way the route really
+  leaves every roundabout.
+- **Mini-roundabouts in the banner:** the small painted ones (Normandy Way, Marchwood) were
+  skipped because neither Google nor the open map router mentions them. Kite now finds them on
+  the map itself and shows which exit to take, with a picture, like the big ones.
+- **Speed limit on more roads:** where the map has a limit at the start of a road but not further
+  along (Normandy Way), Kite keeps showing it until you turn onto a different road, the way the
+  last sign you passed still applies.
+- **Fewer road numbers while driving:** M27, M3 and A27 signs are spaced much further apart, so a
+  motorway junction isn't covered in them.
 
 ## 0.7.3
 
