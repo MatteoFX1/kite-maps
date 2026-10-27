@@ -377,7 +377,9 @@ final class Navigator: ObservableObject {
         let at = progress?.alongMeters ?? 0
         let window = Geo.slice(line, from: max(at - 200, 0), to: at + 60_000)
         // OpenWeb Ninja only every 10 minutes, for the next 40 km: about 6 asks for an hour's drive.
-        let askNinja = WazeNinja.on && Date().timeIntervalSince(ninjaAt) > 600
+        // Not at all with both police and crashes switched off: each ask uses one of the month's few.
+        let askNinja = WazeNinja.on && !AppSettings.shared.wazeKinds.isDisjoint(with: [.police, .accident])
+            && Date().timeIntervalSince(ninjaAt) > 600
         if askNinja { ninjaAt = Date() }
         let near = Geo.slice(line, from: max(at - 200, 0), to: at + 40_000)
         Task {

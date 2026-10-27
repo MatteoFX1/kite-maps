@@ -5,43 +5,40 @@ the middle number for big milestones.
 
 ## 0.7.3
 
-- **Police and crash reports are back (with your own free key):** Settings › Road alerts › Police
-  and crashes. Paste a free OpenWeb Ninja key and Kite warns about police, mobile speed cameras and
-  crashes from Waze drivers while you navigate, shows them on the map, and fills the police heat
-  map. The free plan has 50 checks a month, so Kite checks every 10 minutes while navigating only,
-  and shows how many you've used.
-- **"Waze integration" is now "Road alerts":** it only lists what really works today. Waze
-  only shares road closures now, so the police, crash and hazard switches and the heat map are
-  gone until Waze (or Google) shares those reports again. Police aircraft stay.
-- **Arrow lower on screen:** while driving, your arrow sits lower down, about three quarters of the
-  way, so even more of the screen shows the road ahead. The zoom is the same as before.
-- **"Then" shows the exit number:** when the turn after next is a roundabout, the small "Then"
-  chip shows which exit to take, so you know before you get there.
-- **Sideways phone:** your arrow no longer sits on top of the trip bar when the phone is turned
-  sideways.
-- **Road alerts look matches what it does:** the intro and the Layers tile show a road-closure
-  icon instead of police, crash and hazard ones, and the tile is called "Road alerts".
-- **Traffic lights on the map:** while you drive, small traffic light icons show on your route,
-  like Waze, one per junction.
-- **New map look, Waze-style in Kite's teal:** a thicker teal route with a darker edge and
-  chevrons along it, a chunky white turn arrow with a teal edge, your arrow on a navy disc with a
-  teal ring, softer other-route lines and traffic colours, and the road you've driven fades out.
-- **Teal everywhere for "you":** your location dot, the centre-on-me button, "Your location" and
-  the picked route's time bubble now use Kite's teal instead of the old blue, matching the route.
-- **Your arrow's disc** is white by day and navy at night, and the road name sits a little lower so
-  it never touches it.
-- **More traffic lights found:** Kite now looks closer along the route, so lights in towns aren't missed.
-- **Roundabout arrow on the map** goes all the way round to your exit, like Waze, instead of
-  stopping just inside the roundabout.
-- **Trip list while driving** starts at your next turn, not with the turns you've already made.
-- **Road names big in the turn banner:** long instructions are split like Waze, so "At the end of
-  the road, turn left" is small and "Burgess Road" big underneath, with no more cut-off names.
-- **Route time bubbles** are rounder and a little bigger.
-- **Exit number in the roundabout picture:** the number of your exit is back in the middle of the
-  roundabout drawing, as well as "6th exit" next to it.
-- **Search suggestions put the place you typed first:** typing "Whiteley Shopping Centre" no
-  longer sometimes puts a shop inside it (The Body Shop) at the top.
-- **British words from Google:** place cards say "Car park", not "Parking lot".
+- **Police and crash alerts are back (with your own free key):** Settings › Road alerts › Police
+  and crashes. Paste a free OpenWeb Ninja key and Kite warns you about police, mobile speed
+  cameras and crashes reported by Waze drivers, shows them on the map and fills the police heat
+  map. The free plan has 50 checks a month, so Kite only checks while you navigate, once every 10
+  minutes, and shows how many you've used.
+- **"Waze integration" is now "Road alerts":** it only shows what really works. Without a key
+  that's road closures and police aircraft, since Waze's live map no longer shares anything else.
+- **New map look, Waze-style in Kite's teal:** a thicker teal route with chevrons, a chunky white
+  turn arrow, your arrow on a disc (white by day, navy at night), and the road you've driven
+  fades out. Your location dot and buttons are teal too.
+- **Arrow lower on screen:** your arrow sits about three quarters of the way down, so you see more
+  road ahead. The zoom is the same as before. Sideways, it no longer sits on the trip bar.
+- **Traffic lights on the map** along your route while you drive, like Waze.
+- **Clearer roundabouts:** the map arrow goes all the way round to your exit, the exit number is
+  in the middle of the roundabout picture, the "Then" chip shows the next roundabout's exit, and
+  exit numbers now match the signs (Millbrook is the 2nd exit).
+- **Bigger road names in the turn banner:** "At the end of the road, turn left" small, and
+  "Burgess Road" big underneath.
+- **Speed limits show much sooner,** usually within a second or two, even on roads you've never
+  driven, and roads you've driven before are remembered.
+- **Calmer camera warnings:** one warning per camera, no warnings for cameras on the other side
+  of a dual carriageway, and a row of motorway cameras is said once.
+- **Live traffic on the way:** every few minutes Kite checks the traffic again, so your arrival
+  time stays right, and if a much faster way turns up it takes it and tells you.
+- **Better voice:** road names said in full ("Road", not "Rd"), "a quarter of a
+  mile", "Continue on M27 for 7 miles" on long stretches, motorways by their number, which side
+  your destination is on, and quieter while you're on a phone call.
+- **Trips end on their own:** parking a little short of the pin counts as arriving, and the trip
+  closes a few minutes later so your battery isn't drained.
+- **No more "Rerouting" in a car park** before you've reached the road, and asking for directions
+  while driving gives routes that go the way you're facing.
+- **British words:** "slip road", "car park", and search puts the place you typed first (no more
+  The Body Shop above Whiteley Shopping Centre).
+- **Trip list while driving** starts at your next turn, and route time bubbles are a little bigger.
 
 ## 0.7.2
 

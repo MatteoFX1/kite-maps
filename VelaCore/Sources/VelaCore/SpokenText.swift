@@ -23,8 +23,9 @@ public enum SpokenText {
             let pattern = "(?<![\\p{L}'])" + NSRegularExpression.escapedPattern(for: short) + "(?![\\p{L}'])"
             s = s.replacingOccurrences(of: pattern, with: long, options: .regularExpression)
         }
-        // "St" is Street after a name ("Princes St") but Saint before one ("onto St Mary's Road").
-        s = s.replacingOccurrences(of: "(?<=\\p{Lu}[\\p{L}']{1,30} )St(?![\\p{L}'])", with: "Street", options: .regularExpression)
+        // "St" is Street after a name ("Princes St") but Saint before one ("onto St Mary's Road",
+        // "At St Mary's Roundabout": a capital word in front isn't enough when a name follows).
+        s = s.replacingOccurrences(of: "(?<=\\p{Lu}[\\p{L}']{1,30} )St(?![\\p{L}'])(?! \\p{Lu})", with: "Street", options: .regularExpression)
         s = s.replacingOccurrences(of: "(?<![\\p{L}'])St\\.?(?= \\p{Lu})", with: "Saint", options: .regularExpression)
         // "A57(M)" is said "A57 M".
         s = s.replacingOccurrences(of: "(?<=\\d)\\(M\\)", with: " M", options: .regularExpression)
