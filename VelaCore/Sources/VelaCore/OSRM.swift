@@ -493,11 +493,16 @@ public enum Directions {
             }
             if !g.isEmpty {
                 // One at a time: the FOSSGIS server turns away bursts.
+                // Rerouting at speed, a slow open router (weak signal, a busy server) mustn't hold
+                // the new route back: after a few seconds Google's own steps are driven instead.
+                let reroute = heading != nil && !alternatives
+                let wait: Double = reroute ? 5 : 25
                 var vias: [Int: Route] = [:]
                 for i in g.indices {
-                    if let r = try? await OSRM.routeVia(g[i].polyline, mode: mode) { vias[i] = r }
+                    let line = g[i].polyline
+                    if let r = (await deadline(wait, { try? await OSRM.routeVia(line, mode: mode) })).flatMap({ $0 }) { vias[i] = r }
                 }
-                let plain = (try? await osrmTask.value) ?? []
+                let plain: [Route] = (await deadline(wait, { try? await osrmTask.value })).flatMap { $0 } ?? []
                 var spare = plain
                 for i in g.indices {
                     if var steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
@@ -537,6 +542,20 @@ public enum Directions {
             err = error.localizedDescription
         }
         return Result(routes: [], error: err ?? "No route found.")
+    }
+}
+
+/** [op]'s answer, or nil if it takes longer than [seconds]. */
+func deadline<T: Sendable>(_ seconds: Double, _ op: @escaping @Sendable () async -> T) async -> T? {
+    await withTaskGroup(of: T?.self) { group in
+        group.addTask { await op() }
+        group.addTask {
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1e9))
+            return nil
+        }
+        let first = await group.next() ?? nil
+        group.cancelAll()
+        return first
     }
 }
 
