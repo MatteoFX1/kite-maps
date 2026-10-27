@@ -381,7 +381,9 @@ public enum OSRM {
         var toward: String? {
             guard let d = destinations?.replacingOccurrences(of: ";", with: ",").trimmingCharacters(in: .whitespaces), !d.isEmpty else { return nil }
             let parts = d.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-            let names = (parts.count == 2 ? parts[1] : parts[0]).split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            // UK signs put a road reached later in brackets, "(A32) Alton": the place is what's said.
+            let names = (parts.count == 2 ? parts[1] : parts[0]).split(separator: ",")
+                .map { $0.replacingOccurrences(of: #"\([^)]*\)"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
             let refs = parts.count == 2 ? parts[0].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } : []
             var pick = Array(names.prefix(2))

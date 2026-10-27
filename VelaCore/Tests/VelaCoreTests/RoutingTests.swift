@@ -247,6 +247,9 @@ final class RoutingTests: XCTestCase {
         let off = OSRM.instruction(type: "off ramp", modifier: "slight left", road: "M27", exit: nil, mode: .drive,
                                    signs: .init(destinations: "A335: Eastleigh, Southampton", exits: "5", from: "M27"))
         XCTAssertEqual(off, "Take exit 5 toward Eastleigh and Southampton")
+        let bracket = OSRM.instruction(type: "off ramp", modifier: "slight left", road: "M27", exit: nil, mode: .drive,
+                                       signs: .init(destinations: "A32: (A32) Alton, Fareham", exits: "10", from: "M27"))
+        XCTAssertEqual(bracket, "Take exit 10 toward Alton and Fareham")
         let bare = OSRM.instruction(type: "off ramp", modifier: "slight left", road: "M27", exit: nil, mode: .drive,
                                     signs: .init(destinations: nil, exits: nil, from: "M27"))
         XCTAssertEqual(bare, "Take the exit", "no 'toward M27' while leaving the M27")

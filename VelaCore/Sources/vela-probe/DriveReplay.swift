@@ -17,6 +17,10 @@ func routeCheck() async {
         for m in x.maneuvers where !m.silent { print(String(format: "  %6.0f m  %@", m.alongMeters, m.instruction)) }
     }
     if let e = r.error { print("error: \(e)") }
+    // The first route's line, for `xcrun simctl location booted start - < file`.
+    if let out = ProcessInfo.processInfo.environment["LINE_OUT"], let x = r.routes.first {
+        try? x.polyline.map { String(format: "%.6f,%.6f", $0.lat, $0.lng) }.joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)
+    }
 }
 
 func driveReplay() async {
@@ -38,6 +42,8 @@ func driveReplay() async {
               speed: 12, detour: LatLng(50.9300, -1.4290)),
         Drive(name: "Totton to Uni, missed turn off the A35", from: LatLng(50.9190, -1.4900), to: LatLng(50.9346, -1.3966),
               speed: 13, detour: LatLng(50.9105, -1.4150)),
+        Drive(name: "M27 at 70, missed junction 9, on to junction 10", from: LatLng(50.9521, -1.3704), to: LatLng(50.8846, -1.2482),
+              speed: 31, detour: LatLng(50.8640, -1.2050)),
     ]
     let only = CommandLine.arguments.count > 2 ? Int(CommandLine.arguments[2]) : nil
     for (n, d) in drives.enumerated() where only == nil || only == n {
