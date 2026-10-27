@@ -19,13 +19,13 @@ public enum SpokenText {
     public static func forVoice(_ text: String) -> String {
         var s = text
         for (short, long) in words {
-            // The short form as a word of its own, with or without a full stop after it.
-            let pattern = "(?<![\\p{L}'])" + NSRegularExpression.escapedPattern(for: short) + "\\.?(?![\\p{L}'])"
+            // The short form as a word of its own; a full stop after it stays, as a pause.
+            let pattern = "(?<![\\p{L}'])" + NSRegularExpression.escapedPattern(for: short) + "(?![\\p{L}'])"
             s = s.replacingOccurrences(of: pattern, with: long, options: .regularExpression)
         }
-        // "St" is Street after a name ("Princes St") but Saint before one ("St Mary's Road").
-        s = s.replacingOccurrences(of: "(?<![\\p{L}'])St\\.?(?= [A-Z])", with: "Saint", options: .regularExpression)
-        s = s.replacingOccurrences(of: "(?<=[a-z] )St\\.?(?![\\p{L}'])", with: "Street", options: .regularExpression)
+        // "St" is Street after a name ("Princes St") but Saint before one ("onto St Mary's Road").
+        s = s.replacingOccurrences(of: "(?<=\\p{Lu}[\\p{L}']{1,30} )St(?![\\p{L}'])", with: "Street", options: .regularExpression)
+        s = s.replacingOccurrences(of: "(?<![\\p{L}'])St\\.?(?= \\p{Lu})", with: "Saint", options: .regularExpression)
         // "A57(M)" is said "A57 M".
         s = s.replacingOccurrences(of: "(?<=\\d)\\(M\\)", with: " M", options: .regularExpression)
         // "N", "S", "E", "W" after a road number: "A33 N" is "A33 north".
