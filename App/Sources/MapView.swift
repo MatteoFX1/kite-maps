@@ -506,13 +506,13 @@ struct VelaMapView: UIViewRepresentable {
             let s = model.settings
             let history = WazeHistory.shared.sightings
             let kinds = s.wazeKinds.map(\.rawValue).sorted().joined()
-            // While navigating, police and crashes from OpenWeb Ninja too (the live map has only closures).
-            let ninja = model.nav?.ninjaAlerts ?? []
-            let key = "\(s.wazeOn)\(s.wazeOnMap)\(s.wazeHeatmap)\(s.wazeMaxAge)\(kinds)\(wazeAt.timeIntervalSince1970)\(history.count)\(ninja.map(\.id).joined())"
+            // While navigating, drivers' reports from Waze's app servers too (the live map has only closures).
+            let live = model.nav?.liveAlerts ?? []
+            let key = "\(s.wazeOn)\(s.wazeOnMap)\(s.wazeHeatmap)\(s.wazeMaxAge)\(kinds)\(wazeAt.timeIntervalSince1970)\(history.count)\(live.map(\.id).joined())"
             guard key != lastWazeKey else { return }
             lastWazeKey = key
             let ids = Set(wazeAlerts.map(\.id))
-            let all = wazeAlerts + ninja.filter { !ids.contains($0.id) }
+            let all = wazeAlerts + live.filter { !ids.contains($0.id) }
             let shown = s.wazeOn && s.wazeOnMap ? all.filter { s.shows($0) } : []
             let features: [MLNPointFeature] = shown.map { a in
                 let f = MLNPointFeature()

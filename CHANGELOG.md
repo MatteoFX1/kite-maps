@@ -3,6 +3,15 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.4
+
+- **Police, crashes and hazards from Waze drivers, free, with no key:** while you navigate, Kite
+  asks Waze's own app servers for drivers' reports along the next 25 miles every 90 seconds, the
+  way the Waze app does, with an anonymous account (no name or email). They pop up, show on the
+  map and fill the police heat map. Settings › Road alerts shows whether it's working. The way of
+  asking comes from SABRE Plus for Highway Radar (MIT licence).
+- **No more OpenWeb Ninja key:** the key box and checks counter are gone.
+
 ## 0.7.3
 
 - **Police and crash alerts are back (with your own free key):** Settings › Road alerts › Police

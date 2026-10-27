@@ -15,27 +15,6 @@ final class WazeTests: XCTestCase {
         XCTAssertNil(Waze.parse(Data("nope".utf8)))
     }
 
-    func testNinjaParse() {
-        let json = #"{"status":"OK","data":{"alerts":[{"alert_id":"alert-1","type":"POLICE","subtype":"POLICE_WITH_MOBILE_CAMERA","country":"GB","street":"A4202 Park Ln","latitude":51.513465,"longitude":-0.157961,"publish_datetime_utc":"2026-10-27T13:24:50.000Z","num_thumbs_up":13,"alert_reliability":0},{"alert_id":"alert-2","type":"ACCIDENT","subtype":null,"latitude":50.9,"longitude":-1.3,"publish_datetime_utc":"2026-10-27T13:00:00Z"},{"alert_id":"alert-3","type":"CHIT_CHAT","latitude":0,"longitude":0}],"jams":[]}}"#
-        let list = WazeNinja.parse(Data(json.utf8))!
-        XCTAssertEqual(list.map(\.kind), [.police, .accident])
-        XCTAssertEqual(list[0].title, "Mobile speed camera")
-        XCTAssertEqual(list[0].street, "A4202 Park Ln")
-        XCTAssertEqual(list[0].thumbsUp, 13)
-        XCTAssertEqual(list[0].location, LatLng(51.513465, -0.157961))
-        XCTAssertEqual(list[0].reportedAt, Date(timeIntervalSince1970: 1_793_107_490))
-        XCTAssertEqual(list[1].reportedAt, Date(timeIntervalSince1970: 1_793_106_000))
-        XCTAssertNil(WazeNinja.parse(Data("nope".utf8)))
-    }
-
-    func testSharesNeedNinjaKey() {
-        WazeNinja.key = nil
-        XCTAssertEqual(Waze.shares, [.closure])
-        WazeNinja.key = "k"
-        XCTAssertTrue(Waze.shares.contains(.police))
-        WazeNinja.key = nil
-    }
-
     func testLiveAlertParse() {
         // A RealtimeAlert as Waze's app protocol sends it: police with a mobile camera west of Greenwich.
         var pos = ProtoWriter()

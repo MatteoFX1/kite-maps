@@ -264,13 +264,13 @@ public actor WazeLive {
     // MARK: The wire format
 
     /** Waze's servers: the Americas, Israel, and the rest of the world (the UK). */
-    static func region(_ p: LatLng) -> String {
+    public static func region(_ p: LatLng) -> String {
         if p.lng >= -170, p.lng <= -52, p.lat >= -15, p.lat <= 73 { return "na" }
         if p.lng >= 34, p.lng <= 36, p.lat >= 29.5, p.lat <= 33.5 { return "il" }
         return "row"
     }
 
-    static func box(around p: LatLng, meters: Double) -> (s: Double, w: Double, n: Double, e: Double) {
+    public static func box(around p: LatLng, meters: Double) -> (s: Double, w: Double, n: Double, e: Double) {
         let dLat = meters / 110_574, dLng = meters / (cos(p.lat * .pi / 180) * 111_320)
         return (p.lat - dLat, p.lng - dLng, p.lat + dLat, p.lng + dLng)
     }
@@ -278,7 +278,7 @@ public actor WazeLive {
     static func seeMe() -> String { "SeeMe,1,2,T,T,T,1,-1,1,7" }
 
     /** "MapDisplayed,": the box's corners, its middle, a constant, the corners again. */
-    static func mapDisplayed(_ b: (s: Double, w: Double, n: Double, e: Double)) -> String {
+    public static func mapDisplayed(_ b: (s: Double, w: Double, n: Double, e: Double)) -> String {
         func f(_ v: Double) -> String { String(format: "%.6f", v) }
         let corners = [f(b.w), f(b.n), f(b.e), f(b.n), f(b.e), f(b.s), f(b.w), f(b.s)].joined(separator: ",")
         return "MapDisplayed,\(corners),\(f((b.w + b.e) / 2)),\(f((b.s + b.n) / 2)),67186,\(corners)"
