@@ -5,6 +5,9 @@ the middle number for big milestones.
 
 ## 0.7.3
 
+- **"Waze integration" is now "Road alerts":** it only lists what really works today. Waze
+  only shares road closures now, so the police, crash and hazard switches and the heat map are
+  gone until Waze (or Google) shares those reports again. Police aircraft stay.
 - **Arrow lower on screen:** while driving, your arrow sits lower down, about three quarters of the
   way, so even more of the screen shows the road ahead. The zoom is the same as before.
 - **Traffic lights on the map:** while you drive, small traffic light icons show on your route,
