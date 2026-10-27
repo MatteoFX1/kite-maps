@@ -26,6 +26,48 @@ func limitsCheck() async {
     for l in m?.limits ?? [] { print(String(format: "  %6.1f km  %@", l.startMeters / 1000, l.kmh.map { String(format: "%.0f mph", $0 / 1.609344) } ?? "?")) }
 }
 
+/**
+ * `swift run vela-probe reportsuk`: every driver report (police, crash, hazard, closure...) in
+ * Google's route answers across busy British drives, counted by kind, with the road and age.
+ * For the rush-hour police test: run it at 07:30-09:00.
+ */
+func ukReports() async {
+    let drives: [(String, LatLng, LatLng)] = [
+        ("M27 Southampton to Portsmouth", LatLng(50.915, -1.380), LatLng(50.805, -1.087)),
+        ("M27 Portsmouth to Southampton", LatLng(50.805, -1.087), LatLng(50.915, -1.380)),
+        ("M3 Winchester to London", LatLng(51.063, -1.308), LatLng(51.470, -0.454)),
+        ("M25 Heathrow to Dartford", LatLng(51.470, -0.454), LatLng(51.465, 0.250)),
+        ("M1 Luton to Leicester", LatLng(51.880, -0.420), LatLng(52.636, -1.139)),
+        ("M6 Birmingham to Manchester", LatLng(52.480, -1.900), LatLng(53.480, -2.240)),
+        ("A33 Southampton to Basingstoke", LatLng(50.909, -1.404), LatLng(51.266, -1.087)),
+        ("M62 Leeds to Manchester", LatLng(53.800, -1.549), LatLng(53.480, -2.240)),
+    ]
+    var total: [String: Int] = [:]
+    for (name, a, b) in drives {
+        guard let body = try? await GoogleClient.shared.directionsBody(from: a, to: b, mode: .drive) else {
+            print("\(name): no answer"); continue
+        }
+        // Each report: ...[N,"Reported 12 min ago"] ... [2,["Kind"]] ... "Road"...
+        var kinds: [String: Int] = [:]
+        var examples: [String] = []
+        let ns = body as NSString
+        let re = try! NSRegularExpression(pattern: #"\[\d+,"Reported ([^"]+)"\](.{0,400}?)\[2,\["([^"]+)"\]\](.{0,80})"#, options: [.dotMatchesLineSeparators])
+        for m in re.matches(in: body, range: NSRange(location: 0, length: ns.length)) {
+            let age = ns.substring(with: m.range(at: 1)), kind = ns.substring(with: m.range(at: 3))
+            let tail = ns.substring(with: m.range(at: 4))
+            let road = (try? NSRegularExpression(pattern: #""([^"]{2,40})""#).firstMatch(in: tail, range: NSRange(location: 0, length: (tail as NSString).length)))
+                .map { (tail as NSString).substring(with: $0.range(at: 1)) } ?? "-"
+            kinds[kind, default: 0] += 1
+            if examples.count < 4 { examples.append("\(kind) on \(road), reported \(age)") }
+        }
+        for (k, n) in kinds { total[k, default: 0] += n }
+        print("\(name): " + (kinds.isEmpty ? "no reports" : kinds.sorted { $0.value > $1.value }.map { "\($0.key) ×\($0.value)" }.joined(separator: ", ")))
+        for e in examples { print("    \(e)") }
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+    }
+    print("ALL: " + total.sorted { $0.value > $1.value }.map { "\($0.key) ×\($0.value)" }.joined(separator: ", "))
+}
+
 func routeCheck() async {
     let a = CommandLine.arguments.dropFirst(2).compactMap(Double.init)
     guard a.count >= 4 else { print("usage: route lat lng lat lng [heading]"); return }
