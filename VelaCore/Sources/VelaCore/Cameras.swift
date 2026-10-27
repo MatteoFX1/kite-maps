@@ -76,7 +76,9 @@ public enum Overpass {
      * Cameras, posted speed limits and traffic lights along a route in one query: cameras within
      * 150 m, roads with a `maxspeed` within 12 m, traffic lights within 50 m. Nil when every mirror failed.
      */
-    public static func alongRoute(_ line: [LatLng], speed: Bool, plate: Bool) async
+    /// [limits] false leaves the roads' speed limits out (the road matcher has them): the question is
+    /// then far lighter, and a busy server that turns the full one away still answers it.
+    public static func alongRoute(_ line: [LatLng], speed: Bool, plate: Bool, limits: Bool = true) async
         -> (cameras: [RoadCamera], ways: [LimitWay], zones: [AverageSpeedZone], signals: [LatLng])? {
         guard line.count >= 2 else { return ([], [], [], []) }
         // Long drives go in pieces of about 40 km: one query for a whole motorway trip is often
@@ -87,7 +89,7 @@ public enum Overpass {
         var signals: [LatLng] = []
         var answered = false
         for piece in pieces(line, meters: 40_000) {
-            guard let data = await alongQuery(piece, speed: speed, plate: plate) else { continue }
+            guard let data = await alongQuery(piece, speed: speed, plate: plate, limits: limits) else { continue }
             answered = true
             let found = parse(data) ?? [], w = parseWays(data), lights = parseSignalNodes(data)
             for c in found { cams[c.id] = c }
@@ -118,7 +120,7 @@ public enum Overpass {
         return out
     }
 
-    private static func alongQuery(_ line: [LatLng], speed: Bool, plate: Bool) async -> Data? {
+    private static func alongQuery(_ line: [LatLng], speed: Bool, plate: Bool, limits: Bool) async -> Data? {
         // About one point every 100 m: the query's line cuts corners between points, and traffic
         // lights stand right by the road.
         let maxPts = 400
@@ -129,7 +131,7 @@ public enum Overpass {
         var parts: [String] = []
         if speed { parts.append("node[\"highway\"=\"speed_camera\"](around:150,\(coords));") }
         if plate { parts.append("node[\"surveillance:type\"=\"ALPR\"](around:150,\(coords));") }
-        parts.append("way[\"highway\"][\"maxspeed\"](around:12,\(coords));")
+        if limits { parts.append("way[\"highway\"][\"maxspeed\"](around:12,\(coords));") }
         if speed { parts.append("relation[\"enforcement\"=\"average_speed\"](around:200,\(coords));") }
         parts.append("node[\"highway\"=\"traffic_signals\"](around:50,\(coords));")
         let q = "[out:json][timeout:40];(" + parts.joined() + ");out body geom 8000;"

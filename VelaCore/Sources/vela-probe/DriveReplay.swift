@@ -182,7 +182,7 @@ func driveReplay() async {
         }
         print("  known before asking: \(Overpass.speedLimits(cached.ways, on: route.polyline).count) limit stretches, \(cached.signals.count) lights")
         let t1 = Date()
-        let found = await Overpass.alongRoute(route.polyline, speed: true, plate: false)
+        let found = await Overpass.alongRoute(route.polyline, speed: true, plate: false, limits: ProcessInfo.processInfo.environment["FULL"] != nil)
         let limits = found.map { Overpass.speedLimits($0.ways, on: route.polyline) } ?? []
         print(String(format: "  speed limits: %d stretches, cameras %d, lights %d, %.1f s to get%@", limits.count,
                      found.map { CameraAlerts.project($0.cameras, on: route.polyline).count } ?? 0, found?.signals.count ?? 0,

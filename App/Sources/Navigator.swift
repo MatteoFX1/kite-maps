@@ -267,7 +267,7 @@ final class Navigator: ObservableObject {
         matchedLimits = false
         matchedWays = []
         // Speed limits from the road matcher first: it answers in about a second.
-        Task {
+        let matcher = Task { () -> Bool in
             let found = await Valhalla.speedLimits(along: line) { partial in
                 await MainActor.run {
                     guard self.route.id == id, !partial.isEmpty else { return }
@@ -275,12 +275,13 @@ final class Navigator: ObservableObject {
                     self.route.speedLimits = partial
                 }
             }
-            guard let found, self.route.id == id, !found.limits.isEmpty else { return }
+            guard let found, self.route.id == id, !found.limits.isEmpty else { return false }
             self.matchedLimits = true
             self.route.speedLimits = found.limits
             self.matchedWays = found.ways
             self.routeCameras = self.onOurSide(self.routeCameras)
             RoadCache.shared.add(ways: found.ways.filter { $0.kmh != nil }, cameras: [], signals: [])
+            return true
         }
         // What's already known about these roads shows straight away; the live answer replaces it.
         func useKnown() async {
@@ -303,16 +304,19 @@ final class Navigator: ObservableObject {
         if (cum.last ?? 0) > 8000 {
             let start = Geo.slice(line, from: 0, to: 6000, cumulative: cum)
             Task {
-                guard await Overpass.alongRoute(start, speed: speed, plate: plate) != nil else { return }
+                let limits = !(await matcher.value)
+                guard await Overpass.alongRoute(start, speed: speed, plate: plate, limits: limits) != nil else { return }
                 await useKnown()
             }
         }
         Task {
+            // With the limits from the road matcher, Overpass is only asked for cameras and lights.
+            let limits = !(await matcher.value)
             // The public Overpass servers are sometimes busy: try again a couple of times.
-            var result = await Overpass.alongRoute(line, speed: speed, plate: plate)
+            var result = await Overpass.alongRoute(line, speed: speed, plate: plate, limits: limits)
             for _ in 0..<2 where result == nil && self.route.id == id {
                 try? await Task.sleep(nanoseconds: 20_000_000_000)
-                result = await Overpass.alongRoute(line, speed: speed, plate: plate)
+                result = await Overpass.alongRoute(line, speed: speed, plate: plate, limits: limits)
             }
             guard let found = result, self.route.id == id else { return }
             self.fullRoadData = true
