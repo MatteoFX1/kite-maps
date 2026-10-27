@@ -325,3 +325,14 @@ final class GoogleExitTests: XCTestCase {
         XCTAssertEqual(steps[1].exit, 2)
     }
 }
+
+final class DestinationSideTests: XCTestCase {
+    func testSide() {
+        // Driving north up a road; a place 30 m east of the end is on the right.
+        let line = [LatLng(50.900, -1.400), LatLng(50.901, -1.400)]
+        XCTAssertEqual(Geo.sideAtEnd(LatLng(50.901, -1.3996), of: line), "right")
+        XCTAssertEqual(Geo.sideAtEnd(LatLng(50.901, -1.4004), of: line), "left")
+        XCTAssertNil(Geo.sideAtEnd(LatLng(50.901, -1.400), of: line), "on the road itself")
+        XCTAssertNil(Geo.sideAtEnd(LatLng(50.910, -1.3996), of: line), "a kilometre past the end")
+    }
+}

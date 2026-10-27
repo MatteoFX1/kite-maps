@@ -45,6 +45,8 @@ final class Navigator: ObservableObject {
     private var toldNoSignal = false
     private var spokenStage: [Int: Int] = [:]
     private var stoppedNearEnd: Date?
+    /** "left" or "right": which side of the road the place is, at the end of the route. */
+    private var destinationSide: String? { route.mode == .drive ? Geo.sideAtEnd(destination.location, of: route.polyline) : nil }
     /** The whole route's road data has come in live, so what's remembered no longer stands in. */
     private var fullRoadData = false
     /** The limits came from the road matcher, which knows every road on the route. */
@@ -150,7 +152,7 @@ final class Navigator: ObservableObject {
         let parked = stoppedNearEnd.map { loc.timestamp.timeIntervalSince($0) > 20 } ?? false
         if p.arrived || parked {
             arrived = true
-            speak("You have arrived at \(destination.name).")
+            speak("You have arrived at \(destination.name)" + (destinationSide.map { ", on the \($0)." } ?? "."))
             // Parked, the phone goes in a pocket: let the screen sleep, and a few minutes on, end
             // the trip so full-power GPS doesn't run all day in the background.
             UIApplication.shared.isIdleTimerDisabled = false
@@ -503,7 +505,10 @@ final class Navigator: ObservableObject {
                 g.words.hasPrefix("Lane") ? ". Use " + g.words.lowercased().replacingOccurrences(of: "from left", with: "from the left")
                     : ". Use the \(g.words.lowercased())"
             } ?? ""
-            speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)\(lane)")
+            // "In 200 yards, your destination is on the left", the way Google says it.
+            let words = m.type == .arrive ? destinationSide.map { "your destination is on the \($0)" } ?? m.instruction.lowercasedFirst
+                : m.instruction.lowercasedFirst
+            speak("In \(Fmt.spokenDistance(d)), \(words)\(lane)")
         } else if d <= far && d > near + 150 && stage < 1 && m.type != .arrive {
             spokenStage[i] = 1
             speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
