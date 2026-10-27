@@ -72,6 +72,7 @@ struct VelaMapView: UIViewRepresentable {
         /** Whether the map is currently stripped down for driving; nil after a style load. */
         private var styledDriving: Bool?
         private var lastCameraKey = ""
+        private var lastSignalsKey = ""
         /** Cameras fetched so far, and the 0.1° cells already asked for (cameras don't move). */
         private var cameras: [Int64: RoadCamera] = [:]
         private var cameraCells: Set<String> = []
@@ -105,7 +106,7 @@ struct VelaMapView: UIViewRepresentable {
             styleReady = true
             styledDriving = nil
             repaint(mapView)
-            lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""; lastWazeKey = ""
+            lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""; lastSignalsKey = ""; lastWazeKey = ""
             render(mapView)
         }
 
@@ -229,6 +230,17 @@ struct VelaMapView: UIViewRepresentable {
                 l.isVisible = false
                 insert(l)
             }
+
+            // Traffic lights on the route while driving, small and under the cameras, like Waze.
+            let sigSrc = MLNShapeSource(identifier: "vela-signals", shape: nil, options: nil)
+            style.addSource(sigSrc)
+            let sigs = MLNSymbolStyleLayer(identifier: "vela-signals", source: sigSrc)
+            sigs.iconImageName = NSExpression(forConstantValue: "traffic-light")
+            sigs.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            sigs.iconAnchor = NSExpression(forConstantValue: "bottom")
+            sigs.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 14, 0.75, 17, 1.0])
+            sigs.minimumZoomLevel = 14
+            style.addLayer(sigs)
 
             // Speed cameras and plate readers, from zoom 12 in.
             let camSrc = MLNShapeSource(identifier: "vela-cameras", shape: nil, options: nil)
@@ -400,6 +412,7 @@ struct VelaMapView: UIViewRepresentable {
             renderRoutes(style)
             renderPuck(style)
             renderCameras(style)
+            renderSignals(style)
             renderWaze(style)
             renderMine(style)
             if s.transitLines { loadRail(map) }
@@ -445,6 +458,19 @@ struct VelaMapView: UIViewRepresentable {
                 return f
             }
             (style.source(withIdentifier: "vela-cameras") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
+        }
+
+        private func renderSignals(_ style: MLNStyle) {
+            let lights = model.nav?.routeSignals ?? []
+            let key = "\(lights.count)\(lights.first?.lat ?? 0)"
+            guard key != lastSignalsKey else { return }
+            lastSignalsKey = key
+            let features: [MLNPointFeature] = lights.map { p in
+                let f = MLNPointFeature()
+                f.coordinate = CLLocationCoordinate2D(latitude: p.lat, longitude: p.lng)
+                return f
+            }
+            (style.source(withIdentifier: "vela-signals") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
         }
 
         private func renderWaze(_ style: MLNStyle) {

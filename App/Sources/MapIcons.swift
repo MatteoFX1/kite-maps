@@ -39,6 +39,7 @@ enum MapIcons {
         style.setImage(bubble(fill: .white, stroke: UIColor(hex: 0xBDC1C6)), forName: "bubble-alt")
         style.setImage(speedCamera(), forName: "cam-speed")
         style.setImage(plateCamera(), forName: "cam-plate")
+        style.setImage(trafficLight(), forName: "traffic-light")
         for k in WazeAlert.Kind.allCases { style.setImage(waze(k), forName: "waze-\(k.rawValue)") }
         style.setImage(turnHead(), forName: "turn-head")
         style.setImage(dot("smallcircle.filled.circle", UIColor(hex: 0x5F6368)), forName: "pin-stop")
@@ -78,6 +79,20 @@ enum MapIcons {
             UIBezierPath(ovalIn: CGRect(x: 21, y: 18, width: 4, height: 4)).fill()
             amber.setFill()
             UIBezierPath(rect: CGRect(x: 18, y: 26.5, width: 10, height: 3)).fill()
+        }
+    }
+
+    /** A small traffic light, like Waze's: a dark upright box with red, amber and green lamps. */
+    static func trafficLight() -> UIImage {
+        UIGraphicsImageRenderer(size: CGSize(width: 14, height: 30)).image { _ in
+            UIColor.white.setFill()
+            UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: 14, height: 30), cornerRadius: 5).fill()
+            UIColor(hex: 0x263238).setFill()
+            UIBezierPath(roundedRect: CGRect(x: 1.5, y: 1.5, width: 11, height: 27), cornerRadius: 4).fill()
+            for (i, c) in [0xFF3B30, 0xFFB300, 0x34C759].enumerated() {
+                UIColor(hex: UInt32(c)).setFill()
+                UIBezierPath(ovalIn: CGRect(x: 3.5, y: 3.5 + CGFloat(i) * 8, width: 7, height: 7)).fill()
+            }
         }
     }
 

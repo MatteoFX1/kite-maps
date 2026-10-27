@@ -32,6 +32,8 @@ final class Navigator: ObservableObject {
     @Published private(set) var aircraftNear: (aircraft: PoliceAircraft, meters: Double)?
     /** An average speed check the user is driving through, with their average so far. */
     @Published private(set) var averageCheck: AverageCheck?
+    /** Traffic lights on the route, one per junction, drawn on the map like Waze. */
+    @Published private(set) var routeSignals: [LatLng] = []
 
     let destination: Place
     /** Stops still ahead, in trip order; each is dropped once reached. */
@@ -187,6 +189,7 @@ final class Navigator: ObservableObject {
         zones = []
         zoneEntry = nil
         averageCheck = nil
+        routeSignals = []
         let s = AppSettings.shared
         guard route.mode == .drive else { return }
         let line = route.polyline, id = route.id
@@ -202,6 +205,7 @@ final class Navigator: ObservableObject {
             self.routeCameras = CameraAlerts.project(found.cameras, on: line)
             self.route.speedLimits = Overpass.speedLimits(found.ways, on: line)
             self.zones = CameraAlerts.merge(found.zones, CameraAlerts.averageZones(self.routeCameras))
+            self.routeSignals = found.signals
         }
     }
 

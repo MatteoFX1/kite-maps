@@ -110,7 +110,7 @@ if let via, let line = merged.routes.first?.polyline {
 // Cameras and speed limits along the Davis to airport route.
 if let line = merged.routes.first?.polyline, let extra = await Overpass.alongRoute(line, speed: true, plate: true) {
     let limits = Overpass.speedLimits(extra.ways, on: line)
-    print("Along the route: \(extra.cameras.count) cameras, \(extra.ways.count) roads with limits, \(limits.count) changes: \(limits.prefix(10).map { "\(Int($0.startMeters)) m \($0.kmh.map { String(Int(($0 / 1.609344).rounded())) + " mph" } ?? "?")" })")
+    print("Along the route: \(extra.signals.count) traffic lights, \(extra.cameras.count) cameras, \(extra.ways.count) roads with limits, \(limits.count) changes: \(limits.prefix(10).map { "\(Int($0.startMeters)) m \($0.kmh.map { String(Int(($0 / 1.609344).rounded())) + " mph" } ?? "?")" })")
 } else {
     print("Along the route: Overpass failed")
 }

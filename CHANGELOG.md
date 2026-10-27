@@ -7,6 +7,8 @@ the middle number for big milestones.
 
 - **Arrow lower on screen:** while driving, your arrow sits lower down, about three quarters of the
   way, so even more of the screen shows the road ahead. The zoom is the same as before.
+- **Traffic lights on the map:** while you drive, small traffic light icons show on your route,
+  like Waze, one per junction.
 
 ## 0.7.2
 

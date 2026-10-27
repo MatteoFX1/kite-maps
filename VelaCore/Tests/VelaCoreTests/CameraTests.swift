@@ -11,6 +11,19 @@ final class CameraTests: XCTestCase {
         XCTAssertEqual(cams?[1].operatorName, "Flock Safety")
     }
 
+    func testTrafficLights() {
+        // A junction's lights mapped on two roads into it, one by the route's other end, and one off to the side.
+        let json = #"{"elements":[{"type":"node","id":1,"lat":0.0050,"lon":0.0001,"tags":{"highway":"traffic_signals"}},{"type":"node","id":2,"lat":0.0052,"lon":0,"tags":{"highway":"traffic_signals"}},{"type":"node","id":3,"lat":0.0095,"lon":0,"tags":{"highway":"traffic_signals"}},{"type":"node","id":4,"lat":0.003,"lon":0.002,"tags":{"highway":"traffic_signals"}},{"type":"node","id":5,"lat":0.004,"lon":0,"tags":{"highway":"speed_camera"}}]}"#
+        let data = Data(json.utf8)
+        // Lights are never taken for cameras.
+        XCTAssertEqual(Overpass.parse(data)?.map(\.id), [5])
+        let lights = Overpass.parseSignals(data)
+        XCTAssertEqual(lights.count, 4)
+        let line = [LatLng(0, 0), LatLng(0.01, 0)]
+        let on = Overpass.signalsOnRoute(lights, line: line)
+        XCTAssertEqual(on, [LatLng(0.0050, 0.0001), LatLng(0.0095, 0)])
+    }
+
     func testQuery() {
         let q = Overpass.query(filter: "(1,2,3,4)", speed: true, plate: false)
         XCTAssertEqual(q, "[out:json][timeout:25];(node[\"highway\"=\"speed_camera\"](1,2,3,4););out body 4000;")

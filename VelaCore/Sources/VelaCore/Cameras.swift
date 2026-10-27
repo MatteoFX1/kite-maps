@@ -65,16 +65,18 @@ public enum Overpass {
     }
 
     /**
-     * Cameras and posted speed limits along a route in one query: cameras within 150 m, roads
-     * with a `maxspeed` within 12 m. Nil when every mirror failed.
+     * Cameras, posted speed limits and traffic lights along a route in one query: cameras within
+     * 150 m, roads with a `maxspeed` within 12 m, traffic lights within 20 m. Nil when every mirror failed.
      */
-    public static func alongRoute(_ line: [LatLng], speed: Bool, plate: Bool) async -> (cameras: [RoadCamera], ways: [LimitWay], zones: [AverageSpeedZone])? {
-        guard line.count >= 2 else { return ([], [], []) }
+    public static func alongRoute(_ line: [LatLng], speed: Bool, plate: Bool) async
+        -> (cameras: [RoadCamera], ways: [LimitWay], zones: [AverageSpeedZone], signals: [LatLng])? {
+        guard line.count >= 2 else { return ([], [], [], []) }
         // Long drives go in pieces of about 40 km: one query for a whole motorway trip is often
         // too much for the public servers.
         var cams: [Int64: RoadCamera] = [:]
         var ways: [LimitWay] = []
         var zones: [AverageSpeedZone] = []
+        var signals: [LatLng] = []
         var answered = false
         for piece in pieces(line, meters: 40_000) {
             guard let data = await alongQuery(piece, speed: speed, plate: plate) else { continue }
@@ -82,9 +84,10 @@ public enum Overpass {
             for c in parse(data) ?? [] { cams[c.id] = c }
             ways += parseWays(data)
             zones += averageZones(data, on: line)
+            signals += parseSignals(data)
         }
         guard answered else { return nil }
-        return (Array(cams.values), ways, CameraAlerts.merge(zones, []))
+        return (Array(cams.values), ways, CameraAlerts.merge(zones, []), signalsOnRoute(signals, line: line))
     }
 
     /** [line] cut into runs of about [meters], each sharing its first point with the last run's end. */
@@ -116,7 +119,8 @@ public enum Overpass {
         if plate { parts.append("node[\"surveillance:type\"=\"ALPR\"](around:150,\(coords));") }
         parts.append("way[\"highway\"][\"maxspeed\"](around:12,\(coords));")
         if speed { parts.append("relation[\"enforcement\"=\"average_speed\"](around:200,\(coords));") }
-        let q = "[out:json][timeout:40];(" + parts.joined() + ");out body geom 6000;"
+        parts.append("node[\"highway\"=\"traffic_signals\"](around:20,\(coords));")
+        let q = "[out:json][timeout:40];(" + parts.joined() + ");out body geom 8000;"
         for ep in endpoints {
             guard let (data, status) = await fetch(ep, query: q), status == 200, parse(data) != nil,
                   !timedOut(data) else { continue }
@@ -149,6 +153,32 @@ public enum Overpass {
             out.append(AverageSpeedZone(startMeters: a, endMeters: b, kmh: maxspeedKmh(tags["maxspeed"])))
         }
         return out.sorted { $0.startMeters < $1.startMeters }
+    }
+
+    /** Traffic light nodes in an answer (OSM `highway=traffic_signals`). */
+    static func parseSignals(_ data: Data) -> [LatLng] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let elements = root["elements"] as? [[String: Any]] else { return [] }
+        return elements.compactMap { e in
+            guard (e["tags"] as? [String: String])?["highway"] == "traffic_signals",
+                  let lat = e["lat"] as? Double, let lon = e["lon"] as? Double else { return nil }
+            return LatLng(lat, lon)
+        }
+    }
+
+    /**
+     * The traffic lights on the route itself, one per junction: a junction's lights are often mapped
+     * once per road into it, so lights within 40 m of each other along the route are drawn once.
+     */
+    public static func signalsOnRoute(_ signals: [LatLng], line: [LatLng]) -> [LatLng] {
+        guard line.count >= 2 else { return [] }
+        let cum = Geo.cumulative(line)
+        let on = signals.map { ($0, Geo.project($0, on: line, cumulative: cum)) }
+            .filter { $0.1.offset < 20 }
+            .sorted { $0.1.along < $1.1.along }
+        var out: [(LatLng, Double)] = []
+        for (p, at) in on where out.last.map({ at.along - $0.1 >= 40 }) ?? true { out.append((p, at.along)) }
+        return out.map(\.0)
     }
 
     static func parseWays(_ data: Data) -> [LimitWay] {
@@ -261,6 +291,8 @@ public enum Overpass {
         return elements.compactMap { e in
             guard let lat = e["lat"] as? Double, let lon = e["lon"] as? Double else { return nil }
             let tags = e["tags"] as? [String: String] ?? [:]
+            // The same answer holds traffic lights: only cameras are cameras.
+            if tags["highway"] == "traffic_signals" { return nil }
             let id = (e["id"] as? NSNumber)?.int64Value ?? 0
             let plate = tags["surveillance:type"] == "ALPR"
             return RoadCamera(id: id, kind: plate ? .plate : .speed, location: LatLng(lat, lon),
