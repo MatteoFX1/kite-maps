@@ -115,8 +115,9 @@ final class AppSettings: ObservableObject {
         wazeVoice = d.object(forKey: "wazeVoice") as? Bool ?? true
         wazeHeatmap = d.bool(forKey: "wazeHeatmap")
         wazeMaxAge = d.object(forKey: "wazeMaxAge") as? Int ?? 120
-        ninjaKey = d.string(forKey: "ninjaKey") ?? ""
-        WazeNinja.key = ninjaKey
+        let key = d.string(forKey: "ninjaKey") ?? ""
+        ninjaKey = key
+        WazeNinja.key = key
         policeRisk = d.object(forKey: "policeRisk") as? Bool ?? true
         policeAircraft = d.bool(forKey: "policeAircraft")
         home = d.data(forKey: "home").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }
