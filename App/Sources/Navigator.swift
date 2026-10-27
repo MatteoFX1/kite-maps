@@ -104,6 +104,9 @@ final class Navigator: ObservableObject {
     private var spokenWaze: Set<String> = []
     private var wazeAt = Date.distantPast
     private var wazeLoading = false
+    /** Police and crashes from OpenWeb Ninja, kept across reroutes since each ask uses one of the month's few. */
+    @Published private(set) var ninjaAlerts: [WazeAlert] = []
+    private var ninjaAt = Date.distantPast
     private var riskAt = Date.distantPast
     private var riskPast: [PoliceRisk.Report]?
     private var riskSpokenAt = Date.distantPast
@@ -373,12 +376,25 @@ final class Navigator: ObservableObject {
         // Only the next 60 km: on a long drive the rest will have changed by the time you get there.
         let at = progress?.alongMeters ?? 0
         let window = Geo.slice(line, from: max(at - 200, 0), to: at + 60_000)
+        // OpenWeb Ninja only every 10 minutes, for the next 40 km: about 6 asks for an hour's drive.
+        let askNinja = WazeNinja.on && Date().timeIntervalSince(ninjaAt) > 600
+        if askNinja { ninjaAt = Date() }
+        let near = Geo.slice(line, from: max(at - 200, 0), to: at + 40_000)
         Task {
             let found = await Waze.alongRoute(window.count >= 2 ? window : line)
+            if askNinja, near.count >= 2 {
+                let pad = 0.01
+                if let more = await WazeNinja.alerts(south: near.map(\.lat).min()! - pad, west: near.map(\.lng).min()! - pad,
+                                                     north: near.map(\.lat).max()! + pad, east: near.map(\.lng).max()! + pad) {
+                    WazeHistory.shared.record(more)
+                    self.ninjaAlerts = more
+                }
+            }
             self.wazeLoading = false
-            guard let found, self.route.id == id else { return }
-            WazeHistory.shared.record(found)
-            self.routeWaze = Waze.project(found, on: line)
+            guard self.route.id == id else { return }
+            if let found { WazeHistory.shared.record(found) }
+            let closures = found ?? self.routeWaze.map(\.alert).filter { $0.kind == .closure }
+            self.routeWaze = Waze.project(closures + self.ninjaAlerts, on: line)
         }
     }
 

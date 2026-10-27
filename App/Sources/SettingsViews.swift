@@ -133,7 +133,7 @@ struct SettingsView: View {
                         LabeledContent("Road alerts", value: settings.wazeOn ? "On" : "Off")
                     }
                 } footer: {
-                    Text(Waze.shares.contains(.police) ? "Live police, crash and hazard reports from Waze drivers, and police aircraft."
+                    Text(Waze.shares.contains(.police) ? "Live police and crash reports from Waze drivers, road closures, and police aircraft."
                          : "Live road closures from Waze, and police planes and helicopters.")
                 }
                 Section {
@@ -201,6 +201,19 @@ struct WazeSettingsView: View {
         }
     }
 
+    /** How OpenWeb Ninja answered last time, in plain words. */
+    private func ninjaState(_ s: Waze.Status) -> (text: String, color: Color) {
+        let mins = Int(Date().timeIntervalSince(s.at) / 60)
+        let when = mins < 1 ? "just now" : "\(mins) min ago"
+        switch s.code {
+        case 200: return ("Working: \(s.summary), \(when)", Color(hex: 0x188038))
+        case 0: return ("No connection (\(when))", .orange)
+        case 401, 403: return ("Key not accepted: check it's copied in full", .red)
+        case 429: return ("No checks left this month", .red)
+        default: return ("OpenWeb Ninja error \(s.code) (\(when))", .orange)
+        }
+    }
+
     var body: some View {
         Form {
             Section {
@@ -227,6 +240,27 @@ struct WazeSettingsView: View {
                         // What the hidden live map page saw, to send to whoever looks into it.
                         Text("Details: " + WazeWeb.shared.note).font(.caption2.monospaced())
                     }
+                }
+                Section {
+                    TextField("Paste your key here", text: $settings.ninjaKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.subheadline.monospaced())
+                    if WazeNinja.on {
+                        LabeledContent("Checks used this month", value: "\(WazeNinja.usedThisMonth) of 50")
+                        if let s = WazeNinja.lastStatus {
+                            HStack(spacing: 8) {
+                                Circle().fill(ninjaState(s).color).frame(width: 10, height: 10)
+                                Text(ninjaState(s).text).font(.subheadline)
+                            }
+                        }
+                    } else {
+                        Link("Get a free key", destination: URL(string: "https://app.openwebninja.com/api/waze")!)
+                    }
+                } header: {
+                    Text("Police and crashes")
+                } footer: {
+                    Text("Waze's live map only shares road closures now. For police, mobile speed cameras and crashes, Kite can use OpenWeb Ninja's Waze service with your own free key: sign up (no card needed), open the Waze API and copy the key in here. The free plan has 50 checks a month, so Kite only checks while you're navigating, once every 10 minutes: about 8 hour-long drives.")
                 }
                 Section("Show and warn about") {
                     // Only what Waze still shares (see Waze.shares): no switches that can't do anything.

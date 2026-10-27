@@ -506,10 +506,14 @@ struct VelaMapView: UIViewRepresentable {
             let s = model.settings
             let history = WazeHistory.shared.sightings
             let kinds = s.wazeKinds.map(\.rawValue).sorted().joined()
-            let key = "\(s.wazeOn)\(s.wazeOnMap)\(s.wazeHeatmap)\(s.wazeMaxAge)\(kinds)\(wazeAt.timeIntervalSince1970)\(history.count)"
+            // While navigating, police and crashes from OpenWeb Ninja too (the live map has only closures).
+            let ninja = model.nav?.ninjaAlerts ?? []
+            let key = "\(s.wazeOn)\(s.wazeOnMap)\(s.wazeHeatmap)\(s.wazeMaxAge)\(kinds)\(wazeAt.timeIntervalSince1970)\(history.count)\(ninja.map(\.id).joined())"
             guard key != lastWazeKey else { return }
             lastWazeKey = key
-            let shown = s.wazeOn && s.wazeOnMap ? wazeAlerts.filter { s.shows($0) } : []
+            let ids = Set(wazeAlerts.map(\.id))
+            let all = wazeAlerts + ninja.filter { !ids.contains($0.id) }
+            let shown = s.wazeOn && s.wazeOnMap ? all.filter { s.shows($0) } : []
             let features: [MLNPointFeature] = shown.map { a in
                 let f = MLNPointFeature()
                 f.coordinate = CLLocationCoordinate2D(latitude: a.location.lat, longitude: a.location.lng)
@@ -524,7 +528,7 @@ struct VelaMapView: UIViewRepresentable {
             guard heatOn else { return }
             var seen = Set(history.map(\.id))
             var pts = history.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
-            for a in wazeAlerts where a.kind == .police && seen.insert(a.id).inserted {
+            for a in all where a.kind == .police && seen.insert(a.id).inserted {
                 pts.append(CLLocationCoordinate2D(latitude: a.location.lat, longitude: a.location.lng))
             }
             let heat: [MLNPointFeature] = pts.map { c in

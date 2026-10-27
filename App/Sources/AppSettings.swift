@@ -55,6 +55,18 @@ final class AppSettings: ObservableObject {
     @Published var wazeOnMap: Bool { didSet { d.set(wazeOnMap, forKey: "wazeOnMap") } }
     /** Chime and say "Police reported ahead" while navigating. */
     @Published var wazeVoice: Bool { didSet { d.set(wazeVoice, forKey: "wazeVoice") } }
+    /**
+     * The person's OpenWeb Ninja key, for police and crash reports while navigating. Adding one
+     * turns those kinds on, since until then there was no switch for them.
+     */
+    @Published var ninjaKey: String {
+        didSet {
+            let k = ninjaKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            d.set(k, forKey: "ninjaKey")
+            if WazeNinja.key?.isEmpty ?? true, !k.isEmpty { wazeKinds.formUnion([.police, .accident]) }
+            WazeNinja.key = k
+        }
+    }
     /** Reports older than this are ignored, in minutes; 0 keeps everything Waze still lists. */
     @Published var wazeMaxAge: Int { didSet { d.set(wazeMaxAge, forKey: "wazeMaxAge") } }
     /** A glow where police get reported, from what Kite has seen on this phone. */
@@ -103,6 +115,8 @@ final class AppSettings: ObservableObject {
         wazeVoice = d.object(forKey: "wazeVoice") as? Bool ?? true
         wazeHeatmap = d.bool(forKey: "wazeHeatmap")
         wazeMaxAge = d.object(forKey: "wazeMaxAge") as? Int ?? 120
+        ninjaKey = d.string(forKey: "ninjaKey") ?? ""
+        WazeNinja.key = ninjaKey
         policeRisk = d.object(forKey: "policeRisk") as? Bool ?? true
         policeAircraft = d.bool(forKey: "policeAircraft")
         home = d.data(forKey: "home").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }

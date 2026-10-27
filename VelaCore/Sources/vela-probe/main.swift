@@ -18,6 +18,15 @@ if args.count > 1, args[1] == "incidents" {
     await googleIncidents()
     exit(0)
 }
+if args.count > 1, args[1] == "ninja" {
+    // One OpenWeb Ninja ask over central London (uses one of the key's monthly asks).
+    // Usage: NINJA_KEY=... swift run vela-probe ninja
+    WazeNinja.key = ProcessInfo.processInfo.environment["NINJA_KEY"]
+    let found = await WazeNinja.alerts(south: 51.49, west: -0.20, north: 51.54, east: -0.05)
+    print("ninja: HTTP \(WazeNinja.lastStatus?.code ?? 0), \(WazeNinja.lastStatus?.summary ?? "nothing")")
+    for a in found ?? [] { print(" \(a.title) · \(a.street ?? "?") · \(a.reportedAt) · \(a.thumbsUp) thumbs") }
+    exit(found == nil ? 1 : 0)
+}
 if args.count > 1, args[1] == "body" {
     await rawBody()
     exit(0)

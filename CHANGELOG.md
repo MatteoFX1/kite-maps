@@ -5,6 +5,11 @@ the middle number for big milestones.
 
 ## 0.7.3
 
+- **Police and crash reports are back (with your own free key):** Settings › Road alerts › Police
+  and crashes. Paste a free OpenWeb Ninja key and Kite warns about police, mobile speed cameras and
+  crashes from Waze drivers while you navigate, shows them on the map, and fills the police heat
+  map. The free plan has 50 checks a month, so Kite checks every 10 minutes while navigating only,
+  and shows how many you've used.
 - **"Waze integration" is now "Road alerts":** it only lists what really works today. Waze
   only shares road closures now, so the police, crash and hazard switches and the heat map are
   gone until Waze (or Google) shares those reports again. Police aircraft stay.
