@@ -241,6 +241,26 @@ public enum Geo {
     }
 
     /** Compass bearing from a to b, degrees. */
+    /**
+     * Which side of the road [p] is on at the end of [line] ("your destination is on the left"):
+     * nil when it's on the line itself or behind/past its end.
+     */
+    public static func sideAtEnd(_ p: LatLng, of line: [LatLng]) -> String? {
+        let cum = cumulative(line)
+        guard let total = cum.last, total > 20 else { return nil }
+        let a = point(along: line, meters: max(0, total - 30), cumulative: cum), b = line[line.count - 1]
+        let k = cos(b.lat * .pi / 180) * 111_320.0
+        let dx = (b.lng - a.lng) * k, dy = (b.lat - a.lat) * 110_540
+        let px = (p.lng - a.lng) * k, py = (p.lat - a.lat) * 110_540
+        let len = (dx * dx + dy * dy).squareRoot()
+        guard len > 5 else { return nil }
+        // Sideways from the road, and not well beyond its end.
+        let across = (dx * py - dy * px) / len
+        let ahead = (dx * px + dy * py) / len
+        guard abs(across) > 8, ahead > -20, ahead < len + 60 else { return nil }
+        return across > 0 ? "left" : "right"
+    }
+
     public static func bearing(_ a: LatLng, _ b: LatLng) -> Double {
         let p1 = a.lat * .pi / 180, p2 = b.lat * .pi / 180, dl = (b.lng - a.lng) * .pi / 180
         let y = sin(dl) * cos(p2)

@@ -11,6 +11,19 @@ final class CameraTests: XCTestCase {
         XCTAssertEqual(cams?[1].operatorName, "Flock Safety")
     }
 
+    func testTrafficLights() {
+        // A junction's lights mapped on two roads into it, one by the route's other end, and one off to the side.
+        let json = #"{"elements":[{"type":"node","id":1,"lat":0.0050,"lon":0.0001,"tags":{"highway":"traffic_signals"}},{"type":"node","id":2,"lat":0.0052,"lon":0,"tags":{"highway":"traffic_signals"}},{"type":"node","id":3,"lat":0.0095,"lon":0,"tags":{"highway":"traffic_signals"}},{"type":"node","id":4,"lat":0.003,"lon":0.002,"tags":{"highway":"traffic_signals"}},{"type":"node","id":5,"lat":0.004,"lon":0,"tags":{"highway":"speed_camera"}}]}"#
+        let data = Data(json.utf8)
+        // Lights are never taken for cameras.
+        XCTAssertEqual(Overpass.parse(data)?.map(\.id), [5])
+        let lights = Overpass.parseSignals(data)
+        XCTAssertEqual(lights.count, 4)
+        let line = [LatLng(0, 0), LatLng(0.01, 0)]
+        let on = Overpass.signalsOnRoute(lights, line: line)
+        XCTAssertEqual(on, [LatLng(0.0050, 0.0001), LatLng(0.0095, 0)])
+    }
+
     func testQuery() {
         let q = Overpass.query(filter: "(1,2,3,4)", speed: true, plate: false)
         XCTAssertEqual(q, "[out:json][timeout:25];(node[\"highway\"=\"speed_camera\"](1,2,3,4););out body 4000;")
@@ -140,5 +153,47 @@ final class StreetViewTests: XCTestCase {
         XCTAssertEqual(p?.heading ?? 0, 201.5, accuracy: 0.01)
         XCTAssertEqual(p?.size(zoom: 3).width, 3328)
         XCTAssertNil(StreetView.parse(#"[[5,"search returned no images"]]"#))
+    }
+}
+
+final class RoadCacheTests: XCTestCase {
+    func testKnownRoadsComeBackForARouteNearby() {
+        let cache = RoadCache(file: nil)
+        let road = Overpass.LimitWay(id: 7, kmh: 48.3, line: [LatLng(50.900, -1.400), LatLng(50.905, -1.400)])
+        let far = Overpass.LimitWay(id: 8, kmh: 112, line: [LatLng(51.500, -0.100), LatLng(51.505, -0.100)])
+        cache.add(ways: [road, far], cameras: [RoadCamera(id: 3, kind: .speed, location: LatLng(50.902, -1.4001))],
+                  signals: [(id: 9, at: LatLng(50.903, -1.400))])
+        // The same road seen again is kept once.
+        cache.add(ways: [road], cameras: [], signals: [])
+        let line = [LatLng(50.899, -1.400), LatLng(50.906, -1.400)]
+        let known = cache.along(line)
+        XCTAssertEqual(known.ways.map(\.id), [7])
+        XCTAssertEqual(known.cameras.map(\.id), [3])
+        XCTAssertEqual(known.signals.count, 1)
+        XCTAssertEqual(Overpass.speedLimits(known.ways, on: line).compactMap(\.kmh), [48.3])
+    }
+
+    func testNothingKnownFarAway() {
+        let cache = RoadCache(file: nil)
+        cache.add(ways: [Overpass.LimitWay(id: 1, kmh: 50, line: [LatLng(0, 0), LatLng(0.005, 0)])], cameras: [], signals: [])
+        XCTAssertTrue(cache.along([LatLng(10, 10), LatLng(10.01, 10)]).ways.isEmpty)
+    }
+}
+
+final class ValhallaTests: XCTestCase {
+    func testLimitsFromMatchedRoads() throws {
+        // Two roads at 30 mph (48 km/h), one at 60 (97), one not known.
+        let json = """
+        {"shape":"_ibE_ibE_ibE?_ibE?_ibE?","edges":[
+         {"speed_limit":48,"way_id":11,"length":0.1,"begin_shape_index":0,"end_shape_index":1},
+         {"speed_limit":48,"way_id":12,"length":0.1,"begin_shape_index":1,"end_shape_index":2},
+         {"speed_limit":97,"way_id":13,"length":0.3,"begin_shape_index":2,"end_shape_index":3},
+         {"way_id":14,"length":0.1,"begin_shape_index":3,"end_shape_index":4}]}
+        """
+        let p = try XCTUnwrap(Valhalla.parse(Data(json.utf8)))
+        XCTAssertEqual(p.limits.map(\.kmh), [48, 97, nil])
+        XCTAssertEqual(p.limits.map { $0.startMeters.rounded() }, [0, 200, 500])
+        XCTAssertEqual(p.meters, 600, accuracy: 0.01)
+        XCTAssertEqual(p.ways.map(\.id), [11, 12, 13])
     }
 }

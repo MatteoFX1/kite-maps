@@ -57,7 +57,7 @@ final class WazeHistory {
         return true
     }
 
-    /** Forget every remembered report (Settings › Waze integration). */
+    /** Forget every remembered report (Settings › Road alerts). */
     func clear() {
         sightings = []
         ids = []

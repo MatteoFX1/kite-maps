@@ -131,10 +131,11 @@ struct NavigationOverlay: View {
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .padding(.horizontal, 14).frame(height: 36)
                         .foregroundColor(.white)
-                        .background(Capsule().fill(Color.black.opacity(0.78)))
+                        .background(Capsule().fill(Color(hex: 0x0F172A).opacity(0.92)))
+                        .overlay(Capsule().strokeBorder(Color(hex: 0x2DD4BF).opacity(0.8), lineWidth: 1.5))
                         // Between the speed sign and the mute button, which sit level with it now the car is lower.
                         .frame(maxWidth: g.size.width - 240)
-                        .position(x: g.size.width / 2, y: NavGlide.carY(g.size.height) + 46)
+                        .position(x: g.size.width / 2, y: NavGlide.carY(g.size.height) + 50)
                 }
             }
             .ignoresSafeArea()
@@ -166,7 +167,7 @@ struct NavigationOverlay: View {
                                 model.overviewNav()
                             }
                         }
-                        StepsList(route: nav.route)
+                        StepsList(route: nav.route, from: nav.progress?.nextIndex ?? 0)
                     }
                     .padding(.horizontal, 16)
                 }
@@ -221,10 +222,20 @@ struct InstructionBanner: View {
                             .monospacedDigit()
                             .lineLimit(1).minimumScaleFactor(0.6)
                     }
-                    Text(Self.headline(m))
-                        .font(.system(size: 23, weight: .bold))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.75)
+                    if let parts = Self.split(Self.headline(m)) {
+                        // "At the end of the road, turn left" small, the road you turn onto big, like Waze.
+                        Text(parts.0)
+                            .font(.system(size: 17, weight: .semibold)).opacity(0.9)
+                            .lineLimit(1).minimumScaleFactor(0.75)
+                        Text(parts.1)
+                            .font(.system(size: 25, weight: .heavy))
+                            .lineLimit(2).minimumScaleFactor(0.7)
+                    } else {
+                        Text(Self.headline(m))
+                            .font(.system(size: 23, weight: .bold))
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.75)
+                    }
                     if !refs.isEmpty {
                         HStack(spacing: 6) { ForEach(refs, id: \.self) { RoadShield(ref: $0) } }
                             .padding(.top, 2)
@@ -266,8 +277,30 @@ struct InstructionBanner: View {
             HStack(spacing: 6) {
                 Text("Then").font(.system(size: 16, weight: .bold)).opacity(0.85)
                 Image(systemName: maneuverSymbol(then.type)).font(.system(size: 20, weight: .heavy))
+                if then.type == .roundabout, let n = then.exit {
+                    // Which exit, so the next roundabout is known before the banner changes.
+                    Text("\(n)").font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
+                        .frame(minWidth: 22, minHeight: 22).background(Circle().fill(Color(hex: 0x0F766E)))
+                }
             }
         }
+    }
+
+    /**
+     * A long instruction split into what to do and where: "At the end of the road, turn left onto
+     * Burgess Road" is "At the end of the road, turn left" and "Burgess Road". Short ones stay whole.
+     */
+    static func split(_ text: String) -> (String, String)? {
+        guard text.count > 26 else { return nil }
+        for word in [" onto ", " towards ", " toward "] {
+            guard let r = text.range(of: word, options: .backwards) else { continue }
+            let place = text[r.upperBound...].trimmingCharacters(in: .whitespaces)
+            // "Take the exit toward" keeps its last word, so it still reads as a sentence.
+            let action = word == " onto " ? String(text[..<r.lowerBound]) : String(text[..<r.upperBound]).trimmingCharacters(in: .whitespaces)
+            guard !place.isEmpty, action.count >= 4 else { continue }
+            return (action, place)
+        }
+        return nil
     }
 
     /** "6th exit" for a roundabout (the picture says the rest), else the instruction. */
@@ -677,7 +710,7 @@ struct RouteWazeSummary: View {
         VStack(alignment: .leading, spacing: 0) {
             if let counts {
                 if counts.isEmpty {
-                    Label("No Waze reports on this route", systemImage: "checkmark.shield.fill")
+                    Label("No road closures on this route", systemImage: "checkmark.shield.fill")
                         .font(.system(size: 16, weight: .semibold)).foregroundColor(Vela.open)
                 } else {
                     WrapLayout(spacing: 8, lineSpacing: 8) {
@@ -1190,6 +1223,11 @@ struct RoundaboutDiagram: View {
             head.addLine(to: right)
             head.closeSubpath()
             ctx.fill(head, with: .color(.white))
+            // The exit number in the middle, as well as "6th exit" beside the picture.
+            let digits = Text("\(exit)")
+                .font(.system(size: size.width * (exit >= 10 ? 0.17 : 0.22), weight: .heavy))
+                .foregroundColor(.white)
+            ctx.draw(digits, at: c)
         }
         .accessibilityLabel("Roundabout, take exit \(exit)")
     }

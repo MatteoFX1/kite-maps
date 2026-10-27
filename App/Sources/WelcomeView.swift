@@ -82,34 +82,40 @@ struct WazeIntroView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var on = true
 
+    /** Waze still shares police, crash and hazard reports. */
+    private static var police: Bool { Waze.shares.contains(.police) }
+
     var body: some View {
         // Scrolls with very big text, with the button always in reach at the bottom.
         ScrollView {
         VStack(alignment: .leading, spacing: 22) {
             Spacer(minLength: 20)
             HStack(spacing: 10) {
-                WazeBadge(kind: .police, size: 56)
-                WazeBadge(kind: .accident, size: 56)
-                WazeBadge(kind: .hazard, size: 56)
+                // Only kinds Waze still shares, so the picture matches what Kite can really show.
+                ForEach(Self.police ? [WazeAlert.Kind.police, .accident, .hazard] : [.closure], id: \.self) {
+                    WazeBadge(kind: $0, size: 56)
+                }
             }
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("Waze alerts").font(.largeTitle.weight(.bold))
+                    Text("Road alerts").font(.largeTitle.weight(.bold))
                     Text("BETA").font(.caption.weight(.heavy))
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .foregroundColor(.white)
                         .background(Capsule().fill(Color(hex: 0xF29900)))
                 }
-                Text("Live police, crash and hazard reports from Waze drivers, on the map and as warnings while you drive, plus a police heat map and risk score.")
+                Text(Self.police
+                     ? "Live police, crash and hazard reports from Waze drivers, on the map and as warnings while you drive, plus a police heat map and risk score."
+                     : "Live road closures from Waze, on the map and as warnings while you drive.")
                     .font(.title3).foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             VStack(spacing: 12) {
-                option(title: "Turn on Waze alerts", detail: "Kite asks Waze anonymously about the area you're looking at and your route. Reports Kite sees are kept only on this phone.",
+                option(title: "Turn on road alerts", detail: "Kite asks Waze anonymously about the area you're looking at and your route. Reports Kite sees are kept only on this phone.",
                        icon: "bell.badge", picked: on) { on = true }
                 option(title: "Not now", detail: "Nothing is sent to Waze.", icon: "bell.slash", picked: !on) { on = false }
             }
-            Text("This is a beta: Waze doesn't officially allow other apps to read its live map, so it may stop working. You can change this any time in Settings › Waze integration.")
+            Text("This is a beta: Waze doesn't officially allow other apps to read its live map, so it may stop working. You can change this any time in Settings › Road alerts.")
                 .font(.footnote).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(24)

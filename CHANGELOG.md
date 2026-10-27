@@ -3,6 +3,46 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.3
+
+- **Police and crash alerts are back (with your own free key):** Settings › Road alerts › Police
+  and crashes. Paste a free OpenWeb Ninja key and Kite warns you about police, mobile speed
+  cameras and crashes reported by Waze drivers, shows them on the map and fills the police heat
+  map. The free plan has 50 checks a month, so Kite only checks while you navigate, once every 10
+  minutes, and shows how many you've used.
+- **"Waze integration" is now "Road alerts":** it only shows what really works. Without a key
+  that's road closures and police aircraft, since Waze's live map no longer shares anything else.
+- **New map look, Waze-style in Kite's teal:** a thicker teal route with chevrons, a chunky white
+  turn arrow, your arrow on a disc (white by day, navy at night), and the road you've driven
+  fades out. Your location dot and buttons are teal too.
+- **Arrow lower on screen:** your arrow sits about three quarters of the way down, so you see more
+  road ahead. The zoom is the same as before. Sideways, it no longer sits on the trip bar.
+- **Traffic lights on the map** along your route while you drive, like Waze.
+- **Clearer roundabouts:** the map arrow goes all the way round to your exit, the exit number is
+  in the middle of the roundabout picture, the "Then" chip shows the next roundabout's exit, and
+  exit numbers now match the signs (Millbrook is the 2nd exit).
+- **Bigger road names in the turn banner:** "At the end of the road, turn left" small, and
+  "Burgess Road" big underneath.
+- **Speed limits show much sooner,** usually within a second or two, even on roads you've never
+  driven, and roads you've driven before are remembered.
+- **Calmer camera warnings:** one warning per camera, no warnings for cameras on the other side
+  of a dual carriageway, and a row of motorway cameras is said once.
+- **Live traffic on the way:** every few minutes Kite checks the traffic again, so your arrival
+  time stays right, and if a much faster way turns up it takes it and tells you.
+- **Better voice:** road names said in full ("Road", not "Rd"), "a quarter of a
+  mile", "Continue on M27 for 7 miles" on long stretches, motorways by their number, which side
+  your destination is on, and quieter while you're on a phone call.
+- **Trips end on their own:** parking a little short of the pin counts as arriving, and the trip
+  closes a few minutes later so your battery isn't drained.
+- **No more "Rerouting" in a car park** before you've reached the road, and asking for directions
+  while driving gives routes that go the way you're facing.
+- **British words:** "slip road", "car park", and search puts the place you typed first (no more
+  The Body Shop above Whiteley Shopping Centre).
+- **Trip list while driving** starts at your next turn, and route time bubbles are a little bigger.
+- **Tidier Settings, like Waze:** a short menu of big rows (Voice & driving, Cameras & speed, Road
+  alerts, Map & display, My places, Privacy, About), each opening its own page. Every setting is
+  still there and works the same.
+
 ## 0.7.2
 
 - **One speed sign:** your speed and the speed limit are now one sign in the bottom left, like

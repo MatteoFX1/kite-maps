@@ -247,6 +247,9 @@ final class RoutingTests: XCTestCase {
         let off = OSRM.instruction(type: "off ramp", modifier: "slight left", road: "M27", exit: nil, mode: .drive,
                                    signs: .init(destinations: "A335: Eastleigh, Southampton", exits: "5", from: "M27"))
         XCTAssertEqual(off, "Take exit 5 toward Eastleigh and Southampton")
+        let bracket = OSRM.instruction(type: "off ramp", modifier: "slight left", road: "M27", exit: nil, mode: .drive,
+                                       signs: .init(destinations: "A32: (A32) Alton, Fareham", exits: "10", from: "M27"))
+        XCTAssertEqual(bracket, "Take exit 10 toward Alton and Fareham")
         let bare = OSRM.instruction(type: "off ramp", modifier: "slight left", road: "M27", exit: nil, mode: .drive,
                                     signs: .init(destinations: nil, exits: nil, from: "M27"))
         XCTAssertEqual(bare, "Take the exit", "no 'toward M27' while leaving the M27")
@@ -257,5 +260,82 @@ final class RoutingTests: XCTestCase {
                        "Turn right to stay on A3222")
         XCTAssertEqual(OSRM.instruction(type: "continue", modifier: "uturn", road: "Bridge Road", exit: nil, mode: .drive),
                        "Make a U-turn on Bridge Road")
+    }
+
+    func testNamedRoundaboutWording() {
+        XCTAssertEqual(OSRM.instruction(type: "roundabout", modifier: nil, road: "Millbrook Roundabout", exit: nil, mode: .drive),
+                       "Go straight through Millbrook Roundabout")
+        XCTAssertEqual(OSRM.instruction(type: "roundabout", modifier: nil, road: "Redbridge Roundabout", exit: 2, mode: .drive),
+                       "At Redbridge Roundabout, take the 2nd exit")
+        XCTAssertEqual(OSRM.instruction(type: "roundabout", modifier: nil, road: "A33", exit: 3, mode: .drive),
+                       "At the roundabout, take the 3rd exit onto A33")
+    }
+}
+
+final class SpokenTextTests: XCTestCase {
+    func testRoadNamesSaidInFull() {
+        XCTAssertEqual(SpokenText.forVoice("Take the exit toward Stoneham Wy."), "Take the exit toward Stoneham Way.")
+        XCTAssertEqual(SpokenText.forVoice("Slight left onto the ramp to So'ton"), "Slight left onto the ramp to Southampton")
+        XCTAssertEqual(SpokenText.forVoice("Turn right onto Burgess Rd"), "Turn right onto Burgess Road")
+        XCTAssertEqual(SpokenText.forVoice("Turn left onto Princes St."), "Turn left onto Princes Street.")
+        XCTAssertEqual(SpokenText.forVoice("Turn left onto St Mary's Rd"), "Turn left onto Saint Mary's Road")
+        XCTAssertEqual(SpokenText.forVoice("At St Mary's Roundabout, take the 2nd exit"), "At Saint Mary's Roundabout, take the 2nd exit")
+        XCTAssertEqual(SpokenText.forVoice("Merge onto A33 N"), "Merge onto A33 north")
+        XCTAssertEqual(SpokenText.forVoice("Merge onto A57(M)"), "Merge onto A57 M")
+        XCTAssertEqual(SpokenText.forVoice("Turn left onto Princes St. Then turn right"), "Turn left onto Princes Street. Then turn right")
+        XCTAssertEqual(SpokenText.forVoice("Starting route. Head toward Highfield Rd."), "Starting route. Head toward Highfield Road.")
+        // Words that only start like a short form stay as they are.
+        XCTAssertEqual(SpokenText.forVoice("Continue onto Drove Road toward Romsey"), "Continue onto Drove Road toward Romsey")
+        XCTAssertEqual(SpokenText.forVoice("Turn left onto Avenue Road"), "Turn left onto Avenue Road")
+    }
+}
+
+final class ExitNumberTests: XCTestCase {
+    func testExitFromWords() {
+        XCTAssertEqual(DirectionsParser.exitNumber(in: "At the roundabout, take the 3rd exit onto Hill Ln"), 3)
+        XCTAssertEqual(DirectionsParser.exitNumber(in: "At the roundabout, take the 12th exit"), 12)
+        XCTAssertEqual(DirectionsParser.exitNumber(in: "At the roundabout, take the second exit"), 2)
+        XCTAssertNil(DirectionsParser.exitNumber(in: "At the roundabout, continue straight"))
+    }
+}
+
+final class BritishWordsTests: XCTestCase {
+    func testRampIsSlipRoad() {
+        XCTAssertEqual(British.words("Take the ramp to Southampton"), "Take the slip road to Southampton")
+        XCTAssertEqual(British.words("Slight left onto the ramp to So'ton"), "Slight left onto the slip road to So'ton")
+        XCTAssertEqual(British.words("Turn left onto Rampart Road"), "Turn left onto Rampart Road")
+        XCTAssertEqual(British.words("Exit the parking lot toward Park Walk"), "Exit the car park toward Park Walk")
+    }
+}
+
+
+final class GoogleExitTests: XCTestCase {
+    func testGoogleExitCountWins() {
+        var a = Maneuver(type: .roundabout, instruction: "Go straight through Millbrook Roundabout", location: LatLng(0, 0),
+                         alongMeters: 2662, distanceMeters: 60, road: "Millbrook Roundabout", laneHint: nil)
+        var off = Maneuver(type: .roundabout, instruction: "Exit the roundabout onto Tebourba Way", location: LatLng(0, 0),
+                           alongMeters: 2726, distanceMeters: 0, road: "Tebourba Way", laneHint: nil)
+        off.leavesRoundabout = true
+        off.exit = 1
+        a.exit = nil
+        var steps = [a, off]
+        var g = Maneuver(type: .roundabout, instruction: "At the roundabout, take the 2nd exit", location: LatLng(0, 0),
+                         alongMeters: 2660, distanceMeters: 0, road: nil, laneHint: nil)
+        g.exit = 2
+        StepMerge.addGoogleExits(&steps, from: [g])
+        XCTAssertEqual(steps[0].exit, 2)
+        XCTAssertEqual(steps[0].instruction, "At Millbrook Roundabout, take the 2nd exit")
+        XCTAssertEqual(steps[1].exit, 2)
+    }
+}
+
+final class DestinationSideTests: XCTestCase {
+    func testSide() {
+        // Driving north up a road; a place 30 m east of the end is on the right.
+        let line = [LatLng(50.900, -1.400), LatLng(50.901, -1.400)]
+        XCTAssertEqual(Geo.sideAtEnd(LatLng(50.901, -1.3996), of: line), "right")
+        XCTAssertEqual(Geo.sideAtEnd(LatLng(50.901, -1.4004), of: line), "left")
+        XCTAssertNil(Geo.sideAtEnd(LatLng(50.901, -1.400), of: line), "on the road itself")
+        XCTAssertNil(Geo.sideAtEnd(LatLng(50.910, -1.3996), of: line), "a kilometre past the end")
     }
 }

@@ -43,7 +43,41 @@ public enum SuggestParser {
             if let near { p.distanceMeters = near.distance(to: p.location) }
             out.places.append(p)
         }
+        out.places = closeMatchesFirst(out.places, query: query(of: root))
         return out
+    }
+
+    /** What was typed, as Google echoes it at [0][0]. */
+    static func query(of root: Any) -> String { str(at(root, 0, 0)) ?? "" }
+
+    /**
+     * Places whose name is close to what was typed come first, keeping Google's order otherwise.
+     * Google sometimes puts a shop inside a place first ("The Body Shop, Whiteley Village" for
+     * "Whiteley Shopping Centre"), so tapping the top row went to the wrong place.
+     */
+    static func closeMatchesFirst(_ places: [Place], query: String) -> [Place] {
+        let q = words(query)
+        guard !q.isEmpty else { return places }
+        // 0: the name is what was typed; 1: most typed words are in it; 2: some; 3: none.
+        func tier(_ p: Place) -> Int {
+            let n = words(p.name)
+            // The last word may still be being typed: "whiteley shop" matches "Shopping".
+            let hits = q.enumerated().filter { i, w in
+                n.contains(w) || (i == q.count - 1 && n.contains { $0.hasPrefix(w) })
+            }.count
+            if hits == q.count && hits == n.count { return 0 }
+            let share = Double(hits) / Double(q.count)
+            return share >= 0.6 ? 1 : (share > 0 ? 2 : 3)
+        }
+        return places.enumerated().map { (i: $0.offset, p: $0.element, t: tier($0.element)) }
+            .sorted { $0.t != $1.t ? $0.t < $1.t : $0.i < $1.i }.map(\.p)
+    }
+
+    static func words(_ s: String) -> [String] {
+        s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            .replacingOccurrences(of: "'", with: "").replacingOccurrences(of: "\u{2019}", with: "")
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+            .filter { !["the", "and", "of"].contains($0) }
     }
 
     /** The `d` string of the first `{...}` object in the body. */

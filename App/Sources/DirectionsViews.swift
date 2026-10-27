@@ -53,7 +53,7 @@ struct EndpointsCard: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
             VStack(spacing: 0) {
-                endpoint(icon: "circle", color: Vela.routeBlue, text: state.reversed ? state.destination.name : "Your location")
+                endpoint(icon: "circle", color: Vela.tealLight, text: state.reversed ? state.destination.name : "Your location")
                 ForEach(Array(state.stops.enumerated()), id: \.offset) { i, stop in
                     Divider().padding(.leading, 30)
                     HStack(spacing: 12) {
@@ -337,11 +337,13 @@ struct TripBody: View {
 
 struct StepsList: View {
     let route: Route
+    /** While driving: start at the next step, so turns already made aren't listed. */
+    var from = 0
 
     /** The steps worth saying, each with the length of the quiet name changes after it added on. */
     private var shown: [Maneuver] {
         var out: [Maneuver] = []
-        for m in route.maneuvers {
+        for m in route.maneuvers.dropFirst(min(max(from, 0), route.maneuvers.count)) {
             if m.silent, !out.isEmpty { out[out.count - 1].distanceMeters += m.distanceMeters }
             else if !m.silent { out.append(m) }
         }
