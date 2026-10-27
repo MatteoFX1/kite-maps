@@ -14,6 +14,8 @@ the middle number for big milestones.
   chip shows which exit to take, so you know before you get there.
 - **Sideways phone:** your arrow no longer sits on top of the trip bar when the phone is turned
   sideways.
+- **Road alerts look matches what it does:** the intro and the Layers tile show a road-closure
+  icon instead of police, crash and hazard ones, and the tile is called "Road alerts".
 - **Traffic lights on the map:** while you drive, small traffic light icons show on your route,
   like Waze, one per junction.
 - **New map look, Waze-style in Kite's teal:** a thicker teal route with a darker edge and

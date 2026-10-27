@@ -82,15 +82,19 @@ struct WazeIntroView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var on = true
 
+    /** Waze still shares police, crash and hazard reports. */
+    private static var police: Bool { Waze.shares.contains(.police) }
+
     var body: some View {
         // Scrolls with very big text, with the button always in reach at the bottom.
         ScrollView {
         VStack(alignment: .leading, spacing: 22) {
             Spacer(minLength: 20)
             HStack(spacing: 10) {
-                WazeBadge(kind: .police, size: 56)
-                WazeBadge(kind: .accident, size: 56)
-                WazeBadge(kind: .hazard, size: 56)
+                // Only kinds Waze still shares, so the picture matches what Kite can really show.
+                ForEach(Self.police ? [WazeAlert.Kind.police, .accident, .hazard] : [.closure], id: \.self) {
+                    WazeBadge(kind: $0, size: 56)
+                }
             }
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -100,7 +104,7 @@ struct WazeIntroView: View {
                         .foregroundColor(.white)
                         .background(Capsule().fill(Color(hex: 0xF29900)))
                 }
-                Text(Waze.shares.contains(.police)
+                Text(Self.police
                      ? "Live police, crash and hazard reports from Waze drivers, on the map and as warnings while you drive, plus a police heat map and risk score."
                      : "Live road closures from Waze, on the map and as warnings while you drive.")
                     .font(.title3).foregroundColor(.secondary)

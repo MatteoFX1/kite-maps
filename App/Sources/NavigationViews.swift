@@ -710,7 +710,7 @@ struct RouteWazeSummary: View {
         VStack(alignment: .leading, spacing: 0) {
             if let counts {
                 if counts.isEmpty {
-                    Label("No Waze reports on this route", systemImage: "checkmark.shield.fill")
+                    Label(Waze.shares.contains(.police) ? "No Waze reports on this route" : "No road closures on this route", systemImage: "checkmark.shield.fill")
                         .font(.system(size: 16, weight: .semibold)).foregroundColor(Vela.open)
                 } else {
                     WrapLayout(spacing: 8, lineSpacing: 8) {
