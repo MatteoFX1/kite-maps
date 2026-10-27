@@ -471,7 +471,8 @@ public enum Directions {
 
     public static func routes(from a: LatLng, to b: LatLng, mode: TravelMode,
                               avoidHighways: Bool = false, avoidTolls: Bool = false,
-                              useGoogle: Bool = true, via: [LatLng] = [], heading: Double? = nil) async -> Result {
+                              useGoogle: Bool = true, via: [LatLng] = [], heading: Double? = nil,
+                              alternatives: Bool = false) async -> Result {
         // Ask both at once: Google's route knows traffic, OSRM's steps read better (Vela puts
         // the open router's turn-by-turn on Google's line the same way).
         let osrmTask = Task { try await OSRM.route(from: a, to: b, mode: mode, via: via, heading: heading) }
@@ -482,7 +483,9 @@ public enum Directions {
             if let heading {
                 // A reroute while driving: Google doesn't know which way the car faces, so drop its
                 // routes that start back the way the car came; only the first one is driven, so skip the rest.
-                g = Array(g.filter { !startsBehind($0.polyline, heading: heading) }.prefix(1))
+                let ahead = g.filter { !startsBehind($0.polyline, heading: heading) }
+                // Planning a trip while already moving keeps the choice of routes; a reroute only needs one.
+                g = alternatives ? ahead : Array(ahead.prefix(1))
             }
             if !g.isEmpty {
                 // One at a time: the FOSSGIS server turns away bursts.
