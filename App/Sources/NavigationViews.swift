@@ -277,6 +277,11 @@ struct InstructionBanner: View {
             HStack(spacing: 6) {
                 Text("Then").font(.system(size: 16, weight: .bold)).opacity(0.85)
                 Image(systemName: maneuverSymbol(then.type)).font(.system(size: 20, weight: .heavy))
+                if then.type == .roundabout, let n = then.exit {
+                    // Which exit, so the next roundabout is known before the banner changes.
+                    Text("\(n)").font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
+                        .frame(minWidth: 22, minHeight: 22).background(Circle().fill(Color(hex: 0x0F766E)))
+                }
             }
         }
     }
