@@ -42,6 +42,7 @@ enum MapIcons {
         style.setImage(trafficLight(), forName: "traffic-light")
         for k in WazeAlert.Kind.allCases { style.setImage(waze(k), forName: "waze-\(k.rawValue)") }
         style.setImage(turnHead(), forName: "turn-head")
+        style.setImage(routeChevron(), forName: "route-chevron")
         style.setImage(dot("smallcircle.filled.circle", UIColor(hex: 0x5F6368)), forName: "pin-stop")
         // My places: home, work, the parked car and saved places.
         style.setImage(dot("house.fill", UIColor(hex: 0x1A73E8)), forName: "mine-home")
@@ -51,18 +52,23 @@ enum MapIcons {
     }
 
     /** Vela's speed camera badge: amber rounded square, head-on camera with a big lens and flash slit. */
-    /** The head of the turn arrow drawn on the road: white with a dark blue edge, pointing up. */
+    /** The head of the turn arrow drawn on the road: chunky white with a dark teal edge and a soft shadow, pointing up. */
     static func turnHead() -> UIImage {
-        let size = CGSize(width: 30, height: 26)
-        return UIGraphicsImageRenderer(size: size).image { _ in
+        let size = CGSize(width: 44, height: 40)
+        return UIGraphicsImageRenderer(size: size).image { ctx in
             let p = UIBezierPath()
-            p.move(to: CGPoint(x: 15, y: 2))
-            p.addLine(to: CGPoint(x: 28, y: 22))
-            p.addLine(to: CGPoint(x: 2, y: 22))
+            p.move(to: CGPoint(x: 22, y: 6))
+            p.addLine(to: CGPoint(x: 38, y: 32))
+            p.addLine(to: CGPoint(x: 6, y: 32))
             p.close()
             p.lineJoinStyle = .round
+            ctx.cgContext.setShadow(offset: CGSize(width: 0, height: 2), blur: 3, color: UIColor.black.withAlphaComponent(0.4).cgColor)
+            UIColor(hex: 0x0F766E).setStroke()
+            p.lineWidth = 8
+            p.stroke()
+            ctx.cgContext.setShadow(offset: .zero, blur: 0, color: nil)
             UIColor.white.setFill()
-            UIColor(hex: 0x0B3D91).setStroke()
+            UIColor.white.setStroke()
             p.lineWidth = 2.5
             p.fill()
             p.stroke()
@@ -210,44 +216,54 @@ enum MapIcons {
         }
     }
 
-    /** Vela's navigation arrow: white-ringed blue disc with a white chevron pointing up. */
     /**
-     * The car while navigating: a chunky teal chevron with a lit left face and a shaded right one,
-     * so it reads as a raised 3D arrow, with a white rim and a soft shadow under it.
+     * The car while navigating, Waze-style in Kite's teal: a chunky teal arrow with a white rim and a
+     * darker right half so it reads as raised, sitting on a navy disc with a teal ring.
      */
     private static func puck() -> UIImage {
-        let size = CGSize(width: 58, height: 58)
+        let size = CGSize(width: 76, height: 76)
         return UIGraphicsImageRenderer(size: size).image { ctx in
             let g = ctx.cgContext
-            let tip = CGPoint(x: 29, y: 5), left = CGPoint(x: 8, y: 50), right = CGPoint(x: 50, y: 50), notch = CGPoint(x: 29, y: 40)
+            let disc = UIBezierPath(ovalIn: CGRect(x: 3, y: 3, width: 70, height: 70))
+            UIColor(hex: 0x0F172A, alpha: 0.6).setFill()
+            disc.fill()
+            UIColor(hex: 0x2DD4BF, alpha: 0.75).setStroke()
+            disc.lineWidth = 2.5
+            disc.stroke()
+            let tip = CGPoint(x: 38, y: 13), left = CGPoint(x: 18, y: 60), right = CGPoint(x: 58, y: 60), notch = CGPoint(x: 38, y: 50)
             let outline = UIBezierPath()
             outline.move(to: tip); outline.addLine(to: right); outline.addLine(to: notch); outline.addLine(to: left); outline.close()
             outline.lineJoinStyle = .round
-            // Shadow and white rim.
-            g.setShadow(offset: CGSize(width: 0, height: 3), blur: 5, color: UIColor.black.withAlphaComponent(0.45).cgColor)
+            g.setShadow(offset: CGSize(width: 0, height: 2), blur: 4, color: UIColor.black.withAlphaComponent(0.45).cgColor)
             UIColor.white.setStroke()
-            outline.lineWidth = 6
+            outline.lineWidth = 5
             outline.stroke()
             g.setShadow(offset: .zero, blur: 0, color: nil)
-            // Lit left face.
-            let lit = UIBezierPath()
-            lit.move(to: tip); lit.addLine(to: notch); lit.addLine(to: left); lit.close()
             g.saveGState()
-            lit.addClip()
+            outline.addClip()
             let space = CGColorSpaceCreateDeviceRGB()
-            if let grad = CGGradient(colorsSpace: space, colors: [UIColor(hex: 0x99F6E4).cgColor, UIColor(hex: 0x2DD4BF).cgColor] as CFArray, locations: [0, 1]) {
-                g.drawLinearGradient(grad, start: tip, end: left, options: [])
+            if let grad = CGGradient(colorsSpace: space, colors: [UIColor(hex: 0x99F6E4).cgColor, UIColor(hex: 0x0D9488).cgColor] as CFArray, locations: [0, 1]) {
+                g.drawLinearGradient(grad, start: tip, end: CGPoint(x: 52, y: 60), options: [])
             }
-            g.restoreGState()
-            // Shaded right face.
+            // The right half a shade darker.
+            UIColor(hex: 0x064E3B, alpha: 0.3).setFill()
             let shade = UIBezierPath()
             shade.move(to: tip); shade.addLine(to: right); shade.addLine(to: notch); shade.close()
-            g.saveGState()
-            shade.addClip()
-            if let grad = CGGradient(colorsSpace: space, colors: [UIColor(hex: 0x14B8A6).cgColor, UIColor(hex: 0x0F766E).cgColor] as CFArray, locations: [0, 1]) {
-                g.drawLinearGradient(grad, start: tip, end: right, options: [])
-            }
+            shade.fill()
             g.restoreGState()
+        }
+    }
+
+    /** A chevron along the route line, pointing the way you go (right, along the line). */
+    static func routeChevron() -> UIImage {
+        UIGraphicsImageRenderer(size: CGSize(width: 14, height: 16)).image { _ in
+            let p = UIBezierPath()
+            p.move(to: CGPoint(x: 4, y: 3)); p.addLine(to: CGPoint(x: 10, y: 8)); p.addLine(to: CGPoint(x: 4, y: 13))
+            p.lineWidth = 3
+            p.lineCapStyle = .round
+            p.lineJoinStyle = .round
+            UIColor(hex: 0x0B3B36).setStroke()
+            p.stroke()
         }
     }
 

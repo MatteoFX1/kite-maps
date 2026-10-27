@@ -131,7 +131,8 @@ struct NavigationOverlay: View {
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .padding(.horizontal, 14).frame(height: 36)
                         .foregroundColor(.white)
-                        .background(Capsule().fill(Color.black.opacity(0.78)))
+                        .background(Capsule().fill(Color(hex: 0x0F172A).opacity(0.92)))
+                        .overlay(Capsule().strokeBorder(Color(hex: 0x2DD4BF).opacity(0.8), lineWidth: 1.5))
                         // Between the speed sign and the mute button, which sit level with it now the car is lower.
                         .frame(maxWidth: g.size.width - 240)
                         .position(x: g.size.width / 2, y: NavGlide.carY(g.size.height) + 46)
