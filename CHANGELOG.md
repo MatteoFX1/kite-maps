@@ -10,7 +10,13 @@ the middle number for big milestones.
   way the Waze app does, with an anonymous account (no name or email). They pop up, show on the
   map and fill the police heat map. Settings › Road alerts shows whether it's working. The way of
   asking comes from SABRE Plus for Highway Radar (MIT licence).
-- **No more OpenWeb Ninja key:** the key box and checks counter are gone.
+- **No more OpenWeb Ninja key:** the key box and checks counter are gone, and the saved key is wiped
+  from the phone.
+- **Gentler when Waze is down:** Kite waits longer after each failed ask (up to 10 minutes), and
+  drops drivers' reports after 5 minutes without an answer, so it never warns about old ones.
+- **Road alerts says plainly where reports come from**, with separate lines for closures and
+  drivers' reports.
+- **Tidy-up:** a few bits of unused code removed.
 
 ## 0.7.3
 
