@@ -68,6 +68,27 @@ func ukReports() async {
     print("ALL: " + total.sorted { $0.value > $1.value }.map { "\($0.key) ×\($0.value)" }.joined(separator: ", "))
 }
 
+/** `swift run vela-probe refresh`: asking again partway along, is it recognised as the same way? */
+func refreshCheck() async {
+    let drives = [(LatLng(50.9521, -1.3704), LatLng(50.8846, -1.2482)), (LatLng(50.9190, -1.4900), LatLng(50.9346, -1.3966)),
+                  (LatLng(50.8705, -1.2690), LatLng(50.9346, -1.3966)), (LatLng(50.9890, -1.4970), LatLng(50.9077, -1.4136))]
+    for (a, b) in drives {
+        guard let r = await Directions.routes(from: a, to: b, mode: .drive).routes.first else { continue }
+        let cum = Geo.cumulative(r.polyline)
+        for frac in [0.25, 0.5, 0.75] {
+            let at = (cum.last ?? 0) * frac
+            let here = Geo.point(along: r.polyline, meters: at, cumulative: cum)
+            let ahead = Geo.point(along: r.polyline, meters: at + 30, cumulative: cum)
+            guard let f = await Directions.routes(from: here, to: b, mode: .drive, heading: Geo.bearing(here, ahead)).routes.first else { print("  no answer"); continue }
+            let remaining = (cum.last ?? 0) - at
+            let left = r.durationSeconds * remaining / (cum.last ?? 1)
+            let same = abs(f.distanceMeters - remaining) < max(300, remaining * 0.03)
+            print(String(format: "%.0f%% along: left %.0f m / %.0f s planned, fresh %.0f m / %.0f s, same way %@", frac * 100, remaining, left, f.distanceMeters, f.durationSeconds, same ? "yes" : "NO"))
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+    }
+}
+
 func routeCheck() async {
     let a = CommandLine.arguments.dropFirst(2).compactMap(Double.init)
     guard a.count >= 4 else { print("usage: route lat lng lat lng [heading]"); return }

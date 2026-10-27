@@ -47,6 +47,10 @@ final class Navigator: ObservableObject {
     private var toldNoSignal = false
     private var spokenStage: [Int: Int] = [:]
     private var stoppedNearEnd: Date?
+    /** Today's traffic against the route's estimate, from the latest look (1 = as planned). */
+    private var trafficScale = 1.0
+    private var trafficAt = Date()
+    private var trafficLoading = false
     private var cameraSpokenAt = Date.distantPast
     private var cameraSpokenLimit: Double?
     /** The car has been on the route at least once since it was planned. */
@@ -151,8 +155,10 @@ final class Navigator: ObservableObject {
         lastFix = loc
         // The build's screenshots keep their made-up speed.
         if !demoAlerts { speedMps = max(0, loc.speed) }
-        let p = tracker.update(LatLng(loc.coordinate.latitude, loc.coordinate.longitude),
+        var p = tracker.update(LatLng(loc.coordinate.latitude, loc.coordinate.longitude),
                                accuracy: max(loc.horizontalAccuracy, 5), heading: Self.heading(loc))
+        // The arrival time follows the traffic as it changes on the way, not only as it was at the start.
+        p.remainingSeconds *= trafficScale
         progress = p
         // Parked in a car park short of the pin, or on the far side of the building: that's
         // arriving too, or the trip (and full-power GPS) would never end.
@@ -186,6 +192,7 @@ final class Navigator: ObservableObject {
             return
         }
         announce(p)
+        checkTraffic(p, loc)
         checkCameras(p)
         checkWaze(p)
         checkRisk(p)
@@ -556,6 +563,37 @@ final class Navigator: ObservableObject {
         }
     }
 
+    /**
+     * Every few minutes on a drive, asks again for the way from here, like Waze: the arrival time
+     * follows the traffic, and a clearly faster way (5 minutes and a tenth of what's left) is taken,
+     * with a word about it.
+     */
+    private func checkTraffic(_ p: RouteTracker.Progress, _ loc: CLLocation) {
+        guard route.mode == .drive, !AppSettings.shared.noGoogle, !rerouting, !trafficLoading, !demoAlerts,
+              p.remainingMeters > 5000, !p.offRoute, Date().timeIntervalSince(trafficAt) > 240 else { return }
+        trafficLoading = true
+        trafficAt = Date()
+        let from = LatLng(loc.coordinate.latitude, loc.coordinate.longitude)
+        let heading = Self.heading(loc), id = route.id, planned = p.remainingSeconds / trafficScale
+        let to = destination.location, hw = avoidHighways, tolls = avoidTolls, via = stops.map(\.location)
+        Task {
+            let r = await Directions.routes(from: from, to: to, mode: .drive, avoidHighways: hw, avoidTolls: tolls, via: via, heading: heading)
+            self.trafficLoading = false
+            guard let fresh = r.routes.first, self.route.id == id, !self.rerouting, let now = self.progress,
+                  planned > 0, fresh.trafficSeconds != nil else { return }
+            let current = now.remainingSeconds
+            let saving = current - fresh.durationSeconds
+            // The same way, more or less: just a better arrival time.
+            let sameWay = abs(fresh.distanceMeters - now.remainingMeters) < max(300, now.remainingMeters * 0.03)
+            if !sameWay, saving > max(300, current * 0.1) {
+                self.adopt(fresh)
+                self.speak("Found a faster route. It saves \(Int((saving / 60).rounded())) minutes.")
+            } else if sameWay {
+                self.trafficScale = min(3, max(0.5, fresh.durationSeconds / planned))
+            }
+        }
+    }
+
     /** Just past a step the driver was told about (or the start), so "continue" follows on from it. */
     private func justPassed(_ p: RouteTracker.Progress) -> Bool {
         guard let i = p.nextIndex else { return false }
@@ -617,19 +655,26 @@ final class Navigator: ObservableObject {
             self.rerouting = false
             guard let fresh = r.routes.first else { return }
             self.toldNoSignal = false
-            self.route = fresh
-            self.tracker = RouteTracker(route: fresh)
-            self.spokenStage = [:]
-            self.toldContinue = []
-            self.loadCameras()
-            self.loadRoundabouts()
-            self.wazeAt = .distantPast
-            self.routeWaze = []
-            self.wazeAhead = nil
-            self.loadWaze()
-            if let fix = self.lastFix { self.handle(fix) }
+            self.adopt(fresh)
             if !quiet { self.sayNewRoute() }
         }
+    }
+
+    /** Drives [fresh] from here on: a reroute, or a faster way found on the way. */
+    private func adopt(_ fresh: Route) {
+        route = fresh
+        tracker = RouteTracker(route: fresh)
+        spokenStage = [:]
+        toldContinue = []
+        trafficScale = 1
+        trafficAt = Date()
+        loadCameras()
+        loadRoundabouts()
+        wazeAt = .distantPast
+        routeWaze = []
+        wazeAhead = nil
+        loadWaze()
+        if let fix = lastFix { handle(fix) }
     }
 
     private func speak(_ text: String, urgent: Bool = false) {
