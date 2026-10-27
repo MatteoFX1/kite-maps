@@ -300,6 +300,7 @@ final class BritishWordsTests: XCTestCase {
         XCTAssertEqual(British.words("Take the ramp to Southampton"), "Take the slip road to Southampton")
         XCTAssertEqual(British.words("Slight left onto the ramp to So'ton"), "Slight left onto the slip road to So'ton")
         XCTAssertEqual(British.words("Turn left onto Rampart Road"), "Turn left onto Rampart Road")
+        XCTAssertEqual(British.words("Exit the parking lot toward Park Walk"), "Exit the car park toward Park Walk")
     }
 }
 

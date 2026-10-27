@@ -644,5 +644,8 @@ public enum British {
     public static func words(_ text: String) -> String {
         text.replacingOccurrences(of: #"\b(the|a) ramp\b"#, with: "$1 slip road", options: .regularExpression)
             .replacingOccurrences(of: #"\bramp\b"#, with: "slip road", options: .regularExpression)
+            .replacingOccurrences(of: #"\bparking lot\b"#, with: "car park", options: .regularExpression)
+            .replacingOccurrences(of: #"\bparking garage\b"#, with: "multi-storey car park", options: .regularExpression)
+            .replacingOccurrences(of: #"\bfreeway\b"#, with: "motorway", options: .regularExpression)
     }
 }
