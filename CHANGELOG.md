@@ -9,6 +9,8 @@ the middle number for big milestones.
   way, so even more of the screen shows the road ahead. The zoom is the same as before.
 - **Traffic lights on the map:** while you drive, small traffic light icons show on your route,
   like Waze, one per junction.
+- **Exit number in the roundabout picture:** the number of your exit is back in the middle of the
+  roundabout drawing, as well as "6th exit" next to it.
 
 ## 0.7.2
 

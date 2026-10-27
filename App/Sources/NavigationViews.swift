@@ -1190,6 +1190,11 @@ struct RoundaboutDiagram: View {
             head.addLine(to: right)
             head.closeSubpath()
             ctx.fill(head, with: .color(.white))
+            // The exit number in the middle, as well as "6th exit" beside the picture.
+            let digits = Text("\(exit)")
+                .font(.system(size: size.width * (exit >= 10 ? 0.17 : 0.22), weight: .heavy))
+                .foregroundColor(.white)
+            ctx.draw(digits, at: c)
         }
         .accessibilityLabel("Roundabout, take exit \(exit)")
     }
