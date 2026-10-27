@@ -11,12 +11,12 @@ public actor GoogleClient {
     static let userAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
     static let secChUa = #""Not:A-Brand";v="8", "Chromium";v="156", "Google Chrome";v="156""#
-    static let searchEndpoint = "https://www.google.com/search?tbm=map&authuser=0&hl=en&gl=us"
-    static let directionsEndpoint = "https://www.google.com/maps/preview/directions?authuser=0&hl=en&gl=us"
-    static let suggestEndpoint = "https://www.google.com/s?tbm=map&gs_ri=maps&suggest=p&authuser=0&hl=en&gl=us"
+    static let searchEndpoint = "https://www.google.com/search?tbm=map&authuser=0&hl=en-GB&gl=gb"
+    static let directionsEndpoint = "https://www.google.com/maps/preview/directions?authuser=0&hl=en-GB&gl=gb"
+    static let suggestEndpoint = "https://www.google.com/s?tbm=map&gs_ri=maps&suggest=p&authuser=0&hl=en-GB&gl=gb"
     static let suggestPb = "!2i5!4m12!1m3!1d{SPAN}!2d{LNG}!3d{LAT}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1"
         + "!7i20!10b1!12m6!1m2!18b1!30b1!2m2!1i203!2i100!19m4!1m3!1i1!2i1!3i1!20m1!1e1"
-    static let sessionWarmUrl = "https://www.google.com/maps?hl=en&gl=us"
+    static let sessionWarmUrl = "https://www.google.com/maps?hl=en-GB&gl=gb"
 
     private let session: URLSession
     private var warmed = false
@@ -122,8 +122,8 @@ public actor GoogleClient {
         return String(decoding: data, as: UTF8.self)
     }
 
-    // Matches the hl=en in the URL, so open/closed words come back in English.
-    private static let acceptLanguage = "en-US,en;q=0.9"
+    // Matches the hl=en-GB in the URL: English words, British ones ("Car park", not "Parking lot").
+    private static let acceptLanguage = "en-GB,en;q=0.9"
 
     private func enc(_ s: String) -> String {
         var allowed = CharacterSet.urlQueryAllowed

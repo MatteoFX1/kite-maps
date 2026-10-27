@@ -30,6 +30,9 @@ the middle number for big milestones.
 - **Route time bubbles** are rounder and a little bigger.
 - **Exit number in the roundabout picture:** the number of your exit is back in the middle of the
   roundabout drawing, as well as "6th exit" next to it.
+- **Search suggestions put the place you typed first:** typing "Whiteley Shopping Centre" no
+  longer sometimes puts a shop inside it (The Body Shop) at the top.
+- **British words from Google:** place cards say "Car park", not "Parking lot".
 
 ## 0.7.2
 
