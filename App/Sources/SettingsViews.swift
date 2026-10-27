@@ -82,47 +82,26 @@ struct SettingsView: View {
     private var main: some View {
         NavigationView {
             Form {
-                Section("Appearance") {
-                    Picker("Theme", selection: $settings.theme) {
-                        ForEach(ThemeMode.allCases) { Text($0.label).tag($0) }
-                    }
-                    Picker("Distance units", selection: $settings.units) {
-                        ForEach(UnitsMode.allCases) { Text($0.label).tag($0) }
-                    }
-                }
-                Section("Navigation") {
-                    Toggle("Voice guidance", isOn: $settings.voice)
-                    Toggle("Avoid tolls", isOn: $settings.avoidTolls)
-                    Toggle(Fmt.yards ? "Avoid motorways" : "Avoid highways", isOn: $settings.avoidHighways)
-                    Toggle("Say when a speed camera is ahead", isOn: $settings.cameraWarnings)
-                    Toggle("Say when I'm over the speed limit", isOn: $settings.speedingAlert)
-                    Picker("Default travel mode", selection: $settings.defaultMode) {
+                // Grouped by what each setting is for, with an icon each, like the iPhone's own Settings.
+                Section("Driving") {
+                    Toggle(isOn: $settings.voice) { SettingLabel("Voice guidance", icon: "speaker.wave.2.fill", color: 0x0F766E) }
+                    Picker(selection: $settings.defaultMode) {
                         ForEach(TravelMode.allCases) { Text($0.label).tag($0) }
-                    }
-                }
-                Section("My places") {
-                    Toggle("Parking button on the map", isOn: $settings.parkingButton)
-                    if let pick {
-                        Button { pick(.home) } label: { LabeledContent("Home", value: settings.home?.name ?? "Set") }
-                            .foregroundColor(.primary)
-                        Button { pick(.work) } label: { LabeledContent("Work", value: settings.work?.name ?? "Set") }
-                            .foregroundColor(.primary)
-                    } else {
-                        if let h = settings.home {
-                            LabeledContent("Home", value: h.name)
-                            Button("Remove home", role: .destructive) { settings.home = nil }
-                        }
-                        if let w = settings.work {
-                            LabeledContent("Work", value: w.name)
-                            Button("Remove work", role: .destructive) { settings.work = nil }
-                        }
+                    } label: { SettingLabel("Default travel mode", icon: "car.fill", color: 0x2563EB) }
+                    Toggle(isOn: $settings.avoidTolls) { SettingLabel("Avoid tolls", icon: "sterlingsign.circle.fill", color: 0xF59E0B) }
+                    Toggle(isOn: $settings.avoidHighways) {
+                        SettingLabel(Fmt.yards ? "Avoid motorways" : "Avoid highways", icon: "road.lanes", color: 0x1D4ED8)
                     }
                 }
                 Section {
-                    Toggle("Speed cameras", isOn: $settings.speedCameras)
-                    Toggle(Fmt.yards ? "Number plate cameras" : "License plate cameras", isOn: $settings.plateCameras)
+                    Toggle(isOn: $settings.speedCameras) { SettingLabel("Speed cameras on the map", icon: "camera.fill", color: 0xDC2626) }
+                    Toggle(isOn: $settings.cameraWarnings) { SettingLabel("Say when a speed camera is ahead", icon: "speaker.wave.3.fill", color: 0xDC2626) }
+                    Toggle(isOn: $settings.speedingAlert) { SettingLabel("Say when I'm over the speed limit", icon: "gauge.with.dots.needle.67percent", color: 0xEA580C) }
+                    Toggle(isOn: $settings.plateCameras) {
+                        SettingLabel(Fmt.yards ? "Number plate cameras" : "License plate cameras", icon: "number", color: 0x6B7280)
+                    }
                 } header: {
-                    Text("Cameras")
+                    Text("Cameras & speed")
                 } footer: {
                     Text("Speed cameras and \(Fmt.yards ? "number" : "license") plate cameras from OpenStreetMap's open map, shown on the map and on your route. Some countries, like France and Germany, don't allow warnings of speed cameras, so check before you turn the voice on there.")
                 }
@@ -130,16 +109,54 @@ struct SettingsView: View {
                     NavigationLink {
                         WazeSettingsView(settings: settings)
                     } label: {
-                        LabeledContent("Road alerts", value: settings.wazeOn ? "On" : "Off")
+                        LabeledContent {
+                            Text(settings.wazeOn ? "On" : "Off")
+                        } label: {
+                            SettingLabel("Road alerts", icon: "exclamationmark.triangle.fill", color: 0x7C3AED)
+                        }
                     }
+                } header: {
+                    Text("Live reports")
                 } footer: {
                     Text(Waze.shares.contains(.police) ? "Live police and crash reports from Waze drivers, road closures, and police aircraft."
                          : "Live road closures from Waze, and police planes and helicopters.")
                 }
+                Section("Map") {
+                    Picker(selection: $settings.theme) {
+                        ForEach(ThemeMode.allCases) { Text($0.label).tag($0) }
+                    } label: { SettingLabel("Theme", icon: "circle.lefthalf.filled", color: 0x334155) }
+                    Picker(selection: $settings.units) {
+                        ForEach(UnitsMode.allCases) { Text($0.label).tag($0) }
+                    } label: { SettingLabel("Distance units", icon: "ruler.fill", color: 0x0891B2) }
+                    Toggle(isOn: $settings.parkingButton) { SettingLabel("Parking button on the map", icon: "parkingsign", color: 0x2563EB) }
+                }
+                if pick != nil || settings.home != nil || settings.work != nil {
+                    Section("My places") {
+                        if let pick {
+                            Button { pick(.home) } label: {
+                                LabeledContent { Text(settings.home?.name ?? "Set") } label: { SettingLabel("Home", icon: "house.fill", color: 0x16A34A) }
+                            }
+                            .foregroundColor(.primary)
+                            Button { pick(.work) } label: {
+                                LabeledContent { Text(settings.work?.name ?? "Set") } label: { SettingLabel("Work", icon: "briefcase.fill", color: 0x9333EA) }
+                            }
+                            .foregroundColor(.primary)
+                        } else {
+                            if let h = settings.home {
+                                LabeledContent { Text(h.name) } label: { SettingLabel("Home", icon: "house.fill", color: 0x16A34A) }
+                                Button("Remove home", role: .destructive) { settings.home = nil }
+                            }
+                            if let w = settings.work {
+                                LabeledContent { Text(w.name) } label: { SettingLabel("Work", icon: "briefcase.fill", color: 0x9333EA) }
+                                Button("Remove work", role: .destructive) { settings.work = nil }
+                            }
+                        }
+                    }
+                }
                 Section {
-                    Toggle("Use Kite without Google", isOn: $settings.noGoogle)
+                    Toggle(isOn: $settings.noGoogle) { SettingLabel("Use Kite without Google", icon: "lock.fill", color: 0x475569) }
                 } header: {
-                    Text("Data source & privacy")
+                    Text("Privacy")
                 } footer: {
                     Text("Off (the usual): search, place details, routes and live traffic come from Google, asked anonymously with no account. On: everything comes from free open-data services instead and nothing goes to Google, but search and routes are less complete.")
                 }
@@ -166,6 +183,30 @@ struct SettingsView: View {
             }
         }
         .navigationViewStyle(.stack)
+    }
+}
+
+/** A settings row's name with a small coloured icon in front, like the iPhone's own Settings. */
+struct SettingLabel: View {
+    let title: String
+    let icon: String
+    let color: UInt32
+
+    init(_ title: String, icon: String, color: UInt32) {
+        self.title = title
+        self.icon = icon
+        self.color = color
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 29, height: 29)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color(hex: color)))
+            Text(title)
+        }
     }
 }
 

@@ -39,6 +39,8 @@ the middle number for big milestones.
 - **British words:** "slip road", "car park", and search puts the place you typed first (no more
   The Body Shop above Whiteley Shopping Centre).
 - **Trip list while driving** starts at your next turn, and route time bubbles are a little bigger.
+- **Tidier Settings:** the same settings in clearer groups (Driving, Cameras & speed, Live reports,
+  Map, My places, Privacy), each with a small coloured icon.
 
 ## 0.7.2
 
