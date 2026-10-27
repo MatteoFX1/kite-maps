@@ -12,6 +12,8 @@ the middle number for big milestones.
   way, so even more of the screen shows the road ahead. The zoom is the same as before.
 - **"Then" shows the exit number:** when the turn after next is a roundabout, the small "Then"
   chip shows which exit to take, so you know before you get there.
+- **Sideways phone:** your arrow no longer sits on top of the trip bar when the phone is turned
+  sideways.
 - **Traffic lights on the map:** while you drive, small traffic light icons show on your route,
   like Waze, one per junction.
 - **New map look, Waze-style in Kite's teal:** a thicker teal route with a darker edge and
