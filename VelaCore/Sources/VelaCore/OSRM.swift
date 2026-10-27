@@ -501,6 +501,12 @@ public enum Directions {
                         g[i] = o
                     }
                 }
+                for i in g.indices {
+                    // Whatever the steps came from, the picture's number matches the words.
+                    for j in g[i].maneuvers.indices where g[i].maneuvers[j].type == .roundabout && g[i].maneuvers[j].exit == nil {
+                        g[i].maneuvers[j].exit = DirectionsParser.exitNumber(in: g[i].maneuvers[j].instruction)
+                    }
+                }
                 return Result(routes: g)
             }
         } catch {

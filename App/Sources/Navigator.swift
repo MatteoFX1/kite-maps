@@ -443,6 +443,9 @@ final class Navigator: ObservableObject {
             spokenStage[i] = 3
             // Arriving is said once, with the place's name, when it's reached.
             if m.type == .arrive { return }
+            // Off a small roundabout seconds after "take the 2nd exit onto ..." was said: nothing new to say.
+            if m.leavesRoundabout, let r = route.maneuvers[..<i].last(where: { $0.type == .roundabout }),
+               m.alongMeters - r.alongMeters < 150 { return }
             // The turn itself matters more than whatever is still being said.
             speak(m.instruction, urgent: true)
         } else if m.leavesRoundabout {

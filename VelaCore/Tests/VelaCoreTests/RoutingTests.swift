@@ -282,3 +282,12 @@ final class SpokenTextTests: XCTestCase {
         XCTAssertEqual(SpokenText.forVoice("Turn left onto Avenue Road"), "Turn left onto Avenue Road")
     }
 }
+
+final class ExitNumberTests: XCTestCase {
+    func testExitFromWords() {
+        XCTAssertEqual(DirectionsParser.exitNumber(in: "At the roundabout, take the 3rd exit onto Hill Ln"), 3)
+        XCTAssertEqual(DirectionsParser.exitNumber(in: "At the roundabout, take the 12th exit"), 12)
+        XCTAssertEqual(DirectionsParser.exitNumber(in: "At the roundabout, take the second exit"), 2)
+        XCTAssertNil(DirectionsParser.exitNumber(in: "At the roundabout, continue straight"))
+    }
+}

@@ -119,7 +119,8 @@ func driveReplay() async {
             func say(_ t: String) { print(String(format: "  %4ds %5.0f m  \"%@\"", s, dist, t)) }
             if dist <= now && stage < 3 {
                 spoken[i] = 3
-                if m.type != .arrive { say(m.instruction) }
+                let small = m.leavesRoundabout && (route.maneuvers[..<i].last { $0.type == .roundabout }).map { m.alongMeters - $0.alongMeters < 150 } == true
+                if m.type != .arrive && !small { say(m.instruction) }
             } else if m.leavesRoundabout {
                 continue
             } else if dist <= near && dist > now + 30 && stage < 2 {
