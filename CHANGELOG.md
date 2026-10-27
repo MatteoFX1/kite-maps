@@ -3,11 +3,6 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
-## 0.7.3
-
-- **More road ahead when stopped:** at lights or in traffic, the driving map no longer zooms in so
-  close to your arrow, so you can still see the road in front of you.
-
 ## 0.7.2
 
 - **One speed sign:** your speed and the speed limit are now one sign in the bottom left, like
