@@ -511,6 +511,9 @@ public enum Directions {
                     for j in g[i].maneuvers.indices where g[i].maneuvers[j].type == .roundabout && g[i].maneuvers[j].exit == nil {
                         g[i].maneuvers[j].exit = DirectionsParser.exitNumber(in: g[i].maneuvers[j].instruction)
                     }
+                    if Geo.drivesOnLeft(a) {
+                        for j in g[i].maneuvers.indices { g[i].maneuvers[j].instruction = British.words(g[i].maneuvers[j].instruction) }
+                    }
                 }
                 return Result(routes: g)
             }
@@ -606,5 +609,13 @@ public enum StepMerge {
             let near = google.filter { $0.laneHint != nil && abs($0.alongMeters - steps[i].alongMeters) < 150 }
             steps[i].laneHint = near.min { abs($0.alongMeters - steps[i].alongMeters) < abs($1.alongMeters - steps[i].alongMeters) }?.laneHint
         }
+    }
+}
+
+/** Google words its steps the American way even in Britain: "Take the ramp" is a slip road there. */
+public enum British {
+    public static func words(_ text: String) -> String {
+        text.replacingOccurrences(of: #"\b(the|a) ramp\b"#, with: "$1 slip road", options: .regularExpression)
+            .replacingOccurrences(of: #"\bramp\b"#, with: "slip road", options: .regularExpression)
     }
 }

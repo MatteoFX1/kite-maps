@@ -294,3 +294,12 @@ final class ExitNumberTests: XCTestCase {
         XCTAssertNil(DirectionsParser.exitNumber(in: "At the roundabout, continue straight"))
     }
 }
+
+final class BritishWordsTests: XCTestCase {
+    func testRampIsSlipRoad() {
+        XCTAssertEqual(British.words("Take the ramp to Southampton"), "Take the slip road to Southampton")
+        XCTAssertEqual(British.words("Slight left onto the ramp to So'ton"), "Slight left onto the slip road to So'ton")
+        XCTAssertEqual(British.words("Turn left onto Rampart Road"), "Turn left onto Rampart Road")
+    }
+}
+
