@@ -269,15 +269,16 @@ enum MapIcons {
     }
 
     private static func bubble(fill: UIColor, stroke: UIColor) -> UIImage {
-        let size = CGSize(width: 30, height: 24)
+        // A pill, like the rest of Kite's chips.
+        let size = CGSize(width: 30, height: 26)
         let img = UIGraphicsImageRenderer(size: size).image { _ in
-            let p = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1), cornerRadius: 8)
+            let p = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1), cornerRadius: 12)
             fill.setFill()
             stroke.setStroke()
             p.lineWidth = 1.5
             p.fill()
             p.stroke()
         }
-        return img.resizableImage(withCapInsets: UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10), resizingMode: .stretch)
+        return img.resizableImage(withCapInsets: UIEdgeInsets(top: 12, left: 13, bottom: 12, right: 13), resizingMode: .stretch)
     }
 }
