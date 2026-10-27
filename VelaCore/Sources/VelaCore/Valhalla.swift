@@ -17,7 +17,9 @@ public enum Valhalla {
     }()
 
     /** The limits along [line], and the roads they came from (for RoadCache). Nil when the server didn't answer. */
-    public static func speedLimits(along line: [LatLng]) async -> (limits: [SpeedLimit], ways: [Overpass.LimitWay])? {
+    /// [progress] gets the limits so far after each piece, so a long drive's first miles show straight away.
+    public static func speedLimits(along line: [LatLng], progress: (@Sendable ([SpeedLimit]) async -> Void)? = nil) async
+        -> (limits: [SpeedLimit], ways: [Overpass.LimitWay])? {
         guard line.count >= 2 else { return ([], []) }
         let cum = Geo.cumulative(line)
         let total = cum.last ?? 0
@@ -40,6 +42,8 @@ public enum Valhalla {
             }
             ways += parsed.ways
             start = end
+            // Unknown past what has been matched so far, not the last limit carried on.
+            if start < total { await progress?(merged + [SpeedLimit(startMeters: start, kmh: nil)]) }
         }
         return (merged, ways)
     }

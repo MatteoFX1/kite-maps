@@ -239,7 +239,14 @@ final class Navigator: ObservableObject {
         matchedLimits = false
         // Speed limits from the road matcher first: it answers in about a second.
         Task {
-            guard let found = await Valhalla.speedLimits(along: line), self.route.id == id, !found.limits.isEmpty else { return }
+            let found = await Valhalla.speedLimits(along: line) { partial in
+                await MainActor.run {
+                    guard self.route.id == id, !partial.isEmpty else { return }
+                    self.matchedLimits = true
+                    self.route.speedLimits = partial
+                }
+            }
+            guard let found, self.route.id == id, !found.limits.isEmpty else { return }
             self.matchedLimits = true
             self.route.speedLimits = found.limits
             RoadCache.shared.add(ways: found.ways, cameras: [], signals: [])
