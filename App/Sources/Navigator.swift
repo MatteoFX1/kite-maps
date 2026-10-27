@@ -47,6 +47,8 @@ final class Navigator: ObservableObject {
     private var toldNoSignal = false
     private var spokenStage: [Int: Int] = [:]
     private var stoppedNearEnd: Date?
+    private var cameraSpokenAt = Date.distantPast
+    private var cameraSpokenLimit: Double?
     /** The car has been on the route at least once since it was planned. */
     private var joinedRoute = false
     private static let log = Logger(subsystem: "app.vela.ios", category: "voice")
@@ -316,9 +318,16 @@ final class Navigator: ObservableObject {
         cameraAhead = CameraAlert(kind: cam.kind, meters: ahead, startMeters: max(ahead, 1), limitKmh: limit)
         // Spoken for speed cameras only: number plate cameras are everywhere in Britain, and
         // saying each one would bury the turns. Those get the card alone.
+        // A run of cameras (a smart motorway's gantries, every mile or so) is said once: after
+        // that, the next ones at the same limit within a couple of minutes get the card and the chime.
+        let repeatRun = Date().timeIntervalSince(cameraSpokenAt) < 150 && limit == cameraSpokenLimit
         if AppSettings.shared.cameraWarnings, cam.kind == .speed {
             chime()
-            speak((cam.average ? "Average speed camera ahead" : "Speed camera ahead") + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+            if !repeatRun {
+                speak((cam.average ? "Average speed camera ahead" : "Speed camera ahead") + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+            }
+            cameraSpokenAt = Date()
+            cameraSpokenLimit = limit
         }
     }
 
