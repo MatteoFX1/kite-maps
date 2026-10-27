@@ -85,12 +85,11 @@ public struct WazeAlert: Hashable, Sendable, Identifiable {
 
 public enum Waze {
     /**
-     * The kinds Kite can get. Since October 2026 Waze's live map keeps drivers' reports (police,
-     * crashes, hazards and the rest) to its own app and shares only road closures; police and
-     * crashes come through OpenWeb Ninja instead, with the person's own key (see [WazeNinja]).
-     * Settings shows switches only for these.
+     * The kinds Kite can get. Since October 2026 Waze's live map shares only road closures; the
+     * rest (police, crashes, hazards...) come from Waze's app servers while navigating (see
+     * [WazeLive]). Settings shows a switch for each.
      */
-    public static var shares: Set<WazeAlert.Kind> { WazeNinja.on ? [.closure, .police, .accident] : [.closure] }
+    public static let shares = Set(WazeAlert.Kind.allCases)
     /** Waze keeps the Americas, Israel and the rest of the world on separate servers. */
     public static func env(for p: LatLng) -> String {
         if p.lat > 29, p.lat < 33.6, p.lng > 34, p.lng < 36 { return "il" }
@@ -281,85 +280,5 @@ public enum Waze {
             out.append((a, p.along))
         }
         return out.sorted { $0.1 < $1.1 }
-    }
-}
-
-/**
- * Police and crash reports from OpenWeb Ninja's Waze service, with the person's own key (Settings ›
- * Road alerts). It has the reports Waze's live map no longer shares. The free plan allows only
- * 50 asks a month, so Kite asks only while navigating, and counts them on the phone.
- */
-public enum WazeNinja {
-    /** The person's key; empty or nil when they haven't added one. */
-    nonisolated(unsafe) public static var key: String?
-    public static var on: Bool { !(key ?? "").isEmpty }
-    /** How the last ask went, for Settings: 401/403 is a wrong key, 429 the month's asks used up. */
-    nonisolated(unsafe) public private(set) static var lastStatus: Waze.Status?
-
-    /** Only police and crashes: roadworks and closures would fill the 200 a box holds. */
-    public static func url(south: Double, west: Double, north: Double, east: Double) -> URL {
-        let q = String(format: "bottom_left=%.5f,%.5f&top_right=%.5f,%.5f", south, west, north, east)
-        return URL(string: "https://api.openwebninja.com/waze/alerts-and-jams?\(q)&max_alerts=200&alert_types=POLICE,ACCIDENT")!
-    }
-
-    /** Asks made this calendar month, on this phone. */
-    public static var usedThisMonth: Int {
-        let d = UserDefaults.standard
-        return d.string(forKey: "ninjaMonth") == month ? d.integer(forKey: "ninjaUsed") : 0
-    }
-
-    private static var month: String {
-        let c = Calendar.current.dateComponents([.year, .month], from: Date())
-        return "\(c.year ?? 0)-\(c.month ?? 0)"
-    }
-
-    private static func countAsk() {
-        let d = UserDefaults.standard
-        let used = usedThisMonth + 1
-        d.set(month, forKey: "ninjaMonth")
-        d.set(used, forKey: "ninjaUsed")
-    }
-
-    /** Reports in a box; nil when there's no key or the ask failed. Each call uses one of the month's asks. */
-    public static func alerts(south: Double, west: Double, north: Double, east: Double) async -> [WazeAlert]? {
-        guard let key, !key.isEmpty else { return nil }
-        var req = URLRequest(url: url(south: south, west: west, north: north, east: east))
-        req.setValue(key, forHTTPHeaderField: "X-API-Key")
-        req.timeoutInterval = 20
-        countAsk()
-        guard let (data, resp) = try? await URLSession.shared.data(for: req) else {
-            lastStatus = Waze.Status(at: Date(), code: 0, count: 0)
-            return nil
-        }
-        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-        guard code == 200, let list = parse(data) else {
-            lastStatus = Waze.Status(at: Date(), code: code == 200 ? -1 : code, count: 0)
-            return nil
-        }
-        var types: [String: Int] = [:]
-        for a in list { types[a.kind == .police ? "POLICE" : "ACCIDENT", default: 0] += 1 }
-        lastStatus = Waze.Status(at: Date(), code: 200, count: list.count, types: types)
-        return list
-    }
-
-    /** OpenWeb Ninja's answer: {"data": {"alerts": [{"alert_id", "type", "latitude", ...}]}}. */
-    public static func parse(_ data: Data) -> [WazeAlert]? {
-        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        let body = root["data"] as? [String: Any] ?? root
-        guard let items = body["alerts"] as? [[String: Any]] else { return nil }
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let plain = ISO8601DateFormatter()
-        return items.compactMap { a in
-            guard let lat = (a["latitude"] as? NSNumber)?.doubleValue, let lng = (a["longitude"] as? NSNumber)?.doubleValue,
-                  let type = a["type"] as? String else { return nil }
-            let sub = a["subtype"] as? String ?? ""
-            guard let kind = Waze.kind(type: type, subtype: sub) else { return nil }
-            let when = (a["publish_datetime_utc"] as? String).flatMap { iso.date(from: $0) ?? plain.date(from: $0) }
-            let street = (a["street"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-            return WazeAlert(id: a["alert_id"] as? String ?? "\(type)\(lat),\(lng)", kind: kind, subtype: sub,
-                             location: LatLng(lat, lng), street: street, reportedAt: when ?? Date(),
-                             thumbsUp: (a["num_thumbs_up"] as? NSNumber)?.intValue ?? 0)
-        }
     }
 }

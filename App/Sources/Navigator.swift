@@ -104,9 +104,8 @@ final class Navigator: ObservableObject {
     private var spokenWaze: Set<String> = []
     private var wazeAt = Date.distantPast
     private var wazeLoading = false
-    /** Police and crashes from OpenWeb Ninja, kept across reroutes since each ask uses one of the month's few. */
-    @Published private(set) var ninjaAlerts: [WazeAlert] = []
-    private var ninjaAt = Date.distantPast
+    /** Drivers' reports (police, crashes, hazards...) from Waze's app servers, asked every 90 seconds. */
+    @Published private(set) var liveAlerts: [WazeAlert] = []
     private var riskAt = Date.distantPast
     private var riskPast: [PoliceRisk.Report]?
     private var riskSpokenAt = Date.distantPast
@@ -367,7 +366,7 @@ final class Navigator: ObservableObject {
         }
     }
 
-    /** Live Waze reports along the route; asked again every three minutes, since they come and go. */
+    /** Live Waze reports along the route; asked again every 90 seconds, since they come and go. */
     private func loadWaze() {
         guard route.mode == .drive, AppSettings.shared.wazeOn, !wazeLoading, !demoAlerts else { return }
         wazeLoading = true
@@ -376,32 +375,31 @@ final class Navigator: ObservableObject {
         // Only the next 60 km: on a long drive the rest will have changed by the time you get there.
         let at = progress?.alongMeters ?? 0
         let window = Geo.slice(line, from: max(at - 200, 0), to: at + 60_000)
-        // OpenWeb Ninja only every 10 minutes, for the next 40 km: about 6 asks for an hour's drive.
-        let askNinja = WazeNinja.on && Date().timeIntervalSince(ninjaAt) > 600
-        if askNinja { ninjaAt = Date() }
-        let near = Geo.slice(line, from: max(at - 200, 0), to: at + 40_000)
+        let here = progress.map { Geo.point(along: line, meters: $0.alongMeters) } ?? line[0]
+        let ahead = Geo.slice(line, from: max(at - 200, 0), to: at + 40_000)
         Task {
-            let found = await Waze.alongRoute(window.count >= 2 ? window : line)
-            if askNinja, near.count >= 2 {
-                let pad = 0.01
-                if let more = await WazeNinja.alerts(south: near.map(\.lat).min()! - pad, west: near.map(\.lng).min()! - pad,
-                                                     north: near.map(\.lat).max()! + pad, east: near.map(\.lng).max()! + pad) {
-                    WazeHistory.shared.record(more)
-                    self.ninjaAlerts = more
-                }
-            }
+            // Closures from the live map; everything else from Waze's app servers, for the next 40 km.
+            async let closures = Waze.alongRoute(window.count >= 2 ? window : line)
+            let live = await WazeLive.shared.alongRoute(ahead.count >= 2 ? ahead : line, here: here)
+            let found = await closures
             self.wazeLoading = false
             guard self.route.id == id else { return }
             if let found { WazeHistory.shared.record(found) }
-            let closures = found ?? self.routeWaze.map(\.alert).filter { $0.kind == .closure }
-            self.routeWaze = Waze.project(closures + self.ninjaAlerts, on: line)
+            if let live {
+                WazeHistory.shared.record(live)
+                self.liveAlerts = live
+            }
+            guard found != nil || live != nil else { return }
+            var merged: [String: WazeAlert] = [:]
+            for a in (found ?? self.routeWaze.map(\.alert)) + self.liveAlerts { merged[a.id] = a }
+            self.routeWaze = Waze.project(Array(merged.values), on: line)
         }
     }
 
     private func checkWaze(_ p: RouteTracker.Progress) {
         guard !demoAlerts else { return }
         let s = AppSettings.shared
-        if Date().timeIntervalSince(wazeAt) > 180 { loadWaze() }
+        if Date().timeIntervalSince(wazeAt) > 90 { loadWaze() }
         if let ahead = wazeAhead {
             // Keep the card up, counting down, until the report is passed.
             if let hit = routeWaze.first(where: { $0.alert.id == ahead.alert.id }), hit.along > p.alongMeters - 10 {
