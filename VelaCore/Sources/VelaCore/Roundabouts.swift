@@ -46,7 +46,8 @@ public enum Roundabouts {
             // 2026-10-25's Hampshire drives that held for 17 of 24, and the rest keep the router's sketch.
             if let s = shape(ways, entry: m.location, line: route.polyline, cumulative: cum, along: m.alongMeters,
                              clockwise: clockwise, exitNumber: m.exit), m.exit == nil || s.taken + 1 == m.exit {
-                r.maneuvers[i].roundabout = s
+                let out = exitAngle(route.polyline, cumulative: cum, along: m.alongMeters)
+                r.maneuvers[i].roundabout = out.map { aim(s, at: $0) } ?? s
                 changed = true
             }
         }
@@ -74,6 +75,37 @@ public enum Roundabouts {
             r.maneuvers[i].roundabout = spread(to: out, exit: m.exit ?? 1, clockwise: Geo.drivesOnLeft(m.location))
         }
         return r
+    }
+
+    /**
+     * [shape] with your exit turned to point at [out], the way the road really goes. The map puts
+     * each road where it touches the circle, which on a big roundabout can be well off the way it
+     * heads: a 1st exit that runs straight on touches the ring near the bottom left, and the
+     * picture showed a sharp left (2026-10-27 audit: about 1 in 6 of 63 Hampshire, Wales, London
+     * and Milton Keynes roundabouts, 50 to 100 degrees out). The other roads move round with it, in the same
+     * order, so the count still matches.
+     */
+    static func aim(_ shape: RoundaboutShape, at out: Double) -> RoundaboutShape {
+        guard shape.exits.indices.contains(shape.taken) else { return shape }
+        let cw = shape.clockwise
+        // How far round from the way in; the same road back out is a full lap.
+        func travel(_ a: Double) -> Double {
+            let t = norm(cw ? a - 180 : 180 - a)
+            return t < 15 ? t + 360 : t
+        }
+        func angle(_ t: Double) -> Double { norm(cw ? 180 + t : 180 - t) }
+        let from = travel(shape.exits[shape.taken])
+        guard from < 345 else { return shape }
+        let to = min(max(travel(out), 10), 350)
+        // Stretch the bit of circle up to your exit, and squeeze the rest, or the other way round.
+        func move(_ a: Double) -> Double {
+            let t = travel(a)
+            return angle(t <= from ? t * to / from : to + (t - from) * (375 - to) / (375 - from))
+        }
+        var s = shape
+        s.exits = shape.exits.indices.map { $0 == shape.taken ? angle(to) : move(shape.exits[$0]) }
+        s.entriesOnly = shape.entriesOnly.map(move)
+        return s
     }
 
     /** [exit] exits, the last one at [out] and the ones before it spaced evenly on the way round. */

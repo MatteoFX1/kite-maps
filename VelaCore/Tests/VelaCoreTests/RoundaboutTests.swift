@@ -143,6 +143,27 @@ final class RoundaboutTests: XCTestCase {
     }
 
     /**
+     * The map's picture of a big roundabout (Holbrook Road, Portsmouth): the 1st exit touches the
+     * ring just after you come on, so it was drawn pointing back down, but the road heads left.
+     * Your exit is turned to where the road goes and the others keep their order round.
+     */
+    func testMapPictureAimsWhereTheRoadGoes() {
+        let map = RoundaboutShape(exits: [195, 300, 12, 100], taken: 0, entriesOnly: [140], clockwise: true, complete: true)
+        let s = Roundabouts.aim(map, at: 290)
+        XCTAssertEqual(s.taken, 0)
+        XCTAssertEqual(s.exits[0], 290, accuracy: 0.01)
+        func round(_ a: Double) -> Double { (a - 180 + 360).truncatingRemainder(dividingBy: 360) }
+        XCTAssertEqual(s.exits.map(round), s.exits.map(round).sorted())
+        XCTAssertEqual(s.exits.count, 4)
+        XCTAssertGreaterThan(round(s.entriesOnly[0]), round(s.exits[3]))
+
+        // Already pointing the right way: hardly moves.
+        let fine = Roundabouts.aim(RoundaboutShape(exits: [270, 0, 90], taken: 1, clockwise: true, complete: true), at: 5)
+        XCTAssertEqual(fine.exits[0], 272.5, accuracy: 0.5)
+        XCTAssertEqual(fine.exits[1], 5, accuracy: 0.01)
+    }
+
+    /**
      * Normandy Way, Marchwood (2026-10-27): straight over a mini-roundabout (one mapped point, a
      * side road off to the east) with no step from either router. It gets its own step.
      */

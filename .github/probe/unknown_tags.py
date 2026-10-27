@@ -6,7 +6,7 @@ UA = {"User-Agent": "KiteMaps-iOS-probe/0.1 (+https://github.com/matteofx1/kite-
 els = []
 for i in range(0, len(ids), 400):
     q = "[out:json][timeout:60];way(id:%s);out tags center;" % ",".join(ids[i:i + 400])
-    for host in ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]:
+    for host in ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter", "https://overpass-api.de/api/interpreter"]:
         try:
             req = urllib.request.Request(host, data=urllib.parse.urlencode({"data": q}).encode(), headers=UA)
             els += json.load(urllib.request.urlopen(req, timeout=90))["elements"]
