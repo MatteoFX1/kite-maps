@@ -26,6 +26,8 @@ public enum SpokenText {
         // "St" is Street after a name ("Princes St") but Saint before one ("St Mary's Road").
         s = s.replacingOccurrences(of: "(?<![\\p{L}'])St\\.?(?= [A-Z])", with: "Saint", options: .regularExpression)
         s = s.replacingOccurrences(of: "(?<=[a-z] )St\\.?(?![\\p{L}'])", with: "Street", options: .regularExpression)
+        // "A57(M)" is said "A57 M".
+        s = s.replacingOccurrences(of: "(?<=\\d)\\(M\\)", with: " M", options: .regularExpression)
         // "N", "S", "E", "W" after a road number: "A33 N" is "A33 north".
         for (d, w) in [("N", "north"), ("S", "south"), ("E", "east"), ("W", "west")] {
             s = s.replacingOccurrences(of: "(?<=\\d) \(d)(?![\\p{L}'])", with: " \(w)", options: .regularExpression)

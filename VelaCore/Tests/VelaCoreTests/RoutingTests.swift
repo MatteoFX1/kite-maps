@@ -280,6 +280,7 @@ final class SpokenTextTests: XCTestCase {
         XCTAssertEqual(SpokenText.forVoice("Turn left onto Princes St."), "Turn left onto Princes Street")
         XCTAssertEqual(SpokenText.forVoice("Turn left onto St Mary's Rd"), "Turn left onto Saint Mary's Road")
         XCTAssertEqual(SpokenText.forVoice("Merge onto A33 N"), "Merge onto A33 north")
+        XCTAssertEqual(SpokenText.forVoice("Merge onto A57(M)"), "Merge onto A57 M")
         // Words that only start like a short form stay as they are.
         XCTAssertEqual(SpokenText.forVoice("Continue onto Drove Road toward Romsey"), "Continue onto Drove Road toward Romsey")
         XCTAssertEqual(SpokenText.forVoice("Turn left onto Avenue Road"), "Turn left onto Avenue Road")
