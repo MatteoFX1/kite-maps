@@ -81,91 +81,21 @@ struct SettingsView: View {
 
     private var main: some View {
         NavigationView {
+            // A short menu like Waze's: a few big rows, each opening a page with its switches.
             Form {
-                // Grouped by what each setting is for, with an icon each, like the iPhone's own Settings.
-                Section("Driving") {
-                    Toggle(isOn: $settings.voice) { SettingLabel("Voice guidance", icon: "speaker.wave.2.fill", color: 0x0F766E) }
-                    Picker(selection: $settings.defaultMode) {
-                        ForEach(TravelMode.allCases) { Text($0.label).tag($0) }
-                    } label: { SettingLabel("Default travel mode", icon: "car.fill", color: 0x2563EB) }
-                    Toggle(isOn: $settings.avoidTolls) { SettingLabel("Avoid tolls", icon: "sterlingsign.circle.fill", color: 0xF59E0B) }
-                    Toggle(isOn: $settings.avoidHighways) {
-                        SettingLabel(Fmt.yards ? "Avoid motorways" : "Avoid highways", icon: "road.lanes", color: 0x1D4ED8)
-                    }
-                }
                 Section {
-                    Toggle(isOn: $settings.speedCameras) { SettingLabel("Speed cameras on the map", icon: "camera.fill", color: 0xDC2626) }
-                    Toggle(isOn: $settings.cameraWarnings) { SettingLabel("Say when a speed camera is ahead", icon: "speaker.wave.3.fill", color: 0xDC2626) }
-                    Toggle(isOn: $settings.speedingAlert) { SettingLabel("Say when I'm over the speed limit", icon: "gauge.with.dots.needle.67percent", color: 0xEA580C) }
-                    Toggle(isOn: $settings.plateCameras) {
-                        SettingLabel(Fmt.yards ? "Number plate cameras" : "License plate cameras", icon: "number", color: 0x6B7280)
-                    }
-                } header: {
-                    Text("Cameras & speed")
-                } footer: {
-                    Text("Speed cameras and \(Fmt.yards ? "number" : "license") plate cameras from OpenStreetMap's open map, shown on the map and on your route. Some countries, like France and Germany, don't allow warnings of speed cameras, so check before you turn the voice on there.")
-                }
-                Section {
-                    NavigationLink {
+                    menuRow("Voice & driving", detail: "Voice, travel mode, avoid tolls and \(Fmt.yards ? "motorways" : "highways")",
+                            icon: "speaker.wave.2.fill", color: 0x0F766E) { drivingPage }
+                    menuRow("Cameras & speed", detail: "Camera warnings, speeding alert", icon: "camera.fill", color: 0xDC2626) { camerasPage }
+                    menuRow("Road alerts", detail: Waze.shares.contains(.police) ? "Police, crashes, closures" : "Closures, police aircraft",
+                            value: settings.wazeOn ? "On" : "Off", icon: "exclamationmark.triangle.fill", color: 0x7C3AED) {
                         WazeSettingsView(settings: settings)
-                    } label: {
-                        LabeledContent {
-                            Text(settings.wazeOn ? "On" : "Off")
-                        } label: {
-                            SettingLabel("Road alerts", icon: "exclamationmark.triangle.fill", color: 0x7C3AED)
-                        }
                     }
-                } header: {
-                    Text("Live reports")
-                } footer: {
-                    Text(Waze.shares.contains(.police) ? "Live police and crash reports from Waze drivers, road closures, and police aircraft."
-                         : "Live road closures from Waze, and police planes and helicopters.")
-                }
-                Section("Map") {
-                    Picker(selection: $settings.theme) {
-                        ForEach(ThemeMode.allCases) { Text($0.label).tag($0) }
-                    } label: { SettingLabel("Theme", icon: "circle.lefthalf.filled", color: 0x334155) }
-                    Picker(selection: $settings.units) {
-                        ForEach(UnitsMode.allCases) { Text($0.label).tag($0) }
-                    } label: { SettingLabel("Distance units", icon: "ruler.fill", color: 0x0891B2) }
-                    Toggle(isOn: $settings.parkingButton) { SettingLabel("Parking button on the map", icon: "parkingsign", color: 0x2563EB) }
-                }
-                if pick != nil || settings.home != nil || settings.work != nil {
-                    Section("My places") {
-                        if let pick {
-                            Button { pick(.home) } label: {
-                                LabeledContent { Text(settings.home?.name ?? "Set") } label: { SettingLabel("Home", icon: "house.fill", color: 0x16A34A) }
-                            }
-                            .foregroundColor(.primary)
-                            Button { pick(.work) } label: {
-                                LabeledContent { Text(settings.work?.name ?? "Set") } label: { SettingLabel("Work", icon: "briefcase.fill", color: 0x9333EA) }
-                            }
-                            .foregroundColor(.primary)
-                        } else {
-                            if let h = settings.home {
-                                LabeledContent { Text(h.name) } label: { SettingLabel("Home", icon: "house.fill", color: 0x16A34A) }
-                                Button("Remove home", role: .destructive) { settings.home = nil }
-                            }
-                            if let w = settings.work {
-                                LabeledContent { Text(w.name) } label: { SettingLabel("Work", icon: "briefcase.fill", color: 0x9333EA) }
-                                Button("Remove work", role: .destructive) { settings.work = nil }
-                            }
-                        }
-                    }
-                }
-                Section {
-                    Toggle(isOn: $settings.noGoogle) { SettingLabel("Use Kite without Google", icon: "lock.fill", color: 0x475569) }
-                } header: {
-                    Text("Privacy")
-                } footer: {
-                    Text("Off (the usual): search, place details, routes and live traffic come from Google, asked anonymously with no account. On: everything comes from free open-data services instead and nothing goes to Google, but search and routes are less complete.")
-                }
-                Section("About") {
-                    LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
-                    Link("Kite Maps on GitHub", destination: URL(string: "https://github.com/matteofx1/kite-maps")!)
-                    Link("Based on Vela Maps for Android", destination: URL(string: "https://github.com/PimpinPumpkin/Vela")!)
-                    Text("Free software under the GPL-3.0. Map © OpenFreeMap, OpenMapTiles, OpenStreetMap contributors. Routing © FOSSGIS OSRM. Imagery © Esri.")
-                        .font(.caption).foregroundColor(.secondary)
+                    menuRow("Map & display", detail: "Theme, units, parking button", icon: "circle.lefthalf.filled", color: 0x334155) { mapPage }
+                    menuRow("My places", detail: "Home and work", icon: "house.fill", color: 0x16A34A) { placesPage }
+                    menuRow("Privacy", detail: "Use Kite without Google", value: settings.noGoogle ? "On" : nil,
+                            icon: "lock.fill", color: 0x475569) { privacyPage }
+                    menuRow("About", detail: "Version " + version, icon: "info.circle.fill", color: 0x64748B) { aboutPage }
                 }
             }
             .kiteList()
@@ -183,6 +113,144 @@ struct SettingsView: View {
             }
         }
         .navigationViewStyle(.stack)
+    }
+
+    private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "" }
+
+    /** One big row of the menu: an icon, the name, what's inside in small, and the page it opens. */
+    private func menuRow<Page: View>(_ title: String, detail: String, value: String? = nil, icon: String, color: UInt32,
+                                     @ViewBuilder page: @escaping () -> Page) -> some View {
+        NavigationLink {
+            page()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color(hex: color)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 17, weight: .semibold))
+                    Text(detail).font(.subheadline).foregroundColor(.secondary)
+                }
+                Spacer(minLength: 4)
+                if let value { Text(value).foregroundColor(.secondary) }
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    private var drivingPage: some View {
+        Form {
+            Section {
+                Toggle(isOn: $settings.voice) { SettingLabel("Voice guidance", icon: "speaker.wave.2.fill", color: 0x0F766E) }
+                Picker(selection: $settings.defaultMode) {
+                    ForEach(TravelMode.allCases) { Text($0.label).tag($0) }
+                } label: { SettingLabel("Default travel mode", icon: "car.fill", color: 0x2563EB) }
+            }
+            Section("Routes") {
+                Toggle(isOn: $settings.avoidTolls) { SettingLabel("Avoid tolls", icon: "sterlingsign.circle.fill", color: 0xF59E0B) }
+                Toggle(isOn: $settings.avoidHighways) {
+                    SettingLabel(Fmt.yards ? "Avoid motorways" : "Avoid highways", icon: "road.lanes", color: 0x1D4ED8)
+                }
+            }
+        }
+        .kiteList()
+        .navigationTitle("Voice & driving")
+    }
+
+    private var camerasPage: some View {
+        Form {
+            Section("Warnings") {
+                Toggle(isOn: $settings.cameraWarnings) { SettingLabel("Say when a speed camera is ahead", icon: "speaker.wave.3.fill", color: 0xDC2626) }
+                Toggle(isOn: $settings.speedingAlert) { SettingLabel("Say when I'm over the speed limit", icon: "gauge.with.dots.needle.67percent", color: 0xEA580C) }
+            }
+            Section {
+                Toggle(isOn: $settings.speedCameras) { SettingLabel("Speed cameras", icon: "camera.fill", color: 0xDC2626) }
+                Toggle(isOn: $settings.plateCameras) {
+                    SettingLabel(Fmt.yards ? "Number plate cameras" : "License plate cameras", icon: "number", color: 0x6B7280)
+                }
+            } header: {
+                Text("Show on the map and route")
+            } footer: {
+                Text("Speed cameras and \(Fmt.yards ? "number" : "license") plate cameras from OpenStreetMap's open map, shown on the map and on your route. Some countries, like France and Germany, don't allow warnings of speed cameras, so check before you turn the voice on there.")
+            }
+        }
+        .kiteList()
+        .navigationTitle("Cameras & speed")
+    }
+
+    private var mapPage: some View {
+        Form {
+            Section {
+                Picker(selection: $settings.theme) {
+                    ForEach(ThemeMode.allCases) { Text($0.label).tag($0) }
+                } label: { SettingLabel("Theme", icon: "circle.lefthalf.filled", color: 0x334155) }
+                Picker(selection: $settings.units) {
+                    ForEach(UnitsMode.allCases) { Text($0.label).tag($0) }
+                } label: { SettingLabel("Distance units", icon: "ruler.fill", color: 0x0891B2) }
+                Toggle(isOn: $settings.parkingButton) { SettingLabel("Parking button on the map", icon: "parkingsign", color: 0x2563EB) }
+            }
+        }
+        .kiteList()
+        .navigationTitle("Map & display")
+    }
+
+    private var placesPage: some View {
+        Form {
+            Section {
+                if let pick {
+                    Button { pick(.home) } label: {
+                        LabeledContent { Text(settings.home?.name ?? "Set") } label: { SettingLabel("Home", icon: "house.fill", color: 0x16A34A) }
+                    }
+                    .foregroundColor(.primary)
+                    Button { pick(.work) } label: {
+                        LabeledContent { Text(settings.work?.name ?? "Set") } label: { SettingLabel("Work", icon: "briefcase.fill", color: 0x9333EA) }
+                    }
+                    .foregroundColor(.primary)
+                } else {
+                    if let h = settings.home {
+                        LabeledContent { Text(h.name) } label: { SettingLabel("Home", icon: "house.fill", color: 0x16A34A) }
+                        Button("Remove home", role: .destructive) { settings.home = nil }
+                    }
+                    if let w = settings.work {
+                        LabeledContent { Text(w.name) } label: { SettingLabel("Work", icon: "briefcase.fill", color: 0x9333EA) }
+                        Button("Remove work", role: .destructive) { settings.work = nil }
+                    }
+                    if settings.home == nil && settings.work == nil {
+                        Text("Set home and work from the Saved page.").foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .kiteList()
+        .navigationTitle("My places")
+    }
+
+    private var privacyPage: some View {
+        Form {
+            Section {
+                Toggle(isOn: $settings.noGoogle) { SettingLabel("Use Kite without Google", icon: "lock.fill", color: 0x475569) }
+            } footer: {
+                Text("Off (the usual): search, place details, routes and live traffic come from Google, asked anonymously with no account. On: everything comes from free open-data services instead and nothing goes to Google, but search and routes are less complete.")
+            }
+        }
+        .kiteList()
+        .navigationTitle("Privacy")
+    }
+
+    private var aboutPage: some View {
+        Form {
+            Section {
+                LabeledContent("Version", value: version)
+                Link("Kite Maps on GitHub", destination: URL(string: "https://github.com/matteofx1/kite-maps")!)
+                Link("Based on Vela Maps for Android", destination: URL(string: "https://github.com/PimpinPumpkin/Vela")!)
+                Text("Free software under the GPL-3.0. Map © OpenFreeMap, OpenMapTiles, OpenStreetMap contributors. Routing © FOSSGIS OSRM. Imagery © Esri.")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+        }
+        .kiteList()
+        .navigationTitle("About")
     }
 }
 

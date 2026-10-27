@@ -39,8 +39,9 @@ the middle number for big milestones.
 - **British words:** "slip road", "car park", and search puts the place you typed first (no more
   The Body Shop above Whiteley Shopping Centre).
 - **Trip list while driving** starts at your next turn, and route time bubbles are a little bigger.
-- **Tidier Settings:** the same settings in clearer groups (Driving, Cameras & speed, Live reports,
-  Map, My places, Privacy), each with a small coloured icon.
+- **Tidier Settings, like Waze:** a short menu of big rows (Voice & driving, Cameras & speed, Road
+  alerts, Map & display, My places, Privacy, About), each opening its own page. Every setting is
+  still there and works the same.
 
 ## 0.7.2
 
