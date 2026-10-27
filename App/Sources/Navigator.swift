@@ -44,6 +44,8 @@ final class Navigator: ObservableObject {
     private var rerouteSpokenAt = Date.distantPast
     private var toldNoSignal = false
     private var spokenStage: [Int: Int] = [:]
+    /** Steps already given a "Continue for 7 miles". */
+    private var toldContinue: Set<Int> = []
     private var lastReroute = Date.distantPast
     /** Counts reroutes, so only the newest answer is used (adding a stop while one is loading). */
     private var rerouteRequest = 0
@@ -457,6 +459,38 @@ final class Navigator: ObservableObject {
         } else if d <= far && d > near + 150 && stage < 1 && m.type != .arrive {
             spokenStage[i] = 1
             speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
+        } else if drive && d > 3000 && stage < 1 && !toldContinue.contains(i) && justPassed(p) {
+            // A long way to the next turn, like after joining a motorway: say so once, the way
+            // Google does ("Continue on M27 for 7 miles"), so a quiet stretch doesn't feel lost.
+            toldContinue.insert(i)
+            speak(continueWords(d))
+        }
+    }
+
+    /** Just past a step the driver was told about (or the start), so "continue" follows on from it. */
+    private func justPassed(_ p: RouteTracker.Progress) -> Bool {
+        guard let i = p.nextIndex else { return false }
+        let last = route.maneuvers[..<i].last { !$0.silent }?.alongMeters ?? 0
+        return p.alongMeters - last < 500
+    }
+
+    private func continueWords(_ meters: Double) -> String {
+        "Continue " + (currentRoad.map { "on \($0) " } ?? "") + "for \(Fmt.spokenDistance(meters))."
+    }
+
+    /** Right after a reroute: the first thing to do on the new route, so "Rerouting" isn't the last word. */
+    private func sayNewRoute() {
+        guard let p = progress, let i = p.nextIndex, i < route.maneuvers.count, (spokenStage[i] ?? 0) == 0,
+              !toldContinue.contains(i) else { return }
+        let m = route.maneuvers[i], d = p.distanceToNext
+        let now = max(40, speedMps * 4), near = max(250, speedMps * 12)
+        guard d > now + 30, m.type != .arrive else { return }
+        if d > 3000 {
+            toldContinue.insert(i)
+            speak(continueWords(d))
+        } else {
+            spokenStage[i] = d <= near ? 2 : 1
+            speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
         }
     }
 
@@ -497,6 +531,7 @@ final class Navigator: ObservableObject {
             self.route = fresh
             self.tracker = RouteTracker(route: fresh)
             self.spokenStage = [:]
+            self.toldContinue = []
             self.loadCameras()
             self.loadRoundabouts()
             self.wazeAt = .distantPast
@@ -504,6 +539,7 @@ final class Navigator: ObservableObject {
             self.wazeAhead = nil
             self.loadWaze()
             if let fix = self.lastFix { self.handle(fix) }
+            if !quiet { self.sayNewRoute() }
         }
     }
 
@@ -511,7 +547,7 @@ final class Navigator: ObservableObject {
         guard !muted, !stopped else { return }
         if urgent && speech.isSpeaking { speech.stopSpeaking(at: .word) }
         try? AVAudioSession.sharedInstance().setActive(true)
-        let u = AVSpeechUtterance(string: text)
+        let u = AVSpeechUtterance(string: SpokenText.forVoice(text))
         u.voice = Self.voice
         u.rate = AVSpeechUtteranceDefaultSpeechRate * 0.95
         speech.speak(u)

@@ -55,6 +55,7 @@ func driveReplay() async {
         var total = cum.last ?? 0
         var tracker = RouteTracker(route: route)
         var spoken: [Int: Int] = [:]
+        var told = Set<Int>()
         var lastReroute = -100
         var reroutes = 0
         var offSince: Int?
@@ -96,6 +97,7 @@ func driveReplay() async {
                         total = cum.last ?? 0
                         driven = min(total, d.speed * Double(late))
                         spoken = [:]
+                        told = []
                         let first = fresh.maneuvers.first { $0.type != .depart }
                         print(String(format: "  %ds REROUTE (off route for %ds, new route in %.1f s, %.0f m): first step '%@'",
                                      s, s - late - (offSince ?? s), took, fresh.distanceMeters, first?.instruction ?? "-"))
@@ -126,6 +128,10 @@ func driveReplay() async {
             } else if dist <= far && dist > near + 150 && stage < 1 && m.type != .arrive {
                 spoken[i] = 1
                 say("In \(Int(dist)) m, \(m.instruction)")
+            } else if dist > 3000 && stage < 1 && !told.contains(i),
+                      p.alongMeters - (route.maneuvers[..<i].last { !$0.silent }?.alongMeters ?? 0) < 500 {
+                told.insert(i)
+                say("Continue for \(Int(dist)) m")
             }
         }
         print("  \(s)s end, reroutes \(reroutes), seconds with no speed limit shown \(noLimit)")

@@ -268,3 +268,17 @@ final class RoutingTests: XCTestCase {
                        "At the roundabout, take the 3rd exit onto A33")
     }
 }
+
+final class SpokenTextTests: XCTestCase {
+    func testRoadNamesSaidInFull() {
+        XCTAssertEqual(SpokenText.forVoice("Take the exit toward Stoneham Wy."), "Take the exit toward Stoneham Way")
+        XCTAssertEqual(SpokenText.forVoice("Slight left onto the ramp to So'ton"), "Slight left onto the ramp to Southampton")
+        XCTAssertEqual(SpokenText.forVoice("Turn right onto Burgess Rd"), "Turn right onto Burgess Road")
+        XCTAssertEqual(SpokenText.forVoice("Turn left onto Princes St."), "Turn left onto Princes Street")
+        XCTAssertEqual(SpokenText.forVoice("Turn left onto St Mary's Rd"), "Turn left onto Saint Mary's Road")
+        XCTAssertEqual(SpokenText.forVoice("Merge onto A33 N"), "Merge onto A33 north")
+        // Words that only start like a short form stay as they are.
+        XCTAssertEqual(SpokenText.forVoice("Continue onto Drove Road toward Romsey"), "Continue onto Drove Road toward Romsey")
+        XCTAssertEqual(SpokenText.forVoice("Turn left onto Avenue Road"), "Turn left onto Avenue Road")
+    }
+}
