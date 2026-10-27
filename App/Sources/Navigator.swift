@@ -1,5 +1,6 @@
 import AudioToolbox
 import AVFoundation
+import CallKit
 import CoreLocation
 import Foundation
 import UIKit
@@ -45,6 +46,9 @@ final class Navigator: ObservableObject {
     private var toldNoSignal = false
     private var spokenStage: [Int: Int] = [:]
     private var stoppedNearEnd: Date?
+    private let calls = CXCallObserver()
+    /** A phone (or FaceTime, WhatsApp...) call is going on. */
+    private var onCall: Bool { calls.calls.contains { !$0.hasEnded } }
     /** "left" or "right": which side of the road the place is, at the end of the route. */
     private var destinationSide: String? { route.mode == .drive ? Geo.sideAtEnd(destination.location, of: route.polyline) : nil }
     /** The whole route's road data has come in live, so what's remembered no longer stands in. */
@@ -473,7 +477,7 @@ final class Navigator: ObservableObject {
 
     /** A short tone before a camera warning, the way Waze does it. */
     private func chime() {
-        guard !muted, !stopped else { return }
+        guard !muted, !stopped, !onCall else { return }
         AudioServicesPlaySystemSound(1057)
     }
 
@@ -511,12 +515,14 @@ final class Navigator: ObservableObject {
             speak("In \(Fmt.spokenDistance(d)), \(words)\(lane)")
         } else if d <= far && d > near + 150 && stage < 1 && m.type != .arrive {
             spokenStage[i] = 1
+            // On a phone call only what's needed now is said; the early heads-up would talk over it.
+            if onCall { return }
             speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
         } else if drive && d > 3000 && stage < 1 && !toldContinue.contains(i) && justPassed(p) {
             // A long way to the next turn, like after joining a motorway: say so once, the way
             // Google does ("Continue on M27 for 7 miles"), so a quiet stretch doesn't feel lost.
             toldContinue.insert(i)
-            speak(continueWords(d))
+            if !onCall { speak(continueWords(d)) }
         }
     }
 
