@@ -135,7 +135,9 @@ func driveReplay() async {
                         s += late
                         driven = min(total, driven + d.speed * Double(late))
                         route = fresh
-                        route.speedLimits = Overpass.speedLimits(RoadCache.shared.along(fresh.polyline).ways, on: fresh.polyline)
+                        // Like the app: the road matcher's limits for the new route, else what's remembered.
+                        let m = await Valhalla.speedLimits(along: fresh.polyline)
+                        route.speedLimits = m.map(\.limits) ?? Overpass.speedLimits(RoadCache.shared.along(fresh.polyline).ways, on: fresh.polyline)
                         tracker = RouteTracker(route: route)
                         // A driver who missed a turn follows the new route from here.
                         drivenLine = fresh.polyline
