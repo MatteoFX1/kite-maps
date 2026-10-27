@@ -40,6 +40,12 @@ func ukReports() async {
         ("M1 Luton to Leicester", LatLng(51.880, -0.420), LatLng(52.636, -1.139)),
         ("M6 Birmingham to Manchester", LatLng(52.480, -1.900), LatLng(53.480, -2.240)),
         ("A33 Southampton to Basingstoke", LatLng(50.909, -1.404), LatLng(51.266, -1.087)),
+        ("Southampton city to Bishopstoke", LatLng(50.909, -1.404), LatLng(50.966, -1.330)),
+        ("Totton to Southampton Uni", LatLng(50.919, -1.490), LatLng(50.9346, -1.3966)),
+        ("Park Gate to Southampton Uni", LatLng(50.8705, -1.2690), LatLng(50.9346, -1.3966)),
+        ("Heathrow to the City of London", LatLng(51.470, -0.454), LatLng(51.513, -0.090)),
+        ("Croydon to Camden", LatLng(51.372, -0.100), LatLng(51.539, -0.143)),
+        ("A2 Greenwich to Dartford", LatLng(51.477, 0.000), LatLng(51.445, 0.215)),
         ("M62 Leeds to Manchester", LatLng(53.800, -1.549), LatLng(53.480, -2.240)),
     ]
     var total: [String: Int] = [:]
