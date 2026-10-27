@@ -31,6 +31,11 @@ the middle number for big milestones.
   motorway junction isn't covered in them, and none sit under your arrow.
 - **No more "19" speed signs:** some British roads are mapped as "30" with no unit, which the map
   treats as km/h (19 mph). In Britain Kite now reads those as the 30 mph on the sign.
+- **iPhone Duo support:** Kite now fills both of the foldable's screens instead of running small
+  with black bars (it's built with the newest Xcode). Opened up sideways, the search, place and
+  trip cards move into a panel on the left with a big map beside it, clear of the fold, and the
+  car drives in the middle of the map. Ordinary iPhones look the same, apart from pop-up sheets
+  like Layers taking the newer iOS rounded style.
 
 ## 0.7.3
 

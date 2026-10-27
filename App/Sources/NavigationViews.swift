@@ -9,6 +9,7 @@ struct NavigationOverlay: View {
     @State private var showAlong = false
     @State private var confirmEnd = false
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.sidePanel) private var panel
 
     /** "On my way to X, arriving around 5:42 PM (25 min)" with a map link. */
     private var etaText: String {
@@ -76,6 +77,7 @@ struct NavigationOverlay: View {
             }
             .padding(.horizontal, 12)
             .padding(.top, 4)
+            .inSidePanel(panel)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: nav.cameraAhead?.startMeters)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: nav.wazeAhead?.alert.id)
 
@@ -106,12 +108,16 @@ struct NavigationOverlay: View {
                         .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
+                // Under the car, which drives beside the side panel when there is one.
+                .frame(maxWidth: .infinity)
+                .padding(.leading, panel)
             }
             // Arriving answers the question: the trip bar's Done takes over.
             if confirmEnd, !nav.arrived {
                 EndTripCard(destination: nav.destination.name,
                             onKeep: { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { confirmEnd = false } },
                             onEnd: { model.endNavigation() })
+                    .inSidePanel(panel)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
                 TripBar(nav: nav, onEnd: {
@@ -119,6 +125,7 @@ struct NavigationOverlay: View {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { confirmEnd = true }
                     }
                 }, onSteps: { showSteps = true })
+                .inSidePanel(panel)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -134,8 +141,8 @@ struct NavigationOverlay: View {
                         .background(Capsule().fill(Color(hex: 0x0F172A).opacity(0.92)))
                         .overlay(Capsule().strokeBorder(Color(hex: 0x2DD4BF).opacity(0.8), lineWidth: 1.5))
                         // Between the speed sign and the mute button, which sit level with it now the car is lower.
-                        .frame(maxWidth: g.size.width - 240)
-                        .position(x: g.size.width / 2, y: NavGlide.carY(g.size.height) + 50)
+                        .frame(maxWidth: panel > 0 ? g.size.width - panel - 80 : g.size.width - 240)
+                        .position(x: panel + (g.size.width - panel) / 2, y: NavGlide.carY(g.size.height) + 50)
                 }
             }
             .ignoresSafeArea()

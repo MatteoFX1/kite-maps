@@ -28,6 +28,8 @@ final class NavGlide: NSObject {
     nonisolated static func topInset(_ height: CGFloat) -> CGFloat {
         height < 500 ? max(0, min(height * topFraction, height - bottomInset - 100)) : height * topFraction
     }
+    /** The side panel's width on a big screen, so the car drives in the middle of the map beside it. */
+    var leftInset: CGFloat = 0
     private weak var nav: Navigator?
     private var link: CADisplayLink?
     private var lastFrame: CFTimeInterval = 0
@@ -150,7 +152,7 @@ final class NavGlide: NSObject {
         }
         if n.following {
             let cam = MLNMapCamera(lookingAtCenter: coordNow, acrossDistance: shownAcross, pitch: 50, heading: shownBearing)
-            let pad = UIEdgeInsets(top: Self.topInset(map.bounds.height), left: 0, bottom: Self.bottomInset, right: 0)
+            let pad = UIEdgeInsets(top: Self.topInset(map.bounds.height), left: leftInset, bottom: Self.bottomInset, right: 0)
             map.setCamera(cam, withDuration: 0, animationTimingFunction: nil, edgePadding: pad, completionHandler: nil)
         }
     }
