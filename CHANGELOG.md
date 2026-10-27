@@ -20,6 +20,9 @@ the middle number for big milestones.
 - **Your arrow's disc** is white by day and navy at night, and the road name sits a little lower so
   it never touches it.
 - **More traffic lights found:** Kite now looks closer along the route, so lights in towns aren't missed.
+- **Roundabout arrow on the map** goes all the way round to your exit, like Waze, instead of
+  stopping just inside the roundabout.
+- **Trip list while driving** starts at your next turn, not with the turns you've already made.
 - **Exit number in the roundabout picture:** the number of your exit is back in the middle of the
   roundabout drawing, as well as "6th exit" next to it.
 

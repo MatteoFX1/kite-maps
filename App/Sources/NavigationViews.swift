@@ -167,7 +167,7 @@ struct NavigationOverlay: View {
                                 model.overviewNav()
                             }
                         }
-                        StepsList(route: nav.route)
+                        StepsList(route: nav.route, from: nav.progress?.nextIndex ?? 0)
                     }
                     .padding(.horizontal, 16)
                 }

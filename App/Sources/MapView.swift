@@ -736,7 +736,14 @@ struct VelaMapView: UIViewRepresentable {
             let arrowSrc = style.source(withIdentifier: "vela-turn-arrow") as? MLNShapeSource
             if let n = model.nav, let m = n.nextManeuver, m.type != .arrive, m.type != .depart, m.type != .straight,
                let p = n.progress, m.alongMeters - p.alongMeters < 600 {
-                let a = max(m.alongMeters - 35, from), b = min(m.alongMeters + 22, total)
+                // At a roundabout, all the way round to your exit and a little beyond, like Waze.
+                var end = m.alongMeters + 22
+                if m.type == .roundabout,
+                   let out = n.route.maneuvers.first(where: { $0.leavesRoundabout && $0.alongMeters > m.alongMeters }),
+                   out.alongMeters - m.alongMeters < 250 {
+                    end = out.alongMeters + 22
+                }
+                let a = max(m.alongMeters - 35, from), b = min(end, total)
                 let shaft = Geo.slice(r.polyline, from: a, to: b, cumulative: cum)
                 if shaft.count >= 2 {
                     let tip = shaft[shaft.count - 1], prev = Geo.point(along: r.polyline, meters: max(a, b - 4), cumulative: cum)
