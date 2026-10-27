@@ -531,7 +531,8 @@ public enum Directions {
                     for j in g[i].maneuvers.indices where g[i].maneuvers[j].type == .roundabout && g[i].maneuvers[j].exit == nil {
                         g[i].maneuvers[j].exit = DirectionsParser.exitNumber(in: g[i].maneuvers[j].instruction)
                     }
-                    if Geo.drivesOnLeft(a) {
+                    // Britain and Ireland ("slip road" is British; Australia says "ramp" too).
+                    if (49.8...61).contains(a.lat), (-11...2).contains(a.lng) {
                         for j in g[i].maneuvers.indices { g[i].maneuvers[j].instruction = British.words(g[i].maneuvers[j].instruction) }
                     }
                 }
