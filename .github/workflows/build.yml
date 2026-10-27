@@ -46,6 +46,11 @@ jobs:
         continue-on-error: true
         timeout-minutes: 4
         run: swift run vela-probe google
+      - name: Live Waze reports check (app protocol, UK)
+        working-directory: VelaCore
+        continue-on-error: true
+        timeout-minutes: 4
+        run: swift run vela-probe wazert
       - name: Live Google police check
         working-directory: VelaCore
         continue-on-error: true

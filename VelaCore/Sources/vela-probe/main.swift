@@ -18,14 +18,25 @@ if args.count > 1, args[1] == "incidents" {
     await googleIncidents()
     exit(0)
 }
-if args.count > 1, args[1] == "ninja" {
-    // One OpenWeb Ninja ask over central London (uses one of the key's monthly asks).
-    // Usage: NINJA_KEY=... swift run vela-probe ninja
-    WazeNinja.key = ProcessInfo.processInfo.environment["NINJA_KEY"]
-    let found = await WazeNinja.alerts(south: 51.49, west: -0.20, north: 51.54, east: -0.05)
-    print("ninja: HTTP \(WazeNinja.lastStatus?.code ?? 0), \(WazeNinja.lastStatus?.summary ?? "nothing")")
-    for a in found ?? [] { print(" \(a.title) · \(a.street ?? "?") · \(a.reportedAt) · \(a.thumbsUp) thumbs") }
-    exit(found == nil ? 1 : 0)
+if args.count > 1, args[1] == "wazert" {
+    // Live Waze reports through the app's own protocol (WazeLive), around Southampton, the M27 and London.
+    let places: [(String, LatLng)] = [("Southampton (Bursledon Rd)", LatLng(50.905, -1.34)), ("Eastleigh", LatLng(50.97, -1.35)),
+                                       ("M27 J5-J7", LatLng(50.92, -1.30)), ("Central London", LatLng(51.515, -0.13)),
+                                       ("West London", LatLng(51.50, -0.25))]
+    var police = 0
+    for (name, p) in places {
+        let b = WazeLive.box(around: p, meters: 6_000)
+        let found = await WazeLive.shared.alerts(boxes: [b], near: p)
+        let s = WazeLive.lastStatus
+        print("\(name): \(found == nil ? "FAILED (code \(s?.code ?? 0))" : "\(s?.summary ?? "nothing")")")
+        for a in (found ?? []).filter({ $0.kind == .police }).prefix(8) {
+            let mins = Int(Date().timeIntervalSince(a.reportedAt) / 60)
+            print(String(format: "   %@ · %@ · %.5f,%.5f · %d min ago · %d thumbs", a.title, a.street ?? "?", a.location.lat, a.location.lng, mins, a.thumbsUp))
+        }
+        police += (found ?? []).filter { $0.kind == .police }.count
+    }
+    print("police in all: \(police)")
+    exit(0)
 }
 if args.count > 1, args[1] == "body" {
     await rawBody()
