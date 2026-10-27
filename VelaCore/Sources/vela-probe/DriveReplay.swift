@@ -8,6 +8,13 @@ import VelaCore
  * long a wrong turn takes to notice and fix, and how long speed limits take to arrive.
  */
 /** `swift run vela-probe route lat lng lat lng`: every route Kite would offer, with its steps. */
+/** `swift run vela-probe body lat lng lat lng`: Google's raw route answer, to look through. */
+func rawBody() async {
+    let a = CommandLine.arguments.dropFirst(2).compactMap(Double.init)
+    guard a.count == 4, let body = try? await GoogleClient.shared.directionsBody(from: LatLng(a[0], a[1]), to: LatLng(a[2], a[3]), mode: .drive) else { return }
+    print(body)
+}
+
 func routeCheck() async {
     let a = CommandLine.arguments.dropFirst(2).compactMap(Double.init)
     guard a.count >= 4 else { print("usage: route lat lng lat lng [heading]"); return }

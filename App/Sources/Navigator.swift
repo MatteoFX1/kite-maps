@@ -45,6 +45,8 @@ final class Navigator: ObservableObject {
     private var toldNoSignal = false
     private var spokenStage: [Int: Int] = [:]
     private var stoppedNearEnd: Date?
+    /** The whole route's road data has come in live, so what's remembered no longer stands in. */
+    private var fullRoadData = false
     /** Called a few minutes after arriving, to end the trip. */
     var onFinished: (() -> Void)?
     /** Steps already given a "Continue for 7 miles". */
@@ -57,7 +59,8 @@ final class Navigator: ObservableObject {
     private var avoidHighways: Bool
     private var avoidTolls: Bool
     private var routeCameras: [(camera: RoadCamera, along: Double)] = []
-    private var spokenCameras: Set<Int> = []
+    /** Cameras already warned about, by OSM id: the list is replaced as road data comes in, so not by place in it. */
+    private var spokenCameras: Set<Int64> = []
     private var zones: [AverageSpeedZone] = []
     private var zoneEntry: (index: Int, time: Date, along: Double)?
     private var demoAlerts = false
@@ -204,7 +207,7 @@ final class Navigator: ObservableObject {
 
     private func loadCameras() {
         routeCameras = []
-        spokenCameras = []
+        // Kept across a reroute: a camera already warned about isn't warned about again.
         cameraAhead = nil
         zones = []
         zoneEntry = nil
@@ -214,19 +217,31 @@ final class Navigator: ObservableObject {
         guard route.mode == .drive else { return }
         let line = route.polyline, id = route.id
         let speed = s.speedCameras, plate = s.plateCameras
+        fullRoadData = false
         // What's already known about these roads shows straight away; the live answer replaces it.
-        Task {
+        func useKnown() async {
             let known = await Task.detached(priority: .userInitiated) { () -> (cams: [(camera: RoadCamera, along: Double)], limits: [SpeedLimit], signals: [LatLng]) in
                 let k = RoadCache.shared.along(line)
                 let cams = CameraAlerts.project(k.cameras.filter { $0.kind == .speed ? speed : plate }, on: line)
                 return (cams, k.ways.isEmpty ? [] : Overpass.speedLimits(k.ways, on: line), k.signals)
             }.value
-            // Only while the live answer hasn't come in yet.
-            guard self.route.id == id, self.routeSignals.isEmpty, self.routeCameras.isEmpty else { return }
-            if self.route.speedLimits.isEmpty { self.route.speedLimits = known.limits }
+            // Only while the whole route's live answer hasn't come in yet.
+            guard self.route.id == id, !self.fullRoadData else { return }
+            if !known.limits.isEmpty { self.route.speedLimits = known.limits }
             self.routeCameras = known.cams
             self.zones = CameraAlerts.averageZones(known.cams)
             self.routeSignals = known.signals
+        }
+        Task { await useKnown() }
+        // A small question about the first few miles gets answered far sooner by a busy server than
+        // the whole route (17 s against a minute or a time-out at night), so the limit shows early.
+        let cum = Geo.cumulative(line)
+        if (cum.last ?? 0) > 8000 {
+            let start = Geo.slice(line, from: 0, to: 6000, cumulative: cum)
+            Task {
+                guard await Overpass.alongRoute(start, speed: speed, plate: plate) != nil else { return }
+                await useKnown()
+            }
         }
         Task {
             // The public Overpass servers are sometimes busy: try again a couple of times.
@@ -236,6 +251,7 @@ final class Navigator: ObservableObject {
                 result = await Overpass.alongRoute(line, speed: speed, plate: plate)
             }
             guard let found = result, self.route.id == id else { return }
+            self.fullRoadData = true
             self.routeCameras = CameraAlerts.project(found.cameras, on: line)
             self.route.speedLimits = Overpass.speedLimits(found.ways, on: line)
             self.zones = CameraAlerts.merge(found.zones, CameraAlerts.averageZones(self.routeCameras))
@@ -256,9 +272,10 @@ final class Navigator: ObservableObject {
                 cameraAhead = nil
             }
         }
-        guard let i = CameraAlerts.due(cameraMeters: meters, traveled: p.alongMeters, speedMps: speedMps, spoken: spokenCameras) else { return }
+        let spoken = Set(routeCameras.indices.filter { spokenCameras.contains(routeCameras[$0].camera.id) })
+        guard let i = CameraAlerts.due(cameraMeters: meters, traveled: p.alongMeters, speedMps: speedMps, spoken: spoken) else { return }
         // Cameras a few meters apart are one warning.
-        for (j, m) in meters.enumerated() where m >= meters[i] && m - meters[i] < 40 { spokenCameras.insert(j) }
+        for (j, m) in meters.enumerated() where m >= meters[i] && m - meters[i] < 40 { spokenCameras.insert(routeCameras[j].camera.id) }
         let cam = routeCameras[i].camera
         let ahead = meters[i] - p.alongMeters
         let limit = cam.kind == .speed ? (cam.maxspeedKmh ?? route.speedLimit(at: meters[i])) : nil
