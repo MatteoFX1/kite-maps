@@ -641,7 +641,14 @@ final class Navigator: ObservableObject {
     }
 
     private func continueWords(_ meters: Double) -> String {
-        "Continue " + (currentRoad.map { "on \($0) " } ?? "") + "for \(Fmt.spokenDistance(meters))."
+        // The road's name only if it keeps it all the way: Commercial Road out of Totton becomes the
+        // Redbridge Causeway and Millbrook Road long before the 3.4 miles are up.
+        var road = currentRoad
+        if let p = progress, let next = p.nextIndex,
+           route.maneuvers[..<next].contains(where: { $0.alongMeters > p.alongMeters && $0.road != nil && $0.road != road }) {
+            road = nil
+        }
+        return "Continue " + (road.map { "on \($0) " } ?? "") + "for \(Fmt.spokenDistance(meters))."
     }
 
     /** Right after a reroute: the first thing to do on the new route, so "Rerouting" isn't the last word. */
