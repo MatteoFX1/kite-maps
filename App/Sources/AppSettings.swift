@@ -113,6 +113,8 @@ final class AppSettings: ObservableObject {
         saved = (d.data(forKey: "saved")).flatMap { try? JSONDecoder().decode([Place].self, from: $0) } ?? []
         recents = d.stringArray(forKey: "recents") ?? []
         recentPlaces = d.data(forKey: "recentPlaces").flatMap { try? JSONDecoder().decode([Place].self, from: $0) } ?? []
+        // The OpenWeb Ninja key and counter from 0.7.3, no longer used: don't leave the key on the phone.
+        for k in ["ninjaKey", "ninjaMonth", "ninjaUsed"] { d.removeObject(forKey: k) }
     }
 
     /** Countries where apps may not warn of speed cameras (France, Germany, Switzerland and a few more). */

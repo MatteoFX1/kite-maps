@@ -96,9 +96,4 @@ public enum StreetView {
             + "&w=\(width)&h=\(height)&yaw=\(Int(heading.rounded()))&pitch=0&thumbfov=100")!
     }
 
-    /** Google's embeddable Street View page, starting at [heading]: drag to look, tap the arrows to move. */
-    public static func viewerURL(_ pano: Panorama, heading: Double) -> URL {
-        URL(string: "https://www.google.com/maps/embed?pb=!4v1!6m8!1m7!1s\(pano.id)!2m2!1d\(pano.location.lat)!2d\(pano.location.lng)"
-            + "!3f\(Int(heading.rounded()))!4f0!5f0.78")!
-    }
 }

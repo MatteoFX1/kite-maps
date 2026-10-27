@@ -667,15 +667,6 @@ final class AppModel: ObservableObject {
         map.setCamera(cam, withDuration: 0.5, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut))
     }
 
-    func resetNorth() {
-        guard let map else { return }
-        map.setDirection(0, animated: true)
-        let cam = map.camera
-        cam.pitch = 0
-        cam.heading = 0
-        map.setCamera(cam, animated: true)
-    }
-
     private func resetCamera() {
         guard let map else { return }
         let cam = map.camera

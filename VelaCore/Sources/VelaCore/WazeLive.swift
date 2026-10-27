@@ -18,6 +18,10 @@ public actor WazeLive {
 
     /** How the last ask went, for Settings: when, the HTTP code (0 = no network, -1 = refused in the answer), how many reports. */
     nonisolated(unsafe) public private(set) static var lastStatus: Waze.Status?
+    /** Bytes sent and received since launch, to keep an eye on data use. */
+    nonisolated(unsafe) public private(set) static var bytes = 0
+    /** Another server instead of Waze's, for testing what Kite does when Waze is unreachable. */
+    nonisolated(unsafe) public static var hostOverride: String?
 
     static let protocolVersion = 234
     static let appVersion = "5.17.1.0"
@@ -50,6 +54,8 @@ public actor WazeLive {
     private var http = WazeLive.makeSession()
     private var region = "row"
     private var backoffUntil = Date.distantPast
+    /** Failed asks in a row: each one waits twice as long before the next, up to 10 minutes. */
+    private var failures = 0
     /** Reports from this session, by Waze's id; Waze sends each once per session, then "RmAlert" when it clears. */
     private var cache: [String: WazeAlert] = [:]
 
@@ -90,6 +96,7 @@ public actor WazeLive {
         var types: [String: Int] = [:]
         for a in list { types[Self.typeKey(a.kind), default: 0] += 1 }
         Self.lastStatus = Waze.Status(at: Date(), code: 200, count: list.count, types: types)
+        failures = 0
         return list
     }
 
@@ -108,12 +115,15 @@ public actor WazeLive {
     }
 
     private func failed(_ error: Error) -> [WazeAlert]? {
-        backoffUntil = Date().addingTimeInterval(30)
+        failures += 1
+        backoffUntil = Date().addingTimeInterval(min(30 * pow(2, Double(failures - 1)), 600))
+        let offline: Set<URLError.Code> = [.notConnectedToInternet, .timedOut, .networkConnectionLost, .cannotFindHost,
+                                           .cannotConnectToHost, .dnsLookupFailed, .dataNotAllowed, .internationalRoamingOff]
         let code: Int
         switch error {
         case Failure.rejected: code = 401
         case Failure.expired: code = 440
-        case let e as URLError where e.code == .notConnectedToInternet || e.code == .timedOut: code = 0
+        case let e as URLError where offline.contains(e.code): code = 0
         default: code = -1
         }
         Self.lastStatus = Waze.Status(at: Date(), code: code, count: 0)
@@ -158,6 +168,7 @@ public actor WazeLive {
     // MARK: Register, log in, ask
 
     private func url(_ path: String) -> URL {
+        if let h = Self.hostOverride { return URL(string: "https://\(h)/rtserver/distrib/\(path)")! }
         let host = region == "na" ? "rt-xlb-am.waze.com" : region == "il" ? "rt-xlb-il.waze.com" : "rt-xlb-row.waze.com"
         return URL(string: "https://\(host)/rtserver/distrib/\(path)")!
     }
@@ -233,6 +244,7 @@ public actor WazeLive {
         seq += 1
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
         let (data, resp) = try await http.data(for: req)
+        Self.bytes += body.utf8.count + data.count
         return (data, (resp as? HTTPURLResponse)?.statusCode ?? 0)
     }
 

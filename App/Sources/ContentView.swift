@@ -307,32 +307,6 @@ struct SearchBar: View {
     }
 }
 
-struct CategoryChips: View {
-    let onPick: (Category) -> Void
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(Category.all) { c in
-                    Button { onPick(c) } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: c.icon).font(.system(size: 13))
-                            Text(c.label).font(.subheadline.weight(.medium))
-                        }
-                        .padding(.horizontal, 14)
-                        .frame(height: 36)
-                        .glass(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-        }
-    }
-}
-
 struct SuggestionsPanel: View {
     @ObservedObject var model: AppModel
     @ObservedObject var settings = AppSettings.shared

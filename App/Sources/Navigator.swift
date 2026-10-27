@@ -106,6 +106,9 @@ final class Navigator: ObservableObject {
     private var wazeLoading = false
     /** Drivers' reports (police, crashes, hazards...) from Waze's app servers, asked every 90 seconds. */
     @Published private(set) var liveAlerts: [WazeAlert] = []
+    private var liveAt = Date.distantPast
+    /** Closures from the live map, kept for when it doesn't answer. */
+    private var closureAlerts: [WazeAlert] = []
     private var riskAt = Date.distantPast
     private var riskPast: [PoliceRisk.Report]?
     private var riskSpokenAt = Date.distantPast
@@ -384,14 +387,20 @@ final class Navigator: ObservableObject {
             let found = await closures
             self.wazeLoading = false
             guard self.route.id == id else { return }
-            if let found { WazeHistory.shared.record(found) }
+            if let found {
+                WazeHistory.shared.record(found)
+                self.closureAlerts = found
+            }
             if let live {
                 WazeHistory.shared.record(live)
                 self.liveAlerts = live
+                self.liveAt = Date()
+            } else if !self.liveAlerts.isEmpty, Date().timeIntervalSince(self.liveAt) > 300 {
+                // Waze hasn't answered for 5 minutes: don't keep warning about reports that may be long gone.
+                self.liveAlerts = []
             }
-            guard found != nil || live != nil else { return }
             var merged: [String: WazeAlert] = [:]
-            for a in (found ?? self.routeWaze.map(\.alert)) + self.liveAlerts { merged[a.id] = a }
+            for a in self.closureAlerts + self.liveAlerts { merged[a.id] = a }
             self.routeWaze = Waze.project(Array(merged.values), on: line)
         }
     }

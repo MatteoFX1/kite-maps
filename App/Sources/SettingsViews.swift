@@ -299,15 +299,15 @@ struct WazeSettingsView: View {
 
     /** Whether Waze answered last time, so it's easy to tell when it has stopped working. */
     private var connection: (text: String, color: Color) {
-        guard let s = Waze.lastStatus else { return ("Not checked yet: open the map at city zoom", .gray) }
+        guard let s = Waze.lastStatus else { return ("Closures: checked once you open the map at city zoom", .gray) }
         let mins = Int(Date().timeIntervalSince(s.at) / 60)
         let when = mins < 1 ? "just now" : "\(mins) min ago"
         switch s.code {
-        case 200: return ("Working\(s.viaPage ? " (through the live map page)" : ""): \(s.count) reports, \(when)", Color(hex: 0x188038))
-        case 0: return ("No connection (\(when))", .orange)
-        case 401, 403: return ("Waze turned Kite away (\(s.code), \(when)). It may work again later.", .red)
-        case -1: return ("Waze sent something Kite can't read (\(when))", .red)
-        default: return ("Waze error \(s.code) (\(when))", .orange)
+        case 200: return ("Closures working: \(s.count) reports, \(when)", Color(hex: 0x188038))
+        case 0: return ("Closures: no connection (\(when))", .orange)
+        case 401, 403: return ("Closures: Waze turned Kite away (\(when)). It may work again later.", .red)
+        case -1: return ("Closures: Waze sent something Kite can't read (\(when))", .red)
+        default: return ("Closures: Waze error \(s.code) (\(when))", .orange)
         }
     }
 
@@ -320,6 +320,8 @@ struct WazeSettingsView: View {
         case 200: return ("Driver reports working: \(s.summary), \(when)", Color(hex: 0x188038))
         case 0: return ("Driver reports: no connection (\(when))", .orange)
         case 401: return ("Driver reports: Waze turned Kite away (\(when)). It may work again later.", .red)
+        case 440: return ("Driver reports: reconnecting to Waze (\(when))", .orange)
+        case -1: return ("Driver reports: Waze sent something Kite can't read (\(when))", .red)
         default: return ("Driver reports: Waze error \(s.code) (\(when))", .orange)
         }
     }
@@ -331,7 +333,7 @@ struct WazeSettingsView: View {
             } footer: {
                 Text(settings.noGoogle
                      ? "Off while \"Use Kite without Google\" is on, since Waze belongs to Google."
-                     : "Kite reads the public Waze live map, with no account. Waze sees the area you're looking at, anonymously. It doesn't officially allow other apps to do this, so it may stop working one day.")
+                     : "While you navigate, Kite asks Waze for drivers' reports the way the Waze app does, with an anonymous account Waze makes for it (no name, email or phone). Closures also come from the Waze live map. Waze sees roughly where you are, anonymously. It doesn't allow other apps to do this, so it may stop working one day.")
             }
             if settings.wazeOn {
                 Section {
@@ -345,7 +347,7 @@ struct WazeSettingsView: View {
                     }
                     if let s = Waze.lastStatus, s.code == 200 {
                         // What Waze actually sent, so it's easy to see if a kind has gone missing.
-                        LabeledContent("Last answer", value: s.summary).font(.subheadline)
+                        LabeledContent("Closures, last answer", value: s.summary).font(.subheadline)
                     }
                 } header: {
                     Text("Connection")

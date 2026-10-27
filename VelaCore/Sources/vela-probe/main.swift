@@ -36,6 +36,17 @@ if args.count > 1, args[1] == "wazert" {
         police += (found ?? []).filter { $0.kind == .police }.count
     }
     print("police in all: \(police)")
+    let streets = await WazeLive.shared.alerts(boxes: [WazeLive.box(around: places[0].1, meters: 6_000)], near: places[0].1) ?? []
+    print("with a street name: \(streets.filter { $0.street != nil }.count) of \(streets.count), e.g. \(streets.compactMap(\.street).prefix(5))")
+    print("data used: \(WazeLive.bytes / 1024) KB")
+    // What happens when Waze can't be reached: a quick failure, then a pause before asking again.
+    WazeLive.hostOverride = "127.0.0.1:9"
+    let t = Date()
+    let down = await WazeLive.shared.alerts(boxes: [WazeLive.box(around: places[0].1, meters: 6_000)], near: places[0].1)
+    print(String(format: "unreachable: %@ in %.1f s, status code %d", down == nil ? "nil" : "\(down!.count) reports", Date().timeIntervalSince(t),
+                 WazeLive.lastStatus?.code ?? 99))
+    let again = await WazeLive.shared.alerts(boxes: [WazeLive.box(around: places[0].1, meters: 6_000)], near: places[0].1)
+    print("asked again straight away: \(again == nil ? "skipped (waiting)" : "asked")")
     exit(0)
 }
 if args.count > 1, args[1] == "body" {
