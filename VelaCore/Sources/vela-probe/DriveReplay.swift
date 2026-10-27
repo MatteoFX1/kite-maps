@@ -11,8 +11,9 @@ import VelaCore
 /** `swift run vela-probe body lat lng lat lng`: Google's raw route answer, to look through. */
 func rawBody() async {
     let a = CommandLine.arguments.dropFirst(2).compactMap(Double.init)
-    guard a.count == 4, let body = try? await GoogleClient.shared.directionsBody(from: LatLng(a[0], a[1]), to: LatLng(a[2], a[3]), mode: .drive) else { return }
-    print(body)
+    guard a.count == 4 else { return }
+    do { print(try await GoogleClient.shared.directionsBody(from: LatLng(a[0], a[1]), to: LatLng(a[2], a[3]), mode: .drive)) }
+    catch { FileHandle.standardError.write("failed: \(error)\n".data(using: .utf8)!) }
 }
 
 /** `swift run vela-probe limits lat lng lat lng`: how long the road matcher takes on a long drive, and what it covers. */
@@ -32,7 +33,7 @@ func limitsCheck() async {
  * For the rush-hour police test: run it at 07:30-09:00.
  */
 func ukReports() async {
-    let drives: [(String, LatLng, LatLng)] = [
+    let standard: [(String, LatLng, LatLng)] = [
         ("M27 Southampton to Portsmouth", LatLng(50.915, -1.380), LatLng(50.805, -1.087)),
         ("M27 Portsmouth to Southampton", LatLng(50.805, -1.087), LatLng(50.915, -1.380)),
         ("M3 Winchester to London", LatLng(51.063, -1.308), LatLng(51.470, -0.454)),
@@ -49,10 +50,22 @@ func ukReports() async {
         ("M62 Leeds to Manchester", LatLng(53.800, -1.549), LatLng(53.480, -2.240)),
     ]
     var total: [String: Int] = [:]
-    for (name, a, b) in drives {
+    // ROUTES="lat,lng,lat,lng;..." asks these instead (a report seen in Waze, say).
+    var drives = standard
+    if let custom = ProcessInfo.processInfo.environment["ROUTES"] {
+        drives = custom.split(separator: ";").compactMap { r in
+            let n = r.split(separator: ",").compactMap { Double($0) }
+            return n.count == 4 ? ("\(r)", LatLng(n[0], n[1]), LatLng(n[2], n[3])) : nil
+        }
+    }
+    let dump = ProcessInfo.processInfo.environment["DUMP"]
+    for (k, (name, a, b)) in drives.enumerated() {
         guard let body = try? await GoogleClient.shared.directionsBody(from: a, to: b, mode: .drive) else {
             print("\(name): no answer"); continue
         }
+        if let dump { try? body.write(toFile: "\(dump)/route\(k).txt", atomically: true, encoding: .utf8) }
+        let police = body.components(separatedBy: "olice").count - 1
+        print("\(name): \(body.count) chars, 'police' \(police)x")
         // Each report: ...[N,"Reported 12 min ago"] ... [2,["Kind"]] ... "Road"...
         var kinds: [String: Int] = [:]
         var examples: [String] = []
