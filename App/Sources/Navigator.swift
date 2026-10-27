@@ -104,7 +104,7 @@ final class Navigator: ObservableObject {
         loadRoundabouts()
         speak("Starting route to \(destination.name). " + (first.map { "\($0.instruction)." } ?? ""))
         // That was the heads-up for the first step: don't say it again a moment later.
-        if let f = first, f.alongMeters < 1500, let i = route.maneuvers.firstIndex(of: f) { spokenStage[i] = f.alongMeters < 300 ? 2 : 1 }
+        if let f = first, f.alongMeters < 1500, let i = route.maneuvers.firstIndex(of: f) { spokenStage[i] = f.alongMeters < 100 ? 3 : f.alongMeters < 300 ? 2 : 1 }
     }
 
     func stop() {
@@ -294,8 +294,9 @@ final class Navigator: ObservableObject {
         }
         let spoken = Set(routeCameras.indices.filter { spokenCameras.contains(routeCameras[$0].camera.id) })
         guard let i = CameraAlerts.due(cameraMeters: meters, traveled: p.alongMeters, speedMps: speedMps, spoken: spoken) else { return }
-        // Cameras a few meters apart are one warning.
-        for (j, m) in meters.enumerated() where m >= meters[i] && m - meters[i] < 40 { spokenCameras.insert(routeCameras[j].camera.id) }
+        // Cameras close together are one warning: OSM often maps one per direction, or a pole and its
+        // sign, and the A33 at Redbridge got three warnings in ten seconds.
+        for (j, m) in meters.enumerated() where m >= meters[i] && m - meters[i] < 200 { spokenCameras.insert(routeCameras[j].camera.id) }
         let cam = routeCameras[i].camera
         let ahead = meters[i] - p.alongMeters
         let limit = cam.kind == .speed ? (cam.maxspeedKmh ?? route.speedLimit(at: meters[i])) : nil
