@@ -34,8 +34,8 @@ enum MapIcons {
         style.setImage(dot("mappin", UIColor(hex: 0xE8453C)), forName: "cat-default")
         style.setImage(selectedPin(), forName: "pin-selected")
         style.setImage(originDot(), forName: "pin-origin")
-        style.setImage(puck(), forName: "puck")
-        style.setImage(bubble(fill: UIColor(hex: 0x1F6FEB), stroke: .white), forName: "bubble-sel")
+        style.setImage(puck(dark: true), forName: "puck")
+        style.setImage(bubble(fill: UIColor(hex: 0x0F766E), stroke: .white), forName: "bubble-sel")
         style.setImage(bubble(fill: .white, stroke: UIColor(hex: 0xBDC1C6)), forName: "bubble-alt")
         style.setImage(speedCamera(), forName: "cam-speed")
         style.setImage(plateCamera(), forName: "cam-plate")
@@ -209,7 +209,7 @@ enum MapIcons {
         return UIGraphicsImageRenderer(size: size).image { _ in
             UIColor.white.setFill()
             UIBezierPath(ovalIn: CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1)).fill()
-            UIColor(hex: 0x1F6FEB).setStroke()
+            UIColor(hex: 0x14B8A6).setStroke()
             let ring = UIBezierPath(ovalIn: CGRect(origin: .zero, size: size).insetBy(dx: 4, dy: 4))
             ring.lineWidth = 4
             ring.stroke()
@@ -218,14 +218,15 @@ enum MapIcons {
 
     /**
      * The car while navigating, Waze-style in Kite's teal: a chunky teal arrow with a white rim and a
-     * darker right half so it reads as raised, sitting on a navy disc with a teal ring.
+     * darker right half so it reads as raised, sitting on a disc with a teal ring (navy at night,
+     * white by day).
      */
-    private static func puck() -> UIImage {
+    static func puck(dark: Bool) -> UIImage {
         let size = CGSize(width: 76, height: 76)
         return UIGraphicsImageRenderer(size: size).image { ctx in
             let g = ctx.cgContext
-            let disc = UIBezierPath(ovalIn: CGRect(x: 3, y: 3, width: 70, height: 70))
-            UIColor(hex: 0x0F172A, alpha: 0.6).setFill()
+            let disc = UIBezierPath(ovalIn: CGRect(x: 6, y: 6, width: 64, height: 64))
+            (dark ? UIColor(hex: 0x0F172A, alpha: 0.6) : UIColor(white: 1, alpha: 0.75)).setFill()
             disc.fill()
             UIColor(hex: 0x2DD4BF, alpha: 0.75).setStroke()
             disc.lineWidth = 2.5

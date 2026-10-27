@@ -74,7 +74,7 @@ public enum Overpass {
 
     /**
      * Cameras, posted speed limits and traffic lights along a route in one query: cameras within
-     * 150 m, roads with a `maxspeed` within 12 m, traffic lights within 20 m. Nil when every mirror failed.
+     * 150 m, roads with a `maxspeed` within 12 m, traffic lights within 50 m. Nil when every mirror failed.
      */
     public static func alongRoute(_ line: [LatLng], speed: Bool, plate: Bool) async
         -> (cameras: [RoadCamera], ways: [LimitWay], zones: [AverageSpeedZone], signals: [LatLng])? {
@@ -119,7 +119,9 @@ public enum Overpass {
     }
 
     private static func alongQuery(_ line: [LatLng], speed: Bool, plate: Bool) async -> Data? {
-        let maxPts = 200
+        // About one point every 100 m: the query's line cuts corners between points, and traffic
+        // lights stand right by the road.
+        let maxPts = 400
         let pts = line.count <= maxPts ? line : (0..<maxPts).map {
             line[min(line.count - 1, Int((Double($0) * Double(line.count - 1) / Double(maxPts - 1)).rounded()))]
         }
@@ -129,7 +131,7 @@ public enum Overpass {
         if plate { parts.append("node[\"surveillance:type\"=\"ALPR\"](around:150,\(coords));") }
         parts.append("way[\"highway\"][\"maxspeed\"](around:12,\(coords));")
         if speed { parts.append("relation[\"enforcement\"=\"average_speed\"](around:200,\(coords));") }
-        parts.append("node[\"highway\"=\"traffic_signals\"](around:20,\(coords));")
+        parts.append("node[\"highway\"=\"traffic_signals\"](around:50,\(coords));")
         let q = "[out:json][timeout:40];(" + parts.joined() + ");out body geom 8000;"
         return await firstAnswer(q) { parse($0) != nil }
     }

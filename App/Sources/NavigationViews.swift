@@ -135,7 +135,7 @@ struct NavigationOverlay: View {
                         .overlay(Capsule().strokeBorder(Color(hex: 0x2DD4BF).opacity(0.8), lineWidth: 1.5))
                         // Between the speed sign and the mute button, which sit level with it now the car is lower.
                         .frame(maxWidth: g.size.width - 240)
-                        .position(x: g.size.width / 2, y: NavGlide.carY(g.size.height) + 46)
+                        .position(x: g.size.width / 2, y: NavGlide.carY(g.size.height) + 50)
                 }
             }
             .ignoresSafeArea()

@@ -15,6 +15,11 @@ the middle number for big milestones.
 - **New map look, Waze-style in Kite's teal:** a thicker teal route with a darker edge and
   chevrons along it, a chunky white turn arrow with a teal edge, your arrow on a navy disc with a
   teal ring, softer other-route lines and traffic colours, and the road you've driven fades out.
+- **Teal everywhere for "you":** your location dot, the centre-on-me button, "Your location" and
+  the picked route's time bubble now use Kite's teal instead of the old blue, matching the route.
+- **Your arrow's disc** is white by day and navy at night, and the road name sits a little lower so
+  it never touches it.
+- **More traffic lights found:** Kite now looks closer along the route, so lights in towns aren't missed.
 - **Exit number in the roundabout picture:** the number of your exit is back in the middle of the
   roundabout drawing, as well as "6th exit" next to it.
 

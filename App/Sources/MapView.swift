@@ -19,6 +19,8 @@ struct VelaMapView: UIViewRepresentable {
         let c = context.coordinator
         map.delegate = c
         map.showsUserLocation = true
+        // Your blue dot in Kite's teal, to match the route and the driving arrow.
+        map.tintColor = UIColor(hex: 0x14B8A6)
         map.compassView.isHidden = true
         map.logoView.isHidden = true
         map.attributionButtonPosition = .bottomLeft
@@ -122,6 +124,8 @@ struct VelaMapView: UIViewRepresentable {
                 }
             }
             MapStyler.apply(style, dark: dark)
+            // The car's disc: navy at night, white by day.
+            style.setImage(MapIcons.puck(dark: dark), forName: "puck")
             (style.layer(withIdentifier: "vela-rail-case") as? MLNLineStyleLayer)?.lineColor =
                 NSExpression(forConstantValue: UIColor(white: dark ? 0 : 1, alpha: 0.9))
             // Names next to our pins: dark text on a white halo by day, light text on navy at night.
