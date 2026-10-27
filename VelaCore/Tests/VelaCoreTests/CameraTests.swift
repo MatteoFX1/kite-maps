@@ -179,3 +179,21 @@ final class RoadCacheTests: XCTestCase {
         XCTAssertTrue(cache.along([LatLng(10, 10), LatLng(10.01, 10)]).ways.isEmpty)
     }
 }
+
+final class ValhallaTests: XCTestCase {
+    func testLimitsFromMatchedRoads() throws {
+        // Two roads at 30 mph (48 km/h), one at 60 (97), one not known.
+        let json = """
+        {"shape":"_ibE_ibE_ibE?_ibE?_ibE?","edges":[
+         {"speed_limit":48,"way_id":11,"length":0.1,"begin_shape_index":0,"end_shape_index":1},
+         {"speed_limit":48,"way_id":12,"length":0.1,"begin_shape_index":1,"end_shape_index":2},
+         {"speed_limit":97,"way_id":13,"length":0.3,"begin_shape_index":2,"end_shape_index":3},
+         {"way_id":14,"length":0.1,"begin_shape_index":3,"end_shape_index":4}]}
+        """
+        let p = try XCTUnwrap(Valhalla.parse(Data(json.utf8)))
+        XCTAssertEqual(p.limits.map(\.kmh), [48, 97, nil])
+        XCTAssertEqual(p.limits.map { $0.startMeters.rounded() }, [0, 200, 500])
+        XCTAssertEqual(p.meters, 600, accuracy: 0.01)
+        XCTAssertEqual(p.ways.map(\.id), [11, 12, 13])
+    }
+}

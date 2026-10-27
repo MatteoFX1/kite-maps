@@ -1,0 +1,93 @@
+import Foundation
+
+/**
+ * Posted speed limits along a route from the public Valhalla server (FOSSGIS, the same people as
+ * the open router), which matches the route to OpenStreetMap's roads and says each one's limit.
+ * It answers a whole drive in under a second, where the public Overpass servers can take a minute
+ * or not answer at all at night; Overpass still brings the cameras and traffic lights.
+ */
+public enum Valhalla {
+    static let endpoint = URL(string: "https://valhalla1.openstreetmap.de/trace_attributes")!
+
+    private static let session: URLSession = {
+        let c = URLSessionConfiguration.ephemeral
+        c.timeoutIntervalForRequest = 15
+        c.httpAdditionalHeaders = ["User-Agent": OSRM.userAgent]
+        return URLSession(configuration: c)
+    }()
+
+    /** The limits along [line], and the roads they came from (for RoadCache). Nil when the server didn't answer. */
+    public static func speedLimits(along line: [LatLng]) async -> (limits: [SpeedLimit], ways: [Overpass.LimitWay])? {
+        guard line.count >= 2 else { return ([], []) }
+        let cum = Geo.cumulative(line)
+        let total = cum.last ?? 0
+        // In pieces of about 80 km: the server turns away very long traces.
+        var limits: [SpeedLimit] = []
+        var ways: [Overpass.LimitWay] = []
+        var start = 0.0
+        while start < total {
+            let end = min(total, start + 80_000)
+            let piece = Geo.slice(line, from: start, to: end, cumulative: cum)
+            guard let data = await fetch(thin(piece)), let parsed = parse(data) else { return nil }
+            // Scaled onto the route's own length: the matched roads run a little longer or shorter.
+            let scale = parsed.meters > 0 ? (end - start) / parsed.meters : 1
+            for l in parsed.limits {
+                let at = start + l.startMeters * scale
+                if limits.last?.kmh != l.kmh { limits.append(SpeedLimit(startMeters: at, kmh: l.kmh)) }
+            }
+            ways += parsed.ways
+            start = end
+        }
+        return (limits, ways)
+    }
+
+    /** About one point every 15 m is plenty to match on, and keeps the request small. */
+    static func thin(_ line: [LatLng]) -> [LatLng] {
+        guard var last = line.first else { return [] }
+        var out = [last]
+        for p in line.dropFirst() where last.distance(to: p) >= 15 {
+            out.append(p)
+            last = p
+        }
+        if let end = line.last, out.last != end { out.append(end) }
+        return out
+    }
+
+    private static func fetch(_ shape: [LatLng]) async -> Data? {
+        let body: [String: Any] = [
+            "shape": shape.map { ["lat": $0.lat, "lon": $0.lng] },
+            "costing": "auto",
+            "shape_match": "map_snap",
+            "filters": ["attributes": ["edge.speed_limit", "edge.way_id", "edge.length", "edge.begin_shape_index",
+                                       "edge.end_shape_index", "shape"], "action": "include"],
+        ]
+        var r = URLRequest(url: endpoint)
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard let (data, resp) = try? await session.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return data
+    }
+
+    /** Limit changes along the matched roads (meters from their start), the roads themselves, and their length. */
+    static func parse(_ data: Data) -> (limits: [SpeedLimit], ways: [Overpass.LimitWay], meters: Double)? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let edges = root["edges"] as? [[String: Any]] else { return nil }
+        let shape = (root["shape"] as? String).map { Geo.decodePolyline($0) } ?? []
+        var limits: [SpeedLimit] = []
+        var ways: [Overpass.LimitWay] = []
+        var along = 0.0
+        for e in edges {
+            // 0 is "not known"; Valhalla marks a variable or no limit with 255.
+            let raw = (e["speed_limit"] as? NSNumber)?.doubleValue
+            let kmh = raw.flatMap { (1...200).contains($0) ? $0 : nil }
+            if limits.last.map({ $0.kmh != kmh }) ?? true { limits.append(SpeedLimit(startMeters: along, kmh: kmh)) }
+            along += ((e["length"] as? NSNumber)?.doubleValue ?? 0) * 1000
+            if let a = (e["begin_shape_index"] as? NSNumber)?.intValue, let b = (e["end_shape_index"] as? NSNumber)?.intValue,
+               a >= 0, b < shape.count, b > a, kmh != nil {
+                ways.append(Overpass.LimitWay(id: (e["way_id"] as? NSNumber)?.int64Value ?? 0, kmh: kmh, line: Array(shape[a...b])))
+            }
+        }
+        return (limits, ways, along)
+    }
+}

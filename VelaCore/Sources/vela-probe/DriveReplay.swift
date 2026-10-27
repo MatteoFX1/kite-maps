@@ -61,6 +61,10 @@ func driveReplay() async {
             print("  no route"); continue
         }
         print(String(format: "  route %.0f m, source %@, %.1f s to get", route.distanceMeters, route.source, Date().timeIntervalSince(t0)))
+        let tv = Date()
+        let matched = await Valhalla.speedLimits(along: route.polyline)
+        print(String(format: "  road matcher limits: %d changes, %.0f%% of the way known, %.1f s%@", matched?.limits.count ?? 0,
+                     matched.map { m in coverage(m.limits, total: route.distanceMeters) } ?? 0, Date().timeIntervalSince(tv), matched == nil ? " (FAILED)" : ""))
         let cached = RoadCache.shared.along(route.polyline)
         print("  known before asking: \(Overpass.speedLimits(cached.ways, on: route.polyline).count) limit stretches, \(cached.signals.count) lights")
         let t1 = Date()
@@ -71,6 +75,20 @@ func driveReplay() async {
                      Date().timeIntervalSince(t1), found == nil ? " (FAILED)" : ""))
         // Like the app: what's already known stays when the servers don't answer.
         route.speedLimits = found == nil ? Overpass.speedLimits(cached.ways, on: route.polyline) : limits
+        print(String(format: "  overpass limits cover %.0f%%", coverage(limits, total: route.distanceMeters)))
+        if let m = matched, !m.limits.isEmpty {
+            // Where both know a limit, how often they agree (to the nearest 5 mph).
+            var same = 0, both = 0
+            for x in stride(from: 0.0, to: route.distanceMeters, by: 50) {
+                let o = route.speedLimit(at: x)
+                let v = m.limits.last { $0.startMeters <= x }?.kmh
+                guard let o, let v else { continue }
+                both += 1
+                if abs(o - v) < 8 { same += 1 } else if both % 5 == 0 { print(String(format: "    differ at %.0f m: overpass %.0f, matcher %.0f km/h", x, o, v)) }
+            }
+            print("  agree on \(same) of \(both) samples")
+            route.speedLimits = m.limits
+        }
 
         // The road actually driven: the route itself, or the open router's way through the detour.
         var drivenLine = route.polyline
@@ -166,4 +184,14 @@ func driveReplay() async {
         print("  \(s)s end, reroutes \(reroutes), seconds with no speed limit shown \(noLimit)")
     }
     RoadCache.shared.flush()
+}
+
+/** How much of [total] meters has a known limit. */
+func coverage(_ limits: [SpeedLimit], total: Double) -> Double {
+    guard total > 0 else { return 0 }
+    var known = 0.0
+    for (i, l) in limits.enumerated() where l.kmh != nil {
+        known += (i + 1 < limits.count ? limits[i + 1].startMeters : total) - l.startMeters
+    }
+    return known / total * 100
 }
