@@ -303,3 +303,23 @@ final class BritishWordsTests: XCTestCase {
     }
 }
 
+
+final class GoogleExitTests: XCTestCase {
+    func testGoogleExitCountWins() {
+        var a = Maneuver(type: .roundabout, instruction: "Go straight through Millbrook Roundabout", location: LatLng(0, 0),
+                         alongMeters: 2662, distanceMeters: 60, road: "Millbrook Roundabout", laneHint: nil)
+        var off = Maneuver(type: .roundabout, instruction: "Exit the roundabout onto Tebourba Way", location: LatLng(0, 0),
+                           alongMeters: 2726, distanceMeters: 0, road: "Tebourba Way", laneHint: nil)
+        off.leavesRoundabout = true
+        off.exit = 1
+        a.exit = nil
+        var steps = [a, off]
+        var g = Maneuver(type: .roundabout, instruction: "At the roundabout, take the 2nd exit", location: LatLng(0, 0),
+                         alongMeters: 2660, distanceMeters: 0, road: nil, laneHint: nil)
+        g.exit = 2
+        StepMerge.addGoogleExits(&steps, from: [g])
+        XCTAssertEqual(steps[0].exit, 2)
+        XCTAssertEqual(steps[0].instruction, "At Millbrook Roundabout, take the 2nd exit")
+        XCTAssertEqual(steps[1].exit, 2)
+    }
+}

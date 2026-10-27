@@ -409,7 +409,11 @@ public enum OSRM {
             let verb = mode == .drive ? "Drive" : (mode == .bike ? "Ride" : "Walk")
             return road.map { "\(verb) along \($0)" } ?? "Head out"
         case "arrive": return "You have arrived"
-        case "roundabout", "rotary":
+        case "roundabout turn" where exit == nil:
+            // A mini-roundabout the router treats as a junction, with no exit count: say the turn.
+            let turn = dir.contains("left") ? "turn left" : dir.contains("right") ? "turn right" : "go straight on"
+            return "At the roundabout, \(turn)" + onto
+        case "roundabout", "rotary", "roundabout turn":
             // A named roundabout ("Millbrook Roundabout") is where you are, not a road to go onto.
             if let r = road, r.lowercased().contains("roundabout") {
                 return exit.map { "At \(r), take the \(ordinal($0)) exit" } ?? "Go straight through \(r)"
@@ -498,7 +502,10 @@ public enum Directions {
                 for i in g.indices {
                     if var steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
                         // Google's step positions are only trustworthy when its steps cover the whole line.
-                        if g[i].stepsComplete { StepMerge.addGoogleLaneHints(&steps, from: g[i].maneuvers) }
+                        if g[i].stepsComplete {
+                            StepMerge.addGoogleLaneHints(&steps, from: g[i].maneuvers)
+                            StepMerge.addGoogleExits(&steps, from: g[i].maneuvers)
+                        }
                         g[i].maneuvers = steps
                         g[i].stepsComplete = true
                     } else if !g[i].stepsComplete, !spare.isEmpty {
@@ -607,6 +614,23 @@ public enum StepMerge {
      * Google's own lane advice ("Use the right lane to merge onto Redbridge Rd") on the step at the
      * same place, where the open map has no lanes mapped.
      */
+    /**
+     * Google's exit count for each roundabout, where the open router has none or a different one:
+     * on 2026-10-27's drives the router said "go straight through" or "1st exit" at Millbrook and
+     * Redbridge where Google (and the signs) say 2nd. The open router's road name is kept.
+     */
+    public static func addGoogleExits(_ steps: inout [Maneuver], from google: [Maneuver]) {
+        for i in steps.indices where steps[i].type == .roundabout && !steps[i].leavesRoundabout {
+            let near = google.filter { $0.type == .roundabout && $0.exit != nil && abs($0.alongMeters - steps[i].alongMeters) < 120 }
+            guard let g = near.min(by: { abs($0.alongMeters - steps[i].alongMeters) < abs($1.alongMeters - steps[i].alongMeters) }),
+                  let n = g.exit, n != steps[i].exit else { continue }
+            steps[i].exit = n
+            steps[i].instruction = OSRM.instruction(type: "roundabout", modifier: nil, road: steps[i].road, exit: n, mode: .drive)
+            // The way off says the same number.
+            if i + 1 < steps.count, steps[i + 1].leavesRoundabout { steps[i + 1].exit = n }
+        }
+    }
+
     public static func addGoogleLaneHints(_ steps: inout [Maneuver], from google: [Maneuver]) {
         for i in steps.indices where !steps[i].silent && steps[i].lanes.isEmpty && steps[i].laneHint == nil {
             let near = google.filter { $0.laneHint != nil && abs($0.alongMeters - steps[i].alongMeters) < 150 }
