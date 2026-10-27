@@ -1,0 +1,118 @@
+name: Duo probe
+on:
+  push:
+    branches: [claude/project-thread-lwdtbk]
+permissions:
+  contents: write
+jobs:
+  ipa:
+    name: Build Kite.ipa
+    # Xcode 27.1 (the iOS 27.1 SDK) is what lets Kite fill the iPhone Duo's screens; built with an
+    # older Xcode it runs there small, with black bars.
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Make the Xcode project
+        run: xcodegen generate
+      - name: Build (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Kite.xcodeproj \
+            -scheme Kite \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build | tail -n 200
+      - name: Stamp the build number
+        # AltStore and SideStore spot updates by this number, so each build gets its own.
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" \
+            build/Build/Products/Release-iphoneos/Kite.app/Info.plist
+      - name: Ad-hoc sign
+        # An app with no signature at all is read as broken by some sideloaders. An ad-hoc
+        # signature fixes that; the sideloader still re-signs with your Apple ID.
+        run: |
+          APP=build/Build/Products/Release-iphoneos/Kite.app
+          for f in "$APP"/Frameworks/*.framework; do
+            codesign --force --sign - --timestamp=none "$f"
+          done
+          codesign --force --sign - --timestamp=none "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+      - name: Package .ipa
+        run: |
+          mkdir -p Payload
+          ditto build/Build/Products/Release-iphoneos/Kite.app Payload/Kite.app
+          zip -qr -X Kite.ipa Payload
+          unzip -l Kite.ipa | tail -n 3
+          unzip -tq Kite.ipa
+
+  duo:
+    name: Screenshots (iPhone Duo)
+    runs-on: xcode-27
+    # Only a look at the foldable; never holds up the build.
+    continue-on-error: true
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Make the Xcode project
+        run: xcodegen generate
+      - name: Build for the simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project Kite.xcodeproj -scheme Kite -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
+            || { grep -E "error:" build.log | sort -u | head -40; tail -n 20 build.log; exit 1; }
+          tail -n 3 build.log
+      - name: Take screenshots, closed and open
+        # The simulated Duo starts closed (the outer screen, display "primary"); DeviceHub opens it
+        # (the inner screen, "primary-1"), then turns it upright.
+        run: |
+          DEV=$(xcrun simctl create Duo com.apple.CoreSimulator.SimDeviceType.iPhone-Duo com.apple.CoreSimulator.SimRuntime.iOS-27-1)
+          xcrun simctl boot $DEV; xcrun simctl bootstatus $DEV -b > /dev/null
+          xcrun simctl ui $DEV appearance dark
+          xcrun simctl location $DEV set 50.9097,-1.4044
+          xcrun simctl install $DEV simbuild/Build/Products/Debug-iphonesimulator/Kite.app
+          xcrun simctl privacy $DEV grant location app.vela.ios || true
+          mkdir -p shots
+          shoot() { # name, display, steps...
+            n=$1; disp=$2; shift 2
+            for step in "$@"; do
+              xcrun simctl launch --terminate-running-process $DEV app.vela.ios -demo $step > /dev/null
+              case $step in browse) t=16;; place) t=28;; directions) t=38;; nav) t=44;; *) t=12;; esac
+              sleep $t
+              xcrun simctl io $DEV screenshot --display=$disp "shots/$n-$step.png" > /dev/null 2>&1 || echo "no shot $n-$step"
+            done
+          }
+          shoot closed primary browse place nav
+          bash .github/duo/pose.sh open
+          shoot open primary-1 browse place directions nav settings saved
+          bash .github/duo/pose.sh rotate
+          shoot upright primary-1 browse place nav
+          ls shots
+      - name: Save screenshots to the duo-screenshots branch
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        run: |
+          cd shots
+          for f in *.png; do sips -s format jpeg -s formatOptions 70 -Z 1400 "$f" --out "${f%.png}.jpg" >/dev/null; done
+          rm -f *.png
+          git init -q -b duo-screenshots
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add . && git commit -qm "iPhone Duo screenshots for ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" duo-screenshots
+
