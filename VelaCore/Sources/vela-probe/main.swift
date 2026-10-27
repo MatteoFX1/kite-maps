@@ -22,6 +22,10 @@ if args.count > 1, args[1] == "body" {
     await rawBody()
     exit(0)
 }
+if args.count > 1, args[1] == "limits" {
+    await limitsCheck()
+    exit(0)
+}
 if args.count > 1, args[1] == "route" {
     await routeCheck()
     exit(0)

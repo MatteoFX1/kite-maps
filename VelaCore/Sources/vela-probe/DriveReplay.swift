@@ -15,6 +15,17 @@ func rawBody() async {
     print(body)
 }
 
+/** `swift run vela-probe limits lat lng lat lng`: how long the road matcher takes on a long drive, and what it covers. */
+func limitsCheck() async {
+    let a = CommandLine.arguments.dropFirst(2).compactMap(Double.init)
+    guard a.count == 4, let r = await Directions.routes(from: LatLng(a[0], a[1]), to: LatLng(a[2], a[3]), mode: .drive).routes.first else { return }
+    let t = Date()
+    let m = await Valhalla.speedLimits(along: r.polyline)
+    print(String(format: "%.0f km, %d points: %d limit changes, %.0f%% known, %.1f s", r.distanceMeters / 1000, r.polyline.count,
+                 m?.limits.count ?? 0, m.map { coverage($0.limits, total: r.distanceMeters) } ?? 0, Date().timeIntervalSince(t)))
+    for l in m?.limits ?? [] { print(String(format: "  %6.1f km  %@", l.startMeters / 1000, l.kmh.map { String(format: "%.0f mph", $0 / 1.609344) } ?? "?")) }
+}
+
 func routeCheck() async {
     let a = CommandLine.arguments.dropFirst(2).compactMap(Double.init)
     guard a.count >= 4 else { print("usage: route lat lng lat lng [heading]"); return }
@@ -65,6 +76,17 @@ func driveReplay() async {
         let matched = await Valhalla.speedLimits(along: route.polyline)
         print(String(format: "  road matcher limits: %d changes, %.0f%% of the way known, %.1f s%@", matched?.limits.count ?? 0,
                      matched.map { m in coverage(m.limits, total: route.distanceMeters) } ?? 0, Date().timeIntervalSince(tv), matched == nil ? " (FAILED)" : ""))
+        if let m = matched {
+            let projected = Overpass.speedLimits(m.ways, on: route.polyline)
+            print(String(format: "  matcher by projection covers %.0f%%", coverage(projected, total: route.distanceMeters)))
+            var same = 0, both = 0
+            for x in stride(from: 0.0, to: route.distanceMeters, by: 50) {
+                guard let a = projected.last(where: { $0.startMeters <= x })?.kmh, let b = m.limits.last(where: { $0.startMeters <= x })?.kmh else { continue }
+                both += 1
+                if abs(a - b) < 8 { same += 1 }
+            }
+            print("  scaled vs projected agree on \(same) of \(both)")
+        }
         let cached = RoadCache.shared.along(route.polyline)
         print("  known before asking: \(Overpass.speedLimits(cached.ways, on: route.polyline).count) limit stretches, \(cached.signals.count) lights")
         let t1 = Date()

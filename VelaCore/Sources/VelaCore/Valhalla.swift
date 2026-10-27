@@ -21,24 +21,27 @@ public enum Valhalla {
         guard line.count >= 2 else { return ([], []) }
         let cum = Geo.cumulative(line)
         let total = cum.last ?? 0
-        // In pieces of about 80 km: the server turns away very long traces.
-        var limits: [SpeedLimit] = []
+        // In pieces of about 25 km: the server turns away very long traces, and placing each road on
+        // a short piece of the line is quick.
+        var merged: [SpeedLimit] = []
         var ways: [Overpass.LimitWay] = []
         var start = 0.0
         while start < total {
-            let end = min(total, start + 80_000)
+            let end = min(total, start + 25_000)
             let piece = Geo.slice(line, from: start, to: end, cumulative: cum)
             guard let data = await fetch(thin(piece)), let parsed = parse(data) else { return nil }
-            // Scaled onto the route's own length: the matched roads run a little longer or shorter.
+            // Placed by where each road really lies on the route; scaled by length (the matched
+            // roads run a little longer or shorter) only where that doesn't place it.
+            let placed = Overpass.speedLimits(parsed.ways, on: piece)
             let scale = parsed.meters > 0 ? (end - start) / parsed.meters : 1
-            for l in parsed.limits {
-                let at = start + l.startMeters * scale
-                if limits.last?.kmh != l.kmh { limits.append(SpeedLimit(startMeters: at, kmh: l.kmh)) }
+            for m in stride(from: 0.0, to: end - start, by: 25) {
+                let kmh = placed.last { $0.startMeters <= m }?.kmh ?? parsed.limits.last { $0.startMeters * scale <= m }?.kmh
+                if merged.last.map({ $0.kmh != kmh }) ?? true { merged.append(SpeedLimit(startMeters: start + m, kmh: kmh)) }
             }
             ways += parsed.ways
             start = end
         }
-        return (limits, ways)
+        return (merged, ways)
     }
 
     /** About one point every 15 m is plenty to match on, and keeps the request small. */
