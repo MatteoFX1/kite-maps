@@ -487,7 +487,9 @@ public enum Directions {
             if let heading {
                 // A reroute while driving: Google doesn't know which way the car faces, so drop its
                 // routes that start back the way the car came; only the first one is driven, so skip the rest.
-                let ahead = g.filter { !startsBehind($0.polyline, heading: heading) }
+                var ahead = g.filter { !startsBehind($0.polyline, heading: heading) }
+                // The open router can't avoid motorways or tolls: rather Google's turn round than those.
+                if ahead.isEmpty && (avoidHighways || avoidTolls) { ahead = g }
                 // Planning a trip while already moving keeps the choice of routes; a reroute only needs one.
                 g = alternatives ? ahead : Array(ahead.prefix(1))
             }

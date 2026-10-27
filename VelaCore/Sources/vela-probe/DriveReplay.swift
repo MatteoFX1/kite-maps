@@ -88,10 +88,12 @@ func driveReplay() async {
             driven = min(total, driven + d.speed)
             let truth = Geo.point(along: drivenLine, meters: driven, cumulative: cum)
             // About 5 m of GPS wobble.
-            let fix = LatLng(truth.lat + Double.random(in: -4e-5...4e-5, using: &rng), truth.lng + Double.random(in: -6e-5...6e-5, using: &rng))
+            // NOISE=4 for a city centre's 20 m.
+            let k = Double(ProcessInfo.processInfo.environment["NOISE"] ?? "1") ?? 1
+            let fix = LatLng(truth.lat + k * Double.random(in: -4e-5...4e-5, using: &rng), truth.lng + k * Double.random(in: -6e-5...6e-5, using: &rng))
             let heading = Geo.bearing(prev, truth)
             prev = truth
-            let p = tracker.update(fix, accuracy: 8, heading: heading)
+            let p = tracker.update(fix, accuracy: 8 * k, heading: heading)
             if p.arrived { print("  \(s)s arrived"); break }
             if route.speedLimit(at: p.alongMeters) == nil { noLimit += 1 }
             if p.offRoute {
