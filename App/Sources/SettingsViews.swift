@@ -25,13 +25,14 @@ struct LayersSheet: View {
                 tile("Terrain", icon: "mountain.2.fill", on: settings.terrain) { settings.terrain.toggle() }
                 tile("Speed cameras", badge: .speed, on: settings.speedCameras) { settings.speedCameras.toggle() }
                 tile("Plate cameras", badge: .plate, on: settings.plateCameras) { settings.plateCameras.toggle() }
-                tile("Waze reports", waze: .police, on: settings.wazeOn && settings.wazeOnMap) {
+                tile("Road alerts", waze: Waze.shares.contains(.police) ? .police : .closure, on: settings.wazeOn && settings.wazeOnMap) {
                     if settings.waze && settings.wazeOnMap { settings.wazeOnMap = false } else { settings.waze = true; settings.wazeOnMap = true }
                 }
-                tile("Police heat map", icon: "flame.fill", on: settings.wazeOn && settings.wazeHeatmap && Waze.shares.contains(.police)) {
-                    if settings.waze && settings.wazeHeatmap { settings.wazeHeatmap = false } else { settings.waze = true; settings.wazeHeatmap = true }
+                if Waze.shares.contains(.police) {
+                    tile("Police heat map", icon: "flame.fill", on: settings.wazeOn && settings.wazeHeatmap) {
+                        if settings.waze && settings.wazeHeatmap { settings.wazeHeatmap = false } else { settings.waze = true; settings.wazeHeatmap = true }
+                    }
                 }
-                .disabled(!Waze.shares.contains(.police)).opacity(Waze.shares.contains(.police) ? 1 : 0.4)
             }
             Spacer()
         }
@@ -129,10 +130,11 @@ struct SettingsView: View {
                     NavigationLink {
                         WazeSettingsView(settings: settings)
                     } label: {
-                        LabeledContent("Waze integration (beta)", value: settings.wazeOn ? "On" : "Off")
+                        LabeledContent("Road alerts", value: settings.wazeOn ? "On" : "Off")
                     }
                 } footer: {
-                    Text("Live police, crash and hazard reports from Waze drivers.")
+                    Text(Waze.shares.contains(.police) ? "Live police and crash reports from Waze drivers, road closures, and police aircraft."
+                         : "Live road closures from Waze, and police planes and helicopters.")
                 }
                 Section {
                     Toggle("Use Kite without Google", isOn: $settings.noGoogle)
@@ -167,7 +169,7 @@ struct SettingsView: View {
     }
 }
 
-/** Settings › Waze integration: which live reports to show and warn about, and the police heat map. */
+/** Settings › Road alerts: which live Waze reports to show and warn about, the police heat map and police aircraft. */
 struct WazeSettingsView: View {
     @ObservedObject var settings: AppSettings
     @State private var remembered = 0
@@ -199,6 +201,19 @@ struct WazeSettingsView: View {
         }
     }
 
+    /** How OpenWeb Ninja answered last time, in plain words. */
+    private func ninjaState(_ s: Waze.Status) -> (text: String, color: Color) {
+        let mins = Int(Date().timeIntervalSince(s.at) / 60)
+        let when = mins < 1 ? "just now" : "\(mins) min ago"
+        switch s.code {
+        case 200: return ("Working: \(s.summary), \(when)", Color(hex: 0x188038))
+        case 0: return ("No connection (\(when))", .orange)
+        case 401, 403: return ("Key not accepted: check it's copied in full", .red)
+        case 429: return ("No checks left this month", .red)
+        default: return ("OpenWeb Ninja error \(s.code) (\(when))", .orange)
+        }
+    }
+
     var body: some View {
         Form {
             Section {
@@ -207,16 +222,6 @@ struct WazeSettingsView: View {
                 Text(settings.noGoogle
                      ? "Off while \"Use Kite without Google\" is on, since Waze belongs to Google."
                      : "Kite reads the public Waze live map, with no account. Waze sees the area you're looking at, anonymously. It doesn't officially allow other apps to do this, so it may stop working one day.")
-            }
-            if !Waze.shares.contains(.police) {
-                Section {
-                    Label {
-                        Text("Barely working right now. Waze's live map has stopped sharing drivers' reports, so police, crashes and hazards can't reach Kite. Only road closures still come through. The greyed-out switches come back if Waze shares them again.")
-                            .font(.subheadline)
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
-                    }
-                }
             }
             if settings.wazeOn {
                 Section {
@@ -231,13 +236,35 @@ struct WazeSettingsView: View {
                 } header: {
                     Text("Connection")
                 } footer: {
-                    if Waze.lastStatus != nil {
+                    if let s = Waze.lastStatus, s.code != 200 {
                         // What the hidden live map page saw, to send to whoever looks into it.
                         Text("Details: " + WazeWeb.shared.note).font(.caption2.monospaced())
                     }
                 }
+                Section {
+                    TextField("Paste your key here", text: $settings.ninjaKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.subheadline.monospaced())
+                    if WazeNinja.on {
+                        LabeledContent("Checks used this month", value: "\(WazeNinja.usedThisMonth) of 50")
+                        if let s = WazeNinja.lastStatus {
+                            HStack(spacing: 8) {
+                                Circle().fill(ninjaState(s).color).frame(width: 10, height: 10)
+                                Text(ninjaState(s).text).font(.subheadline)
+                            }
+                        }
+                    } else {
+                        Link("Get a free key", destination: URL(string: "https://app.openwebninja.com/api/waze")!)
+                    }
+                } header: {
+                    Text("Police and crashes")
+                } footer: {
+                    Text("Waze's live map only shares road closures now. For police, mobile speed cameras and crashes, Kite can use OpenWeb Ninja's Waze service with your own free key: sign up (no card needed), open the Waze API and copy the key in here. The free plan has 50 checks a month, so Kite only checks while you're navigating, once every 10 minutes: about 8 hour-long drives.")
+                }
                 Section("Show and warn about") {
-                    ForEach(kinds, id: \.0) { item in
+                    // Only what Waze still shares (see Waze.shares): no switches that can't do anything.
+                    ForEach(kinds.filter { Waze.shares.contains($0.0) }, id: \.0) { item in
                         let k = item.0
                         Toggle(isOn: Binding(
                             get: { settings.wazeKinds.contains(k) },
@@ -248,7 +275,6 @@ struct WazeSettingsView: View {
                                 Text(item.1)
                             }
                         }
-                        .disabled(!Waze.shares.contains(k)).opacity(Waze.shares.contains(k) ? 1 : 0.4)
                     }
                 }
                 Section {
@@ -262,18 +288,17 @@ struct WazeSettingsView: View {
                 } footer: {
                     Text("While navigating, a card pops up for reports on your route, only ones made by drivers going your way.")
                 }
-                Section {
-                    Group {
+                if Waze.shares.contains(.police) {
+                    Section {
                         Toggle("Police heat map", isOn: $settings.wazeHeatmap)
                         Toggle("Police risk score while driving", isOn: $settings.policeRisk)
+                        LabeledContent("Police reports remembered", value: "\(remembered)")
+                        if remembered > 0 {
+                            Button("Forget them all", role: .destructive) { confirmClear = true }
+                        }
+                    } footer: {
+                        Text("A glow where police get reported most, and a low, medium or high risk for the road ahead (counting reports made at this time of day most). Waze only shares what's live now, so Kite remembers the reports it sees on this phone, for 90 days and never anywhere else, and both fill in the more you use it.")
                     }
-                    .disabled(!Waze.shares.contains(.police)).opacity(Waze.shares.contains(.police) ? 1 : 0.4)
-                    LabeledContent("Police reports remembered", value: "\(remembered)")
-                    if remembered > 0 {
-                        Button("Forget them all", role: .destructive) { confirmClear = true }
-                    }
-                } footer: {
-                    Text("A glow where police get reported most, and a low, medium or high risk for the road ahead (counting reports made at this time of day most). Waze only shares what's live now, so Kite remembers the reports it sees on this phone, for 90 days and never anywhere else, and both fill in the more you use it.")
                 }
             }
             Section {
@@ -285,7 +310,7 @@ struct WazeSettingsView: View {
             }
         }
         .kiteList()
-        .navigationTitle("Waze integration (beta)")
+        .navigationTitle("Road alerts")
         .onAppear { remembered = WazeHistory.shared.sightings.count }
         .confirmationDialog("Forget the \(remembered) police reports Kite remembered? The heat map and risk score start again from nothing.",
                             isPresented: $confirmClear, titleVisibility: .visible) {

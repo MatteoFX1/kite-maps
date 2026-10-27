@@ -19,6 +19,8 @@ struct VelaMapView: UIViewRepresentable {
         let c = context.coordinator
         map.delegate = c
         map.showsUserLocation = true
+        // Your blue dot in Kite's teal, to match the route and the driving arrow.
+        map.tintColor = UIColor(hex: 0x14B8A6)
         map.compassView.isHidden = true
         map.logoView.isHidden = true
         map.attributionButtonPosition = .bottomLeft
@@ -72,6 +74,7 @@ struct VelaMapView: UIViewRepresentable {
         /** Whether the map is currently stripped down for driving; nil after a style load. */
         private var styledDriving: Bool?
         private var lastCameraKey = ""
+        private var lastSignalsKey = ""
         /** Cameras fetched so far, and the 0.1° cells already asked for (cameras don't move). */
         private var cameras: [Int64: RoadCamera] = [:]
         private var cameraCells: Set<String> = []
@@ -105,7 +108,7 @@ struct VelaMapView: UIViewRepresentable {
             styleReady = true
             styledDriving = nil
             repaint(mapView)
-            lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""; lastWazeKey = ""
+            lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""; lastSignalsKey = ""; lastWazeKey = ""
             render(mapView)
         }
 
@@ -121,6 +124,8 @@ struct VelaMapView: UIViewRepresentable {
                 }
             }
             MapStyler.apply(style, dark: dark)
+            // The car's disc: navy at night, white by day.
+            style.setImage(MapIcons.puck(dark: dark), forName: "puck")
             (style.layer(withIdentifier: "vela-rail-case") as? MLNLineStyleLayer)?.lineColor =
                 NSExpression(forConstantValue: UIColor(white: dark ? 0 : 1, alpha: 0.9))
             // Names next to our pins: dark text on a white halo by day, light text on navy at night.
@@ -191,15 +196,36 @@ struct VelaMapView: UIViewRepresentable {
                 if let labels { style.insertLayer(l, below: labels) } else { style.addLayer(l) }
             }
             let altSrc = MLNShapeSource(identifier: "vela-route-alt", shape: nil, options: nil)
-            let routeSrc = MLNShapeSource(identifier: "vela-route", shape: nil, options: nil)
+            // Line metrics, for the teal-to-cyan fade along the route.
+            let routeSrc = MLNShapeSource(identifier: "vela-route", shape: nil, options: [.lineDistanceMetrics: true])
             let spanSrc = MLNShapeSource(identifier: "vela-route-traffic", shape: nil, options: nil)
             [altSrc, routeSrc, spanSrc].forEach(style.addSource)
 
-            let altEdge = line("vela-route-alt-edge", altSrc, UIColor(hex: 0x3566C4), width: 11)
-            let altFill = line("vela-route-alt", altSrc, UIColor(hex: 0xA9C4F5), width: 7)
-            let edge = line("vela-route-edge", routeSrc, UIColor(hex: 0x0B3D91), width: 15)
-            let fill = line("vela-route-line", routeSrc, UIColor(hex: 0x2F7BFF), width: 10)
-            [altEdge, altFill, edge, fill].forEach(insert)
+            // Waze's road shape in Kite's teal: a thick teal line with a darker edge and chevrons
+            // along it. Other routes soft and see-through; while driving, the road already driven fades out.
+            let doneSrc = MLNShapeSource(identifier: "vela-route-done", shape: nil, options: nil)
+            style.addSource(doneSrc)
+            let done = line("vela-route-done", doneSrc, UIColor(hex: 0x64748B), width: 10)
+            done.lineOpacity = NSExpression(forConstantValue: 0.5)
+            let altEdge = line("vela-route-alt-edge", altSrc, UIColor(hex: 0x115E59), width: 11)
+            altEdge.lineOpacity = NSExpression(forConstantValue: 0.6)
+            let altFill = line("vela-route-alt", altSrc, UIColor(hex: 0x5EEAD4), width: 7)
+            altFill.lineOpacity = NSExpression(forConstantValue: 0.6)
+            let edge = line("vela-route-edge", routeSrc, UIColor(hex: 0x0F766E), width: 15)
+            let fill = line("vela-route-line", routeSrc, UIColor(hex: 0x2DD4BF), width: 10)
+            fill.lineGradient = NSExpression(format: "mgl_interpolate:withCurveType:parameters:stops:($lineProgress, 'linear', nil, %@)",
+                                             [0: UIColor(hex: 0x2DD4BF), 1: UIColor(hex: 0x22D3EE)])
+            let chevrons = MLNSymbolStyleLayer(identifier: "vela-route-chevrons", source: routeSrc)
+            chevrons.symbolPlacement = NSExpression(forConstantValue: "line")
+            chevrons.symbolSpacing = NSExpression(forConstantValue: 70)
+            chevrons.iconImageName = NSExpression(forConstantValue: "route-chevron")
+            chevrons.iconRotationAlignment = NSExpression(forConstantValue: "map")
+            chevrons.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            chevrons.iconIgnoresPlacement = NSExpression(forConstantValue: true)
+            chevrons.keepsIconUpright = NSExpression(forConstantValue: false)
+            chevrons.iconOpacity = NSExpression(forConstantValue: 0.55)
+            chevrons.minimumZoomLevel = 13
+            [done, altEdge, altFill, edge, fill, chevrons].forEach(insert)
             // A transit trip: each ride in its line's color, walks dotted.
             let transitSrc = MLNShapeSource(identifier: "vela-transit", shape: nil, options: nil)
             style.addSource(transitSrc)
@@ -212,7 +238,7 @@ struct VelaMapView: UIViewRepresentable {
             ride.predicate = NSPredicate(format: "walk == 0")
             ride.lineColor = NSExpression(mglJSONObject: ["to-color", ["get", "color"]])
             [walk, rideEdge, ride].forEach(insert)
-            for (level, color) in [(1, 0xF2A65A), (2, 0xE8453C), (3, 0x9E1C1C)] {
+            for (level, color) in [(1, 0xF59E0B), (2, 0xEF4444), (3, 0xB91C1C)] {
                 let l = line("vela-route-traffic-\(level)", spanSrc, UIColor(hex: UInt32(color)), width: 10)
                 l.predicate = NSPredicate(format: "level == %d", level)
                 insert(l)
@@ -229,6 +255,17 @@ struct VelaMapView: UIViewRepresentable {
                 l.isVisible = false
                 insert(l)
             }
+
+            // Traffic lights on the route while driving, small and under the cameras, like Waze.
+            let sigSrc = MLNShapeSource(identifier: "vela-signals", shape: nil, options: nil)
+            style.addSource(sigSrc)
+            let sigs = MLNSymbolStyleLayer(identifier: "vela-signals", source: sigSrc)
+            sigs.iconImageName = NSExpression(forConstantValue: "traffic-light")
+            sigs.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            sigs.iconAnchor = NSExpression(forConstantValue: "bottom")
+            sigs.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 14, 0.75, 17, 1.0])
+            sigs.minimumZoomLevel = 14
+            style.addLayer(sigs)
 
             // Speed cameras and plate readers, from zoom 12 in.
             let camSrc = MLNShapeSource(identifier: "vela-cameras", shape: nil, options: nil)
@@ -326,10 +363,10 @@ struct VelaMapView: UIViewRepresentable {
                 b.predicate = NSPredicate(format: "sel == %d", selected ? 1 : 0)
                 b.iconImageName = NSExpression(forConstantValue: selected ? "bubble-sel" : "bubble-alt")
                 b.iconTextFit = NSExpression(forConstantValue: "both")
-                b.iconTextFitPadding = NSExpression(forConstantValue: NSValue(uiEdgeInsets: UIEdgeInsets(top: 5, left: 9, bottom: 5, right: 9)))
+                b.iconTextFitPadding = NSExpression(forConstantValue: NSValue(uiEdgeInsets: UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)))
                 b.text = NSExpression(forKeyPath: "label")
                 b.textFontNames = NSExpression(forConstantValue: ["Noto Sans Bold"])
-                b.textFontSize = NSExpression(forConstantValue: 13)
+                b.textFontSize = NSExpression(forConstantValue: 15)
                 b.textColor = NSExpression(forConstantValue: selected ? UIColor.white : UIColor(hex: 0x202124))
                 b.iconAllowsOverlap = NSExpression(forConstantValue: true)
                 b.textAllowsOverlap = NSExpression(forConstantValue: true)
@@ -339,12 +376,16 @@ struct VelaMapView: UIViewRepresentable {
             // The next turn drawn on the road while navigating, like Vela's turn arrows.
             let arrowSrc = MLNShapeSource(identifier: "vela-turn-arrow", shape: nil, options: nil)
             style.addSource(arrowSrc)
-            let arrowEdge = line("vela-turn-arrow-edge", arrowSrc, UIColor(hex: 0x0B3D91), width: 11)
+            // A chunky white arrow with rounded corners, a dark teal edge and a soft shadow, like Waze's.
+            let arrowShadow = line("vela-turn-arrow-shadow", arrowSrc, .black, width: 17)
+            arrowShadow.predicate = NSPredicate(format: "part == 'shaft'")
+            arrowShadow.lineOpacity = NSExpression(forConstantValue: 0.35)
+            arrowShadow.lineBlur = NSExpression(forConstantValue: 4)
+            arrowShadow.lineTranslation = NSExpression(forConstantValue: NSValue(cgVector: CGVector(dx: 0, dy: 2)))
+            let arrowEdge = line("vela-turn-arrow-edge", arrowSrc, UIColor(hex: 0x0F766E), width: 15)
             arrowEdge.predicate = NSPredicate(format: "part == 'shaft'")
-            arrowEdge.lineCap = NSExpression(forConstantValue: "butt")
-            let arrowLine = line("vela-turn-arrow", arrowSrc, .white, width: 7)
+            let arrowLine = line("vela-turn-arrow", arrowSrc, .white, width: 9)
             arrowLine.predicate = NSPredicate(format: "part == 'shaft'")
-            arrowLine.lineCap = NSExpression(forConstantValue: "butt")
             let head = MLNSymbolStyleLayer(identifier: "vela-turn-arrow-head", source: arrowSrc)
             head.predicate = NSPredicate(format: "part == 'head'")
             head.iconImageName = NSExpression(forConstantValue: "turn-head")
@@ -352,7 +393,7 @@ struct VelaMapView: UIViewRepresentable {
             head.iconRotationAlignment = NSExpression(forConstantValue: "map")
             head.iconAllowsOverlap = NSExpression(forConstantValue: true)
             head.iconIgnoresPlacement = NSExpression(forConstantValue: true)
-            for l in [arrowEdge, arrowLine] as [MLNStyleLayer] { style.addLayer(l) }
+            for l in [arrowShadow, arrowEdge, arrowLine] as [MLNStyleLayer] { style.addLayer(l) }
             style.addLayer(head)
 
             let puckSrc = MLNShapeSource(identifier: "vela-puck", shape: nil, options: nil)
@@ -392,14 +433,15 @@ struct VelaMapView: UIViewRepresentable {
                 MapStyler.drive(style, on: navigating)
                 styledDriving = navigating
                 // A bold route line while driving, like Waze; the usual blue when planning.
-                (style.layer(withIdentifier: "vela-route-line") as? MLNLineStyleLayer)?.lineWidth = NSExpression(forConstantValue: navigating ? 13 : 10)
-                (style.layer(withIdentifier: "vela-route-edge") as? MLNLineStyleLayer)?.lineWidth = NSExpression(forConstantValue: navigating ? 19 : 15)
+                (style.layer(withIdentifier: "vela-route-line") as? MLNLineStyleLayer)?.lineWidth = NSExpression(forConstantValue: navigating ? 16 : 10)
+                (style.layer(withIdentifier: "vela-route-edge") as? MLNLineStyleLayer)?.lineWidth = NSExpression(forConstantValue: navigating ? 22 : 15)
             }
             for id in ["building", "building-3d"] { style.layer(withIdentifier: id)?.isVisible = !s.satellite && !navigating }
             renderResults(style)
             renderRoutes(style)
             renderPuck(style)
             renderCameras(style)
+            renderSignals(style)
             renderWaze(style)
             renderMine(style)
             if s.transitLines { loadRail(map) }
@@ -447,14 +489,31 @@ struct VelaMapView: UIViewRepresentable {
             (style.source(withIdentifier: "vela-cameras") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
         }
 
+        private func renderSignals(_ style: MLNStyle) {
+            let lights = model.nav?.routeSignals ?? []
+            let key = "\(lights.count)\(lights.first?.lat ?? 0)"
+            guard key != lastSignalsKey else { return }
+            lastSignalsKey = key
+            let features: [MLNPointFeature] = lights.map { p in
+                let f = MLNPointFeature()
+                f.coordinate = CLLocationCoordinate2D(latitude: p.lat, longitude: p.lng)
+                return f
+            }
+            (style.source(withIdentifier: "vela-signals") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
+        }
+
         private func renderWaze(_ style: MLNStyle) {
             let s = model.settings
             let history = WazeHistory.shared.sightings
             let kinds = s.wazeKinds.map(\.rawValue).sorted().joined()
-            let key = "\(s.wazeOn)\(s.wazeOnMap)\(s.wazeHeatmap)\(s.wazeMaxAge)\(kinds)\(wazeAt.timeIntervalSince1970)\(history.count)"
+            // While navigating, police and crashes from OpenWeb Ninja too (the live map has only closures).
+            let ninja = model.nav?.ninjaAlerts ?? []
+            let key = "\(s.wazeOn)\(s.wazeOnMap)\(s.wazeHeatmap)\(s.wazeMaxAge)\(kinds)\(wazeAt.timeIntervalSince1970)\(history.count)\(ninja.map(\.id).joined())"
             guard key != lastWazeKey else { return }
             lastWazeKey = key
-            let shown = s.wazeOn && s.wazeOnMap ? wazeAlerts.filter { s.shows($0) } : []
+            let ids = Set(wazeAlerts.map(\.id))
+            let all = wazeAlerts + ninja.filter { !ids.contains($0.id) }
+            let shown = s.wazeOn && s.wazeOnMap ? all.filter { s.shows($0) } : []
             let features: [MLNPointFeature] = shown.map { a in
                 let f = MLNPointFeature()
                 f.coordinate = CLLocationCoordinate2D(latitude: a.location.lat, longitude: a.location.lng)
@@ -469,7 +528,7 @@ struct VelaMapView: UIViewRepresentable {
             guard heatOn else { return }
             var seen = Set(history.map(\.id))
             var pts = history.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
-            for a in wazeAlerts where a.kind == .police && seen.insert(a.id).inserted {
+            for a in all where a.kind == .police && seen.insert(a.id).inserted {
                 pts.append(CLLocationCoordinate2D(latitude: a.location.lat, longitude: a.location.lng))
             }
             let heat: [MLNPointFeature] = pts.map { c in
@@ -660,12 +719,15 @@ struct VelaMapView: UIViewRepresentable {
             }
             guard let r = main else {
                 routeSrc?.shape = nil; spanSrc?.shape = nil; bubbleSrc?.shape = nil
+                (style.source(withIdentifier: "vela-route-done") as? MLNShapeSource)?.shape = nil
                 return
             }
             let cum = Geo.cumulative(r.polyline)
             let total = cum.last ?? 0
             let ahead = from > 1 ? Geo.slice(r.polyline, from: from, to: total, cumulative: cum) : r.polyline
             routeSrc?.shape = ahead.count >= 2 ? polyline(ahead) : nil
+            let driven = model.nav != nil && from > 1 ? Geo.slice(r.polyline, from: 0, to: from, cumulative: cum) : []
+            (style.source(withIdentifier: "vela-route-done") as? MLNShapeSource)?.shape = driven.count >= 2 ? polyline(driven) : nil
             let spans: [MLNPolylineFeature] = r.trafficSpans.compactMap { s in
                 let a = max(s.startMeters, from), b = min(s.startMeters + s.lengthMeters, total)
                 guard b > a else { return nil }
@@ -678,7 +740,14 @@ struct VelaMapView: UIViewRepresentable {
             let arrowSrc = style.source(withIdentifier: "vela-turn-arrow") as? MLNShapeSource
             if let n = model.nav, let m = n.nextManeuver, m.type != .arrive, m.type != .depart, m.type != .straight,
                let p = n.progress, m.alongMeters - p.alongMeters < 600 {
-                let a = max(m.alongMeters - 35, from), b = min(m.alongMeters + 22, total)
+                // At a roundabout, all the way round to your exit and a little beyond, like Waze.
+                var end = m.alongMeters + 22
+                if m.type == .roundabout,
+                   let out = n.route.maneuvers.first(where: { $0.leavesRoundabout && $0.alongMeters > m.alongMeters }),
+                   out.alongMeters - m.alongMeters < 250 {
+                    end = out.alongMeters + 22
+                }
+                let a = max(m.alongMeters - 35, from), b = min(end, total)
                 let shaft = Geo.slice(r.polyline, from: a, to: b, cumulative: cum)
                 if shaft.count >= 2 {
                     let tip = shaft[shaft.count - 1], prev = Geo.point(along: r.polyline, meters: max(a, b - 4), cumulative: cum)

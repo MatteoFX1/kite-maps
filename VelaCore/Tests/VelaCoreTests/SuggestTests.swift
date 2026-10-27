@@ -18,4 +18,19 @@ final class SuggestTests: XCTestCase {
         XCTAssertEqual(r.places.first?.address, "226 F St, Davis, CA")
         XCTAssertEqual(r.queries, ["pizza near me"])
     }
+
+    func testCloseNameMatchComesFirst() {
+        func place(_ n: String) -> Place { Place(id: n, name: n, location: LatLng(50.88, -1.25), source: "google") }
+        let google = ["The Body Shop", "Whiteley Village", "Whiteley Shopping Centre", "Boots"].map(place)
+        XCTAssertEqual(SuggestParser.closeMatchesFirst(google, query: "Whiteley Shopping Centre").map(\.name),
+                       ["Whiteley Shopping Centre", "Whiteley Village", "The Body Shop", "Boots"])
+        // Still typing: the last word counts as a start.
+        XCTAssertEqual(SuggestParser.closeMatchesFirst(google, query: "whiteley shop").first?.name, "Whiteley Shopping Centre")
+        // Nothing close: Google's order stays.
+        XCTAssertEqual(SuggestParser.closeMatchesFirst(google, query: "pharmacy").map(\.name), google.map(\.name))
+        // Several close ones keep Google's order between them.
+        let tescos = ["Tesco Express", "Tesco Extra", "Sainsbury's"].map(place)
+        XCTAssertEqual(SuggestParser.closeMatchesFirst(tescos, query: "tesco").map(\.name), ["Tesco Express", "Tesco Extra", "Sainsbury's"])
+        XCTAssertEqual(SuggestParser.closeMatchesFirst(tescos, query: "sainsburys").first?.name, "Sainsbury's")
+    }
 }

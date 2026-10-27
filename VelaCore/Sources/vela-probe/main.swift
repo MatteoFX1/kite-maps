@@ -18,6 +18,39 @@ if args.count > 1, args[1] == "incidents" {
     await googleIncidents()
     exit(0)
 }
+if args.count > 1, args[1] == "ninja" {
+    // One OpenWeb Ninja ask over central London (uses one of the key's monthly asks).
+    // Usage: NINJA_KEY=... swift run vela-probe ninja
+    WazeNinja.key = ProcessInfo.processInfo.environment["NINJA_KEY"]
+    let found = await WazeNinja.alerts(south: 51.49, west: -0.20, north: 51.54, east: -0.05)
+    print("ninja: HTTP \(WazeNinja.lastStatus?.code ?? 0), \(WazeNinja.lastStatus?.summary ?? "nothing")")
+    for a in found ?? [] { print(" \(a.title) · \(a.street ?? "?") · \(a.reportedAt) · \(a.thumbsUp) thumbs") }
+    exit(found == nil ? 1 : 0)
+}
+if args.count > 1, args[1] == "body" {
+    await rawBody()
+    exit(0)
+}
+if args.count > 1, args[1] == "limits" {
+    await limitsCheck()
+    exit(0)
+}
+if args.count > 1, args[1] == "reportsuk" {
+    await ukReports()
+    exit(0)
+}
+if args.count > 1, args[1] == "refresh" {
+    await refreshCheck()
+    exit(0)
+}
+if args.count > 1, args[1] == "route" {
+    await routeCheck()
+    exit(0)
+}
+if args.count > 1, args[1] == "drive" {
+    await driveReplay()
+    exit(0)
+}
 if args.count > 1, args[1] == "uk" {
     await ukRoutes()
     exit(0)
@@ -110,7 +143,7 @@ if let via, let line = merged.routes.first?.polyline {
 // Cameras and speed limits along the Davis to airport route.
 if let line = merged.routes.first?.polyline, let extra = await Overpass.alongRoute(line, speed: true, plate: true) {
     let limits = Overpass.speedLimits(extra.ways, on: line)
-    print("Along the route: \(extra.cameras.count) cameras, \(extra.ways.count) roads with limits, \(limits.count) changes: \(limits.prefix(10).map { "\(Int($0.startMeters)) m \($0.kmh.map { String(Int(($0 / 1.609344).rounded())) + " mph" } ?? "?")" })")
+    print("Along the route: \(extra.signals.count) traffic lights, \(extra.cameras.count) cameras, \(extra.ways.count) roads with limits, \(limits.count) changes: \(limits.prefix(10).map { "\(Int($0.startMeters)) m \($0.kmh.map { String(Int(($0 / 1.609344).rounded())) + " mph" } ?? "?")" })")
 } else {
     print("Along the route: Overpass failed")
 }

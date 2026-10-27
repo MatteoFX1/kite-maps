@@ -191,9 +191,23 @@ enum DirectionsParser {
             text.removeSubrange(r)
         }
         text = text.capitalizedFirst
-        return Maneuver(type: mapType(token, side: side, severity: severity),
-                        instruction: text.isEmpty ? "Continue" : text,
-                        location: LatLng(0, 0), alongMeters: 0, distanceMeters: meters, road: road, laneHint: lane)
+        var m = Maneuver(type: mapType(token, side: side, severity: severity),
+                         instruction: text.isEmpty ? "Continue" : text,
+                         location: LatLng(0, 0), alongMeters: 0, distanceMeters: meters, road: road, laneHint: lane)
+        // Google says the exit only in words: keep the number too, for the roundabout picture.
+        if m.type == .roundabout { m.exit = exitNumber(in: m.instruction) }
+        return m
+    }
+
+    /** "take the 3rd exit" is 3. */
+    public static func exitNumber(in text: String) -> Int? {
+        let words = ["first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7, "eighth": 8]
+        let lower = text.lowercased()
+        if let r = lower.range(of: #"(\d+)(st|nd|rd|th) exit"#, options: .regularExpression) {
+            return Int(lower[r].prefix { $0.isNumber })
+        }
+        for (w, n) in words where lower.contains("\(w) exit") { return n }
+        return nil
     }
 
     static func mapType(_ token: String?, side: String?, severity: String?) -> ManeuverType {

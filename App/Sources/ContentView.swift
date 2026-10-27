@@ -154,7 +154,7 @@ struct BrowseOverlay: View {
                         HStack(alignment: .bottom) {
                             if idle { WazeMapChips(model: model) }
                             Spacer()
-                            MapFab(icon: "location.fill", tint: Vela.routeBlue, size: 64) { model.centerOnUser() }
+                            MapFab(icon: "location.fill", tint: Vela.accentText(scheme), size: 64) { model.centerOnUser() }
                                 .accessibilityLabel("Centre on me")
                                 .contextMenu {
                                     if let u = model.userLatLng {

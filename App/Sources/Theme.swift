@@ -134,8 +134,10 @@ enum Fmt {
             if ft < 1000 { return "\(max(Int((ft / 100).rounded()) * 100, 100)) feet" }
         }
         let mi = m / 1609.344
-        if mi < 0.3 { return "a quarter mile" }
+        // The way people say it: "a quarter of a mile" in Britain, "a quarter mile" in America.
+        if mi < 0.3 { return yards ? "a quarter of a mile" : "a quarter mile" }
         if mi < 0.6 { return "half a mile" }
+        if mi < 0.9 { return "three quarters of a mile" }
         return mi < 1.05 ? "1 mile" : String(format: "%.1f miles", mi)
     }
 

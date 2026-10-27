@@ -526,10 +526,14 @@ final class AppModel: ObservableObject {
         routesRequest += 1
         let req = routesRequest
         let hw = settings.avoidHighways, tolls = settings.avoidTolls, google = !settings.noGoogle
+        // Already driving (asked at a red light, say): no route that starts with a U-turn.
+        let moving = location.last.flatMap { l in l.speed >= 4 && l.course >= 0 && l.courseAccuracy >= 0 && l.courseAccuracy < 45 ? l.course : nil }
+        let heading = d.reversed ? nil : moving
         for m in TravelMode.allCases {
             directions?.loading.insert(m)
             Task {
-                let r = await Directions.routes(from: from, to: to, mode: m, avoidHighways: hw, avoidTolls: tolls, useGoogle: google, via: via)
+                let r = await Directions.routes(from: from, to: to, mode: m, avoidHighways: hw, avoidTolls: tolls, useGoogle: google, via: via,
+                                                heading: m == .drive ? heading : nil, alternatives: true)
                 guard directions?.destination.id == d.destination.id, routesRequest == req else { return }
                 directions?.loading.remove(m)
                 directions?.routes[m] = r.routes
@@ -601,6 +605,10 @@ final class AppModel: ObservableObject {
         let n = Navigator(route: route, destination: d.destination, stops: d.stops, settings: settings)
         nav = n
         navSub = n.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        n.onFinished = { [weak self, weak n] in
+            guard let self, let n, self.nav === n else { return }
+            self.endNavigation()
+        }
         location.setNavigating(true, mode: route.mode.rawValue)
         map?.showsUserLocation = false
         if let loc = location.last { n.handle(loc); followCamera(n, loc, animated: false) }

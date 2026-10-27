@@ -132,8 +132,11 @@ public enum OSRM {
                         continue
                     }
                     let modifier = m["modifier"] as? String
-                    let name = (step["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-                    let ref = (step["ref"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    let ref0 = (step["ref"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    // A motorway is known by its number ("M271"), not its name ("Nursling Spur Motorway").
+                    let ref = ref0?.split(separator: ";").first.map { String($0).trimmingCharacters(in: .whitespaces) }
+                    let motorway = ref.flatMap { r in r.range(of: #"^(M\d+|A\d+\(M\))$"#, options: .regularExpression) != nil ? r : nil }
+                    let name = motorway ?? (step["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                     let dist = step["distance"] as? Double ?? 0
                     if let n = name ?? ref { roads[n, default: 0] += dist }
                     let loc = (m["location"] as? [Double]).map { LatLng($0[1], $0[0]) } ?? Geo.point(along: line, meters: along, cumulative: cum)
@@ -381,7 +384,9 @@ public enum OSRM {
         var toward: String? {
             guard let d = destinations?.replacingOccurrences(of: ";", with: ",").trimmingCharacters(in: .whitespaces), !d.isEmpty else { return nil }
             let parts = d.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-            let names = (parts.count == 2 ? parts[1] : parts[0]).split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            // UK signs put a road reached later in brackets, "(A32) Alton": the place is what's said.
+            let names = (parts.count == 2 ? parts[1] : parts[0]).split(separator: ",")
+                .map { $0.replacingOccurrences(of: #"\([^)]*\)"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
             let refs = parts.count == 2 ? parts[0].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } : []
             var pick = Array(names.prefix(2))
@@ -407,8 +412,16 @@ public enum OSRM {
             let verb = mode == .drive ? "Drive" : (mode == .bike ? "Ride" : "Walk")
             return road.map { "\(verb) along \($0)" } ?? "Head out"
         case "arrive": return "You have arrived"
-        case "roundabout", "rotary":
-            let n = exit.map { "take the \(ordinal($0)) exit" } ?? "go through it"
+        case "roundabout turn" where exit == nil:
+            // A mini-roundabout the router treats as a junction, with no exit count: say the turn.
+            let turn = dir.contains("left") ? "turn left" : dir.contains("right") ? "turn right" : "go straight on"
+            return "At the roundabout, \(turn)" + onto
+        case "roundabout", "rotary", "roundabout turn":
+            // A named roundabout ("Millbrook Roundabout") is where you are, not a road to go onto.
+            if let r = road, r.lowercased().contains("roundabout") {
+                return exit.map { "At \(r), take the \(ordinal($0)) exit" } ?? "Go straight through \(r)"
+            }
+            let n = exit.map { "take the \(ordinal($0)) exit" } ?? "go straight through"
             return "At the roundabout, \(n)" + onto
         case "exit roundabout", "exit rotary": return "Exit the roundabout" + onto
         case "merge": return "Merge" + onto
@@ -419,7 +432,10 @@ public enum OSRM {
             let base = signs.number.map { "Take exit \($0)" } ?? "Take the exit"
             if let t = signs.toward { return base + " toward \(t)" }
             return base + (newRoad.map { " onto \($0)" } ?? "")
-        case "fork": return "Keep \(dir.contains("left") ? "left" : "right") at the fork" + onto
+        case "fork":
+            // Leaving the M27 by a slip road that still carries its name isn't "onto M27".
+            let toward = signs.toward.map { " toward \($0)" } ?? ""
+            return "Keep \(dir.contains("left") ? "left" : "right") at the fork" + (newRoad.map { " onto \($0)" } ?? toward)
         case "end of road": return "At the end of the road, turn \(dir.replacingOccurrences(of: "slight ", with: ""))" + onto
         case "continue", "new name":
             let stay = road.map { " to stay on \($0)" } ?? ""
@@ -462,7 +478,8 @@ public enum Directions {
 
     public static func routes(from a: LatLng, to b: LatLng, mode: TravelMode,
                               avoidHighways: Bool = false, avoidTolls: Bool = false,
-                              useGoogle: Bool = true, via: [LatLng] = [], heading: Double? = nil) async -> Result {
+                              useGoogle: Bool = true, via: [LatLng] = [], heading: Double? = nil,
+                              alternatives: Bool = false) async -> Result {
         // Ask both at once: Google's route knows traffic, OSRM's steps read better (Vela puts
         // the open router's turn-by-turn on Google's line the same way).
         let osrmTask = Task { try await OSRM.route(from: a, to: b, mode: mode, via: via, heading: heading) }
@@ -473,20 +490,32 @@ public enum Directions {
             if let heading {
                 // A reroute while driving: Google doesn't know which way the car faces, so drop its
                 // routes that start back the way the car came; only the first one is driven, so skip the rest.
-                g = Array(g.filter { !startsBehind($0.polyline, heading: heading) }.prefix(1))
+                var ahead = g.filter { !startsBehind($0.polyline, heading: heading) }
+                // The open router can't avoid motorways or tolls: rather Google's turn round than those.
+                if ahead.isEmpty && (avoidHighways || avoidTolls) { ahead = g }
+                // Planning a trip while already moving keeps the choice of routes; a reroute only needs one.
+                g = alternatives ? ahead : Array(ahead.prefix(1))
             }
             if !g.isEmpty {
                 // One at a time: the FOSSGIS server turns away bursts.
+                // Rerouting at speed, a slow open router (weak signal, a busy server) mustn't hold
+                // the new route back: after a few seconds Google's own steps are driven instead.
+                let reroute = heading != nil && !alternatives
+                let wait: Double = reroute ? 5 : 25
                 var vias: [Int: Route] = [:]
                 for i in g.indices {
-                    if let r = try? await OSRM.routeVia(g[i].polyline, mode: mode) { vias[i] = r }
+                    let line = g[i].polyline
+                    if let r = (await deadline(wait, { try? await OSRM.routeVia(line, mode: mode) })).flatMap({ $0 }) { vias[i] = r }
                 }
-                let plain = (try? await osrmTask.value) ?? []
+                let plain: [Route] = (await deadline(wait, { try? await osrmTask.value })).flatMap { $0 } ?? []
                 var spare = plain
                 for i in g.indices {
                     if var steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
                         // Google's step positions are only trustworthy when its steps cover the whole line.
-                        if g[i].stepsComplete { StepMerge.addGoogleLaneHints(&steps, from: g[i].maneuvers) }
+                        if g[i].stepsComplete {
+                            StepMerge.addGoogleLaneHints(&steps, from: g[i].maneuvers)
+                            StepMerge.addGoogleExits(&steps, from: g[i].maneuvers)
+                        }
                         g[i].maneuvers = steps
                         g[i].stepsComplete = true
                     } else if !g[i].stepsComplete, !spare.isEmpty {
@@ -495,6 +524,16 @@ public enum Directions {
                         var o = spare.removeFirst()
                         if let t = g[i].trafficSeconds, g[i].typicalSeconds > 0 { o.trafficSeconds = o.typicalSeconds * t / g[i].typicalSeconds }
                         g[i] = o
+                    }
+                }
+                for i in g.indices {
+                    // Whatever the steps came from, the picture's number matches the words.
+                    for j in g[i].maneuvers.indices where g[i].maneuvers[j].type == .roundabout && g[i].maneuvers[j].exit == nil {
+                        g[i].maneuvers[j].exit = DirectionsParser.exitNumber(in: g[i].maneuvers[j].instruction)
+                    }
+                    // Britain and Ireland ("slip road" is British; Australia says "ramp" too).
+                    if (49.8...61).contains(a.lat), (-11...2).contains(a.lng) {
+                        for j in g[i].maneuvers.indices { g[i].maneuvers[j].instruction = British.words(g[i].maneuvers[j].instruction) }
                     }
                 }
                 return Result(routes: g)
@@ -509,6 +548,20 @@ public enum Directions {
             err = error.localizedDescription
         }
         return Result(routes: [], error: err ?? "No route found.")
+    }
+}
+
+/** [op]'s answer, or nil if it takes longer than [seconds]. */
+func deadline<T: Sendable>(_ seconds: Double, _ op: @escaping @Sendable () async -> T) async -> T? {
+    await withTaskGroup(of: T?.self) { group in
+        group.addTask { await op() }
+        group.addTask {
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1e9))
+            return nil
+        }
+        let first = await group.next() ?? nil
+        group.cancelAll()
+        return first
     }
 }
 
@@ -586,10 +639,38 @@ public enum StepMerge {
      * Google's own lane advice ("Use the right lane to merge onto Redbridge Rd") on the step at the
      * same place, where the open map has no lanes mapped.
      */
+    /**
+     * Google's exit count for each roundabout, where the open router has none or a different one:
+     * on 2026-10-27's drives the router said "go straight through" or "1st exit" at Millbrook and
+     * Redbridge where Google (and the signs) say 2nd. The open router's road name is kept.
+     */
+    public static func addGoogleExits(_ steps: inout [Maneuver], from google: [Maneuver]) {
+        for i in steps.indices where steps[i].type == .roundabout && !steps[i].leavesRoundabout {
+            let near = google.filter { $0.type == .roundabout && $0.exit != nil && abs($0.alongMeters - steps[i].alongMeters) < 120 }
+            guard let g = near.min(by: { abs($0.alongMeters - steps[i].alongMeters) < abs($1.alongMeters - steps[i].alongMeters) }),
+                  let n = g.exit, n != steps[i].exit else { continue }
+            steps[i].exit = n
+            steps[i].instruction = OSRM.instruction(type: "roundabout", modifier: nil, road: steps[i].road, exit: n, mode: .drive)
+            // The way off says the same number.
+            if i + 1 < steps.count, steps[i + 1].leavesRoundabout { steps[i + 1].exit = n }
+        }
+    }
+
     public static func addGoogleLaneHints(_ steps: inout [Maneuver], from google: [Maneuver]) {
         for i in steps.indices where !steps[i].silent && steps[i].lanes.isEmpty && steps[i].laneHint == nil {
             let near = google.filter { $0.laneHint != nil && abs($0.alongMeters - steps[i].alongMeters) < 150 }
             steps[i].laneHint = near.min { abs($0.alongMeters - steps[i].alongMeters) < abs($1.alongMeters - steps[i].alongMeters) }?.laneHint
         }
+    }
+}
+
+/** Google words its steps the American way even in Britain: "Take the ramp" is a slip road there. */
+public enum British {
+    public static func words(_ text: String) -> String {
+        text.replacingOccurrences(of: #"\b(the|a) ramp\b"#, with: "$1 slip road", options: .regularExpression)
+            .replacingOccurrences(of: #"\bramp\b"#, with: "slip road", options: .regularExpression)
+            .replacingOccurrences(of: #"\bparking lot\b"#, with: "car park", options: .regularExpression)
+            .replacingOccurrences(of: #"\bparking garage\b"#, with: "multi-storey car park", options: .regularExpression)
+            .replacingOccurrences(of: #"\bfreeway\b"#, with: "motorway", options: .regularExpression)
     }
 }
