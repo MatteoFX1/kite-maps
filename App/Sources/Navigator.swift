@@ -65,6 +65,22 @@ final class Navigator: ObservableObject {
     private var fullRoadData = false
     /** The limits came from the road matcher, which knows every road on the route. */
     private var matchedLimits = false
+    /** The roads the route really drives, from the road matcher (empty until it answers). */
+    private var matchedWays: [Overpass.LimitWay] = []
+
+    /**
+     * Cameras on the roads the route drives, not the other side of a dual carriageway: OSM maps
+     * one per carriageway, about 30 m apart on the M27, which is close enough to the route to
+     * count. Without the matched roads, all are kept.
+     */
+    private func onOurSide(_ cams: [(camera: RoadCamera, along: Double)]) -> [(camera: RoadCamera, along: Double)] {
+        guard !matchedWays.isEmpty else { return cams }
+        return cams.filter { c in
+            matchedWays.contains { w in
+                w.line.count >= 2 && Geo.project(c.camera.location, on: w.line).offset < 15
+            }
+        }
+    }
     /** Called a few minutes after arriving, to end the trip. */
     var onFinished: (() -> Void)?
     /** Steps already given a "Continue for 7 miles". */
@@ -249,6 +265,7 @@ final class Navigator: ObservableObject {
         let speed = s.speedCameras, plate = s.plateCameras
         fullRoadData = false
         matchedLimits = false
+        matchedWays = []
         // Speed limits from the road matcher first: it answers in about a second.
         Task {
             let found = await Valhalla.speedLimits(along: line) { partial in
@@ -261,7 +278,9 @@ final class Navigator: ObservableObject {
             guard let found, self.route.id == id, !found.limits.isEmpty else { return }
             self.matchedLimits = true
             self.route.speedLimits = found.limits
-            RoadCache.shared.add(ways: found.ways, cameras: [], signals: [])
+            self.matchedWays = found.ways
+            self.routeCameras = self.onOurSide(self.routeCameras)
+            RoadCache.shared.add(ways: found.ways.filter { $0.kmh != nil }, cameras: [], signals: [])
         }
         // What's already known about these roads shows straight away; the live answer replaces it.
         func useKnown() async {
@@ -273,7 +292,7 @@ final class Navigator: ObservableObject {
             // Only while the whole route's live answer hasn't come in yet.
             guard self.route.id == id, !self.fullRoadData else { return }
             if !known.limits.isEmpty, !self.matchedLimits { self.route.speedLimits = known.limits }
-            self.routeCameras = known.cams
+            self.routeCameras = self.onOurSide(known.cams)
             self.zones = CameraAlerts.averageZones(known.cams)
             self.routeSignals = known.signals
         }
@@ -297,7 +316,7 @@ final class Navigator: ObservableObject {
             }
             guard let found = result, self.route.id == id else { return }
             self.fullRoadData = true
-            self.routeCameras = CameraAlerts.project(found.cameras, on: line)
+            self.routeCameras = self.onOurSide(CameraAlerts.project(found.cameras, on: line))
             if !self.matchedLimits { self.route.speedLimits = Overpass.speedLimits(found.ways, on: line) }
             self.zones = CameraAlerts.merge(found.zones, CameraAlerts.averageZones(self.routeCameras))
             self.routeSignals = found.signals

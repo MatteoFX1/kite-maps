@@ -151,6 +151,16 @@ func driveReplay() async {
             print("  scaled vs projected agree on \(same) of \(both)")
         }
         let cached = RoadCache.shared.along(route.polyline)
+        if let m = matched {
+            let cams = CameraAlerts.project(cached.cameras, on: route.polyline)
+            let ours = cams.filter { c in m.ways.contains { w in w.line.count >= 2 && Geo.project(c.camera.location, on: w.line).offset < 15 } }
+            print("  cameras near the route \(cams.count), on the roads it drives \(ours.count)")
+            for c in cams where !ours.contains(where: { $0.camera.id == c.camera.id }) {
+                let off = Geo.project(c.camera.location, on: route.polyline).offset
+                let nearest = m.ways.map { Geo.project(c.camera.location, on: $0.line).offset }.min() ?? -1
+                print(String(format: "    dropped %lld at %.0f m: %.0f m from the route line, %.0f m from a driven road", c.camera.id, c.along, off, nearest))
+            }
+        }
         print("  known before asking: \(Overpass.speedLimits(cached.ways, on: route.polyline).count) limit stretches, \(cached.signals.count) lights")
         let t1 = Date()
         let found = await Overpass.alongRoute(route.polyline, speed: true, plate: false)

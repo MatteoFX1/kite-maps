@@ -16,7 +16,7 @@ public enum Valhalla {
         return URLSession(configuration: c)
     }()
 
-    /** The limits along [line], and the roads they came from (for RoadCache). Nil when the server didn't answer. */
+    /** The limits along [line], and the roads it drives (with their limit where known). Nil when the server didn't answer. */
     /// [progress] gets the limits so far after each piece, so a long drive's first miles show straight away.
     public static func speedLimits(along line: [LatLng], progress: (@Sendable ([SpeedLimit]) async -> Void)? = nil) async
         -> (limits: [SpeedLimit], ways: [Overpass.LimitWay])? {
@@ -91,7 +91,7 @@ public enum Valhalla {
             if limits.last.map({ $0.kmh != kmh }) ?? true { limits.append(SpeedLimit(startMeters: along, kmh: kmh)) }
             along += ((e["length"] as? NSNumber)?.doubleValue ?? 0) * 1000
             if let a = (e["begin_shape_index"] as? NSNumber)?.intValue, let b = (e["end_shape_index"] as? NSNumber)?.intValue,
-               a >= 0, b < shape.count, b > a, kmh != nil {
+               a >= 0, b < shape.count, b > a {
                 ways.append(Overpass.LimitWay(id: (e["way_id"] as? NSNumber)?.int64Value ?? 0, kmh: kmh, line: Array(shape[a...b])))
             }
         }
