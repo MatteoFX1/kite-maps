@@ -47,6 +47,8 @@ final class Navigator: ObservableObject {
     private var toldNoSignal = false
     private var spokenStage: [Int: Int] = [:]
     private var stoppedNearEnd: Date?
+    /** The car has been on the route at least once since it was planned. */
+    private var joinedRoute = false
     private static let log = Logger(subsystem: "app.vela.ios", category: "voice")
     private let calls = CXCallObserver()
     /** A phone (or FaceTime, WhatsApp...) call is going on. */
@@ -170,7 +172,11 @@ final class Navigator: ObservableObject {
             }
             return
         }
-        if p.offRoute && !rerouting && Date().timeIntervalSince(lastReroute) > 8 {
+        // Starting in a car park or a driveway, off the road the route begins on: that's not a
+        // wrong turn, so no "Rerouting" every few seconds until the car has reached the route once
+        // (or has clearly gone another way).
+        if p.offsetMeters < 40 { joinedRoute = true }
+        if p.offRoute && !rerouting && (joinedRoute || p.offsetMeters > 400) && Date().timeIntervalSince(lastReroute) > 8 {
             reroute(from: loc)
             return
         }
