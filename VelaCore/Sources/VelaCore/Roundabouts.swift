@@ -93,7 +93,7 @@ public enum Roundabouts {
      * clockwise from straight ahead, so 0 is straight on, 90 right, 270 left and 180 back the way
      * it came. The way out is the first 40 m of steady road after the circle.
      */
-    static func exitAngle(_ line: [LatLng], cumulative cum: [Double], along: Double) -> Double? {
+    public static func exitAngle(_ line: [LatLng], cumulative cum: [Double], along: Double) -> Double? {
         let total = cum.last ?? 0
         func heading(_ a: Double, _ b: Double) -> Double? {
             let p = Geo.point(along: line, meters: max(0, a), cumulative: cum), q = Geo.point(along: line, meters: min(total, b), cumulative: cum)
@@ -382,7 +382,7 @@ public enum Roundabouts {
         (a.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
     }
 
-    static func angleGap(_ a: Double, _ b: Double) -> Double {
+    public static func angleGap(_ a: Double, _ b: Double) -> Double {
         abs(signedGap(a, b))
     }
 
