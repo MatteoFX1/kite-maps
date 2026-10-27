@@ -89,7 +89,7 @@ public enum Valhalla {
         for e in edges {
             // 0 is "not known"; Valhalla marks a variable or no limit with 255.
             let raw = (e["speed_limit"] as? NSNumber)?.doubleValue
-            let mapped = raw.flatMap { (1...200).contains($0) ? $0 : nil }
+            let mapped = Overpass.britishLimit(raw.flatMap { (1...200).contains($0) ? $0 : nil }, at: shape.first ?? LatLng(0, 0))
             let names = Set((e["names"] as? [String]) ?? [])
             // A limit holds until a sign says otherwise: further along the same road with no limit
             // mapped, the last one still applies (Normandy Way, Marchwood: 40 mph mapped by the

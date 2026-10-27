@@ -197,6 +197,18 @@ final class ValhallaTests: XCTestCase {
         XCTAssertEqual(p.ways.map(\.id), [11, 12, 13])
     }
 
+    /** A British road mapped "maxspeed=30" with no unit is 30 mph, not 19; elsewhere 30 stays km/h. */
+    func testBritishUnitlessLimitIsMph() {
+        let eastleigh = LatLng(50.9613, -1.3705), paris = LatLng(48.85, 2.35), dublin = LatLng(53.35, -6.26)
+        XCTAssertEqual(Overpass.britishLimit(30, at: eastleigh) ?? 0, 48.28, accuracy: 0.01)
+        XCTAssertEqual(Overpass.britishLimit(30, at: paris), 30)
+        XCTAssertEqual(Overpass.britishLimit(30, at: dublin), 30)
+        // Already mph (30 mph is 48.28 km/h) or not a round number: left alone.
+        XCTAssertEqual(Overpass.britishLimit(48.28032, at: eastleigh) ?? 0, 48.28, accuracy: 0.01)
+        XCTAssertEqual(Overpass.britishLimit(80, at: eastleigh), 80)
+        XCTAssertNil(Overpass.britishLimit(nil, at: eastleigh))
+    }
+
     /** Normandy Way, Marchwood (2026-10-27): 40 mph mapped by the roundabout, nothing for the next mile, then another road. */
     func testLimitCarriesAlongTheSameRoad() throws {
         let json = """

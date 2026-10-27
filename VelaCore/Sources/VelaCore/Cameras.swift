@@ -227,8 +227,26 @@ public enum Overpass {
                 guard let lat = g["lat"] as? Double, let lon = g["lon"] as? Double else { return nil }
                 return LatLng(lat, lon)
             }
-            return line.count >= 2 ? LimitWay(id: (e["id"] as? NSNumber)?.int64Value ?? 0, kmh: maxspeedKmh(tags["maxspeed"]), line: line) : nil
+            return line.count >= 2 ? LimitWay(id: (e["id"] as? NSNumber)?.int64Value ?? 0,
+                                              kmh: britishLimit(maxspeedKmh(tags["maxspeed"]), at: line[0]), line: line) : nil
         }
+    }
+
+    /**
+     * In Great Britain limits are signed in mph, but some roads are mapped "maxspeed=30" with no
+     * unit, which by the map's rules means 30 km/h and showed as a "19" sign (the roundabout at
+     * Chestnut Avenue / Passfield Avenue, Eastleigh). No British limit is a round 10 to 70 km/h,
+     * so there those are read as the mph the sign says.
+     */
+    public static func britishLimit(_ kmh: Double?, at p: LatLng) -> Double? {
+        guard let kmh, inGreatBritain(p) else { return kmh }
+        let n = kmh.rounded()
+        return abs(kmh - n) < 0.01 && Int(n) % 10 == 0 && (10...70).contains(n) ? n * 1.609344 : kmh
+    }
+
+    /** England, Wales and Scotland, roughly (Ireland, north and south, left out). */
+    static func inGreatBritain(_ p: LatLng) -> Bool {
+        (49.8...61).contains(p.lat) && (-8...2).contains(p.lng) && !(p.lat < 55.4 && p.lng < -5.4)
     }
 
     /** OSM `maxspeed` to km/h, as Vela reads it: "50", "30 mph", "50 km/h", Britain's "national"; nil for "none", "DE:urban" and the like. */
@@ -258,7 +276,8 @@ public enum Overpass {
         for w in ways {
             let hits = w.line.map { Geo.project($0, on: line, cumulative: cum) }.filter { $0.offset < 12 }.map(\.along)
             guard let lo = hits.min(), let hi = hits.max(), hi - lo > 20 else { continue }
-            spans.append((lo, hi, w.kmh))
+            // Roads remembered from earlier drives may still hold the unit-less reading.
+            spans.append((lo, hi, britishLimit(w.kmh, at: w.line[0])))
         }
         guard !spans.isEmpty else { return [] }
         // Sample every 25 m; where roads overlap, the shorter (more specific) one wins.
@@ -324,7 +343,7 @@ public enum Overpass {
             let plate = tags["surveillance:type"] == "ALPR"
             return RoadCamera(id: id, kind: plate ? .plate : .speed, location: LatLng(lat, lon),
                               operatorName: plate ? (tags["operator"] ?? tags["manufacturer"]) : nil,
-                              maxspeedKmh: plate ? nil : maxspeedKmh(tags["maxspeed"]),
+                              maxspeedKmh: plate ? nil : britishLimit(maxspeedKmh(tags["maxspeed"]), at: LatLng(lat, lon)),
                               average: !plate && tags["enforcement"] == "average_speed")
         }
     }

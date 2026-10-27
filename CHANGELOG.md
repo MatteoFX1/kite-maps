@@ -27,7 +27,9 @@ the middle number for big milestones.
   along (Normandy Way), Kite keeps showing it until you turn onto a different road, the way the
   last sign you passed still applies.
 - **Fewer road numbers while driving:** M27, M3 and A27 signs are spaced much further apart, so a
-  motorway junction isn't covered in them.
+  motorway junction isn't covered in them, and none sit under your arrow.
+- **No more "19" speed signs:** some British roads are mapped as "30" with no unit, which the map
+  treats as km/h (19 mph). In Britain Kite now reads those as the 30 mph on the sign.
 
 ## 0.7.3
 

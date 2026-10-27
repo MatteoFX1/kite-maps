@@ -404,7 +404,8 @@ struct VelaMapView: UIViewRepresentable {
             puck.iconRotationAlignment = NSExpression(forConstantValue: "map")
             puck.iconPitchAlignment = NSExpression(forConstantValue: "map")
             puck.iconAllowsOverlap = NSExpression(forConstantValue: true)
-            puck.iconIgnoresPlacement = NSExpression(forConstantValue: true)
+            // Always drawn, and it keeps the space it covers clear: no road number or name under the car.
+            puck.iconIgnoresPlacement = NSExpression(forConstantValue: false)
             style.addLayer(puck)
         }
 
