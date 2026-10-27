@@ -161,7 +161,10 @@ final class Navigator: ObservableObject {
         } else {
             stoppedNearEnd = nil
         }
-        let parked = stoppedNearEnd.map { loc.timestamp.timeIntervalSince($0) > 20 } ?? false
+        // Off the road into a car park (or right at the end): 20 seconds stopped. Still on the road
+        // short of it, it could be a red light or a queue, so a minute and a half.
+        let offRoad = p.offsetMeters > 20 || p.remainingMeters < 40
+        let parked = stoppedNearEnd.map { loc.timestamp.timeIntervalSince($0) > (offRoad ? 20 : 90) } ?? false
         if p.arrived || parked {
             arrived = true
             speak("You have arrived at \(destination.name)" + (destinationSide.map { ", on the \($0)." } ?? "."))
