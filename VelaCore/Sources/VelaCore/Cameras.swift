@@ -1,8 +1,8 @@
 import Foundation
 
 /** A mapped camera from OpenStreetMap: a fixed speed camera, or a license plate reader (DeFlock). */
-public struct RoadCamera: Hashable, Sendable, Identifiable {
-    public enum Kind: String, Sendable { case speed, plate }
+public struct RoadCamera: Hashable, Codable, Sendable, Identifiable {
+    public enum Kind: String, Codable, Sendable { case speed, plate }
     public var id: Int64
     public var kind: Kind
     public var location: LatLng
@@ -59,9 +59,17 @@ public enum Overpass {
     }
 
     /** A mapped road with a posted limit (OSM `maxspeed`), in km/h, and its shape. */
-    public struct LimitWay: Sendable {
+    public struct LimitWay: Codable, Sendable {
+        /** OSM's way id, so the same road seen twice is kept once. */
+        public var id: Int64 = 0
         public var kmh: Double?
         public var line: [LatLng]
+
+        public init(id: Int64 = 0, kmh: Double?, line: [LatLng]) {
+            self.id = id
+            self.kmh = kmh
+            self.line = line
+        }
     }
 
     /**
@@ -81,10 +89,12 @@ public enum Overpass {
         for piece in pieces(line, meters: 40_000) {
             guard let data = await alongQuery(piece, speed: speed, plate: plate) else { continue }
             answered = true
-            for c in parse(data) ?? [] { cams[c.id] = c }
-            ways += parseWays(data)
+            let found = parse(data) ?? [], w = parseWays(data), lights = parseSignalNodes(data)
+            for c in found { cams[c.id] = c }
+            ways += w
             zones += averageZones(data, on: line)
-            signals += parseSignals(data)
+            signals += lights.map(\.at)
+            RoadCache.shared.add(ways: w, cameras: found, signals: lights)
         }
         guard answered else { return nil }
         return (Array(cams.values), ways, CameraAlerts.merge(zones, []), signalsOnRoute(signals, line: line))
@@ -121,12 +131,32 @@ public enum Overpass {
         if speed { parts.append("relation[\"enforcement\"=\"average_speed\"](around:200,\(coords));") }
         parts.append("node[\"highway\"=\"traffic_signals\"](around:20,\(coords));")
         let q = "[out:json][timeout:40];(" + parts.joined() + ");out body geom 8000;"
-        for ep in endpoints {
-            guard let (data, status) = await fetch(ep, query: q), status == 200, parse(data) != nil,
-                  !timedOut(data) else { continue }
-            return data
+        return await firstAnswer(q) { parse($0) != nil }
+    }
+
+    /**
+     * Asks the mirrors one after another, but without waiting out a slow one: each next mirror is
+     * asked [stagger] seconds after the last, and the first good answer wins. A busy main server
+     * used to hold a drive's speed limits back by two minutes or more.
+     */
+    static func firstAnswer(_ q: String, stagger: Double = 8, valid: @escaping @Sendable (Data) -> Bool) async -> Data? {
+        await withTaskGroup(of: Data?.self) { group in
+            for (i, ep) in endpoints.enumerated() {
+                group.addTask {
+                    if i > 0 { try? await Task.sleep(nanoseconds: UInt64(Double(i) * stagger * 1e9)) }
+                    guard !Task.isCancelled, let (data, status) = await fetch(ep, query: q), status == 200,
+                          !timedOut(data), valid(data) else { return nil }
+                    return data
+                }
+            }
+            for await answer in group {
+                if let answer {
+                    group.cancelAll()
+                    return answer
+                }
+            }
+            return nil
         }
-        return nil
     }
 
     /**
@@ -156,13 +186,15 @@ public enum Overpass {
     }
 
     /** Traffic light nodes in an answer (OSM `highway=traffic_signals`). */
-    static func parseSignals(_ data: Data) -> [LatLng] {
+    static func parseSignals(_ data: Data) -> [LatLng] { parseSignalNodes(data).map(\.at) }
+
+    static func parseSignalNodes(_ data: Data) -> [(id: Int64, at: LatLng)] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let elements = root["elements"] as? [[String: Any]] else { return [] }
         return elements.compactMap { e in
             guard (e["tags"] as? [String: String])?["highway"] == "traffic_signals",
                   let lat = e["lat"] as? Double, let lon = e["lon"] as? Double else { return nil }
-            return LatLng(lat, lon)
+            return ((e["id"] as? NSNumber)?.int64Value ?? 0, LatLng(lat, lon))
         }
     }
 
@@ -191,7 +223,7 @@ public enum Overpass {
                 guard let lat = g["lat"] as? Double, let lon = g["lon"] as? Double else { return nil }
                 return LatLng(lat, lon)
             }
-            return line.count >= 2 ? LimitWay(kmh: maxspeedKmh(tags["maxspeed"]), line: line) : nil
+            return line.count >= 2 ? LimitWay(id: (e["id"] as? NSNumber)?.int64Value ?? 0, kmh: maxspeedKmh(tags["maxspeed"]), line: line) : nil
         }
     }
 
@@ -248,11 +280,7 @@ public enum Overpass {
     private static func cameras(filter: String, speed: Bool, plate: Bool) async -> [RoadCamera]? {
         guard speed || plate else { return [] }
         let q = query(filter: filter, speed: speed, plate: plate)
-        for ep in endpoints {
-            guard let (data, status) = await fetch(ep, query: q), status == 200, !timedOut(data), let list = parse(data) else { continue }
-            return list
-        }
-        return nil
+        return await firstAnswer(q) { parse($0) != nil }.flatMap(parse)
     }
 
     /** One request to one mirror. A POST, since a route's query is too long for a URL. Nil on a network error. */
@@ -270,12 +298,7 @@ public enum Overpass {
 
     /** Any query, failing over across the mirrors; nil when none answered with data. */
     public static func query(_ q: String) async -> Data? {
-        for ep in endpoints {
-            guard let (data, status) = await fetch(ep, query: q), status == 200, !timedOut(data),
-                  (try? JSONSerialization.jsonObject(with: data)) != nil else { continue }
-            return data
-        }
-        return nil
+        await firstAnswer(q) { (try? JSONSerialization.jsonObject(with: $0)) != nil }
     }
 
     /** A busy server can answer 200 with a "remark" that the query ran out of time, and no data. */

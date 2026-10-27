@@ -155,3 +155,27 @@ final class StreetViewTests: XCTestCase {
         XCTAssertNil(StreetView.parse(#"[[5,"search returned no images"]]"#))
     }
 }
+
+final class RoadCacheTests: XCTestCase {
+    func testKnownRoadsComeBackForARouteNearby() {
+        let cache = RoadCache(file: nil)
+        let road = Overpass.LimitWay(id: 7, kmh: 48.3, line: [LatLng(50.900, -1.400), LatLng(50.905, -1.400)])
+        let far = Overpass.LimitWay(id: 8, kmh: 112, line: [LatLng(51.500, -0.100), LatLng(51.505, -0.100)])
+        cache.add(ways: [road, far], cameras: [RoadCamera(id: 3, kind: .speed, location: LatLng(50.902, -1.4001))],
+                  signals: [(id: 9, at: LatLng(50.903, -1.400))])
+        // The same road seen again is kept once.
+        cache.add(ways: [road], cameras: [], signals: [])
+        let line = [LatLng(50.899, -1.400), LatLng(50.906, -1.400)]
+        let known = cache.along(line)
+        XCTAssertEqual(known.ways.map(\.id), [7])
+        XCTAssertEqual(known.cameras.map(\.id), [3])
+        XCTAssertEqual(known.signals.count, 1)
+        XCTAssertEqual(Overpass.speedLimits(known.ways, on: line).compactMap(\.kmh), [48.3])
+    }
+
+    func testNothingKnownFarAway() {
+        let cache = RoadCache(file: nil)
+        cache.add(ways: [Overpass.LimitWay(id: 1, kmh: 50, line: [LatLng(0, 0), LatLng(0.005, 0)])], cameras: [], signals: [])
+        XCTAssertTrue(cache.along([LatLng(10, 10), LatLng(10.01, 10)]).ways.isEmpty)
+    }
+}

@@ -258,4 +258,13 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(OSRM.instruction(type: "continue", modifier: "uturn", road: "Bridge Road", exit: nil, mode: .drive),
                        "Make a U-turn on Bridge Road")
     }
+
+    func testNamedRoundaboutWording() {
+        XCTAssertEqual(OSRM.instruction(type: "roundabout", modifier: nil, road: "Millbrook Roundabout", exit: nil, mode: .drive),
+                       "Go straight through Millbrook Roundabout")
+        XCTAssertEqual(OSRM.instruction(type: "roundabout", modifier: nil, road: "Redbridge Roundabout", exit: 2, mode: .drive),
+                       "At Redbridge Roundabout, take the 2nd exit")
+        XCTAssertEqual(OSRM.instruction(type: "roundabout", modifier: nil, road: "A33", exit: 3, mode: .drive),
+                       "At the roundabout, take the 3rd exit onto A33")
+    }
 }

@@ -18,6 +18,10 @@ if args.count > 1, args[1] == "incidents" {
     await googleIncidents()
     exit(0)
 }
+if args.count > 1, args[1] == "drive" {
+    await driveReplay()
+    exit(0)
+}
 if args.count > 1, args[1] == "uk" {
     await ukRoutes()
     exit(0)

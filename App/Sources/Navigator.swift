@@ -194,6 +194,20 @@ final class Navigator: ObservableObject {
         guard route.mode == .drive else { return }
         let line = route.polyline, id = route.id
         let speed = s.speedCameras, plate = s.plateCameras
+        // What's already known about these roads shows straight away; the live answer replaces it.
+        Task {
+            let known = await Task.detached(priority: .userInitiated) { () -> (cams: [(camera: RoadCamera, along: Double)], limits: [SpeedLimit], signals: [LatLng]) in
+                let k = RoadCache.shared.along(line)
+                let cams = CameraAlerts.project(k.cameras.filter { $0.kind == .speed ? speed : plate }, on: line)
+                return (cams, k.ways.isEmpty ? [] : Overpass.speedLimits(k.ways, on: line), k.signals)
+            }.value
+            // Only while the live answer hasn't come in yet.
+            guard self.route.id == id, self.routeSignals.isEmpty, self.routeCameras.isEmpty else { return }
+            if self.route.speedLimits.isEmpty { self.route.speedLimits = known.limits }
+            self.routeCameras = known.cams
+            self.zones = CameraAlerts.averageZones(known.cams)
+            self.routeSignals = known.signals
+        }
         Task {
             // The public Overpass servers are sometimes busy: try again a couple of times.
             var result = await Overpass.alongRoute(line, speed: speed, plate: plate)
@@ -429,6 +443,9 @@ final class Navigator: ObservableObject {
             if m.type == .arrive { return }
             // The turn itself matters more than whatever is still being said.
             speak(m.instruction, urgent: true)
+        } else if m.leavesRoundabout {
+            // Already said with the roundabout ("take the 3rd exit"): only "exit" itself, as it comes up.
+            return
         } else if d <= near && d > now + 30 && stage < 2 {
             spokenStage[i] = 2
             // Which lane, like the banner shows, so it's known without looking.

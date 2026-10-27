@@ -408,7 +408,11 @@ public enum OSRM {
             return road.map { "\(verb) along \($0)" } ?? "Head out"
         case "arrive": return "You have arrived"
         case "roundabout", "rotary":
-            let n = exit.map { "take the \(ordinal($0)) exit" } ?? "go through it"
+            // A named roundabout ("Millbrook Roundabout") is where you are, not a road to go onto.
+            if let r = road, r.lowercased().contains("roundabout") {
+                return exit.map { "At \(r), take the \(ordinal($0)) exit" } ?? "Go straight through \(r)"
+            }
+            let n = exit.map { "take the \(ordinal($0)) exit" } ?? "go straight through"
             return "At the roundabout, \(n)" + onto
         case "exit roundabout", "exit rotary": return "Exit the roundabout" + onto
         case "merge": return "Merge" + onto
