@@ -132,8 +132,11 @@ public enum OSRM {
                         continue
                     }
                     let modifier = m["modifier"] as? String
-                    let name = (step["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-                    let ref = (step["ref"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    let ref0 = (step["ref"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    // A motorway is known by its number ("M271"), not its name ("Nursling Spur Motorway").
+                    let ref = ref0?.split(separator: ";").first.map { String($0).trimmingCharacters(in: .whitespaces) }
+                    let motorway = ref.flatMap { r in r.range(of: #"^(M\d+|A\d+\(M\))$"#, options: .regularExpression) != nil ? r : nil }
+                    let name = motorway ?? (step["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                     let dist = step["distance"] as? Double ?? 0
                     if let n = name ?? ref { roads[n, default: 0] += dist }
                     let loc = (m["location"] as? [Double]).map { LatLng($0[1], $0[0]) } ?? Geo.point(along: line, meters: along, cumulative: cum)

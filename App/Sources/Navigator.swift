@@ -3,6 +3,7 @@ import AVFoundation
 import CallKit
 import CoreLocation
 import Foundation
+import OSLog
 import UIKit
 import VelaCore
 
@@ -46,6 +47,7 @@ final class Navigator: ObservableObject {
     private var toldNoSignal = false
     private var spokenStage: [Int: Int] = [:]
     private var stoppedNearEnd: Date?
+    private static let log = Logger(subsystem: "app.vela.ios", category: "voice")
     private let calls = CXCallObserver()
     /** A phone (or FaceTime, WhatsApp...) call is going on. */
     private var onCall: Bool { calls.calls.contains { !$0.hasEnded } }
@@ -608,7 +610,10 @@ final class Navigator: ObservableObject {
         guard !muted, !stopped else { return }
         if urgent && speech.isSpeaking { speech.stopSpeaking(at: .word) }
         try? AVAudioSession.sharedInstance().setActive(true)
-        let u = AVSpeechUtterance(string: SpokenText.forVoice(text))
+        let said = SpokenText.forVoice(text)
+        // What was said, for checking a drive afterwards (Console, or `log stream` on a simulator).
+        Self.log.info("say: \(said, privacy: .public)")
+        let u = AVSpeechUtterance(string: said)
         u.voice = Self.voice
         u.rate = AVSpeechUtteranceDefaultSpeechRate * 0.95
         speech.speak(u)
