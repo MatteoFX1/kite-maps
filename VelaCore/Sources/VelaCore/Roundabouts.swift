@@ -217,7 +217,7 @@ public enum Roundabouts {
         // Otherwise only road straighter than any ring: 5 degrees in 20 m is a 230 m circle.
         let steady = 5.0
         var d = start
-        while d + 40 <= min(total, start + 400) {
+        while d + 40 <= min(total, start + 1000) {
             if let a = heading(d, d + 20), let b = heading(d + 20, d + 40), angleGap(a, b) < steady, let h = heading(d, d + 40) {
                 return norm(h - into)
             }
