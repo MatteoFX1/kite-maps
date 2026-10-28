@@ -21,6 +21,12 @@ the middle number for big milestones.
   turning left (Chestnut Avenue, Eastleigh). The arrow now follows the way the route really
   leaves every roundabout, big ones included (checked on 64 roundabouts in Hampshire, Wales,
   London and Milton Keynes).
+- **Big motorway roundabouts point the right way too:** at M27 J3 (Rownhams) and J5 (Stoneham)
+  the picture pointed along the roundabout itself, not the road you leave on. It now looks at
+  where the route actually leaves the circle, so the arrow matches the exit (also Bury Road).
+- **Lanes match the road:** at roundabouts the lane boxes now show as many lanes as the road in
+  really has (3 at J3), using the Highway Code rule for which lane to be in. On a one-lane road
+  in (Bury Road) there's no lane advice, since there's nothing to choose.
 - **Mini-roundabouts in the banner:** the small painted ones (Normandy Way, Marchwood) were
   skipped because neither Google nor the open map router mentions them. Kite now finds them on
   the map itself and shows which exit to take, with a picture, like the big ones.

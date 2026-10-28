@@ -146,6 +146,45 @@ final class RoundaboutTests: XCTestCase {
     }
 
     /**
+     * Rownhams (M27 junction 3, 2026-10-28): a 120 m circle, in from the south and round the west
+     * side to leave heading east. The ring is nearly straight for 40 m, and it was read as the way
+     * out, so the M27 east exit was drawn as straight on.
+     */
+    func testBigRoundaboutExitIsReadOffTheRoadOut() throws {
+        let c = LatLng(50.9455, -1.4763)
+        let k = cos(c.lat * .pi / 180) * 111_320
+        func at(_ deg: Double, _ r: Double) -> LatLng {
+            LatLng(c.lat + r * cos(deg * .pi / 180) / 110_540, c.lng + r * sin(deg * .pi / 180) / k)
+        }
+        var line = [at(180, 500), at(180, 120)]
+        for d in stride(from: 185.0, through: 420, by: 5) { line.append(at(d, 120)) }
+        // Off the ring at 60 degrees (north-east), then east along the slip road.
+        let off = at(60, 120)
+        line.append(LatLng(off.lat, off.lng + 400 / k))
+        let cum = Geo.cumulative(line)
+        let entry = cum[1], leave = cum[line.count - 2]
+        let withStep = try XCTUnwrap(Roundabouts.exitAngle(line, cumulative: cum, along: entry, leaving: leave))
+        XCTAssertLessThan(Roundabouts.angleGap(withStep, 90), 10)
+        let without = try XCTUnwrap(Roundabouts.exitAngle(line, cumulative: cum, along: entry))
+        XCTAssertLessThan(Roundabouts.angleGap(without, 90), 10)
+    }
+
+    /** The Highway Code's lanes, as many as the road in has; none for a one-lane road in. */
+    func testRuleLanesFollowTheRoadIn() throws {
+        var s = RoundaboutShape(exits: [270, 0, 90], taken: 2, clockwise: true, complete: true)
+        s.entryLanes = 3
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [false, false, true])
+        s.taken = 1
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [true, true, false])
+        s.taken = 0
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [true, false, false])
+        s.entryLanes = nil
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [true, false])
+        s.entryLanes = 1
+        XCTAssertNil(s.ruleLanes(leftTraffic: true))
+    }
+
+    /**
      * The map's picture of a big roundabout (Holbrook Road, Portsmouth): the 1st exit touches the
      * ring just after you come on, so it was drawn pointing back down, but the road heads left.
      * Your exit is turned to where the road goes and the others keep their order round.

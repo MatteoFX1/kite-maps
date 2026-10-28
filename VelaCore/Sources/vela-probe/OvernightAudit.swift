@@ -26,11 +26,14 @@ func overnightAudit() async {
         ("Camden to Greenwich (London)", LatLng(51.5390, -0.1430), LatLng(51.4780, -0.0010)),
         ("Croydon to Wimbledon (London)", LatLng(51.3720, -0.1000), LatLng(51.4210, -0.2060)),
         ("Milton Keynes roundabouts", LatLng(52.0400, -0.7590), LatLng(52.0200, -0.7000)),
+        ("Marchwood to Eastleigh via M271, M27 J3 and J5", LatLng(50.8880, -1.4420), LatLng(50.9620, -1.3640)),
+        ("Normandy Way to Eastleigh", LatLng(50.8930, -1.4490), LatLng(50.9620, -1.3640)),
+        ("M27 J5 onto the A335", LatLng(50.9440, -1.4300), LatLng(50.9580, -1.3640)),
     ]
     let only = CommandLine.arguments.count > 2 ? Int(CommandLine.arguments[2]) : nil
     var flags = 0, roundabouts = 0
     var unknownWays: Set<Int64> = []
-    for (n, d) in drives.enumerated() where only == nil || only == n {
+    for (n, d) in drives.enumerated() where only == nil || only == n || (only! >= 100 && n >= only! - 100) {
         print("##### \(n): \(d.0)")
         let r = await Directions.routes(from: d.1, to: d.2, mode: .drive)
         guard var x = r.routes.first else { print("FLAG no route: \(r.error ?? "")"); continue }
@@ -38,9 +41,10 @@ func overnightAudit() async {
         if let a = await Roundabouts.apply(to: x) { x = a }
         let cum = Geo.cumulative(x.polyline)
         print(String(format: "  %.1f km, source %@, %d steps", x.distanceMeters / 1000, x.source, x.maneuvers.count))
-        for m in x.maneuvers where m.type == .roundabout && !m.leavesRoundabout {
+        for (i, m) in x.maneuvers.enumerated() where m.type == .roundabout && !m.leavesRoundabout {
             roundabouts += 1
-            let line = Roundabouts.exitAngle(x.polyline, cumulative: cum, along: m.alongMeters)
+            let line = Roundabouts.exitAngle(x.polyline, cumulative: cum, along: m.alongMeters, leaving: Roundabouts.wayOff(x.maneuvers, i))
+            let off = Roundabouts.wayOff(x.maneuvers, i).map { String(format: " off=%.0f", $0 - m.alongMeters) } ?? " off=-"
             var notes: [String] = []
             if let s = m.roundabout {
                 let drawn = s.exits[s.taken]
@@ -49,9 +53,10 @@ func overnightAudit() async {
             } else { notes.append("no picture") }
             if m.exit == nil { notes.append("no exit number") }
             let shape = m.roundabout.map { s in "[\(s.exits.map { String(Int($0)) }.joined(separator: ","))] took \(s.taken + 1)\(s.complete ? " osm" : "")\(s.mini ? " mini" : "")" } ?? "-"
-            let lanes = m.lanes.isEmpty ? "" : " lanes " + m.lanes.map { ($0.valid ? "*" : "") + $0.indications.joined(separator: "/") }.joined(separator: "|")
-            print(String(format: "%@ %6.0f m  %@  exit=%@ line=%@ pic=%@%@  %.5f,%.5f%@", notes.isEmpty ? "  ok  " : "FLAG", m.alongMeters, m.instruction,
-                         m.exit.map(String.init) ?? "-", line.map { String(Int($0)) } ?? "-", shape, lanes, m.location.lat, m.location.lng,
+            let rule = m.roundabout.map { s in " in=\(s.entryLanes.map(String.init) ?? "?") rule=" + (s.ruleLanes(leftTraffic: true)?.map { $0.valid ? "*" : "." }.joined() ?? "none") } ?? ""
+            let lanes = m.lanes.isEmpty ? rule : " lanes " + m.lanes.map { ($0.valid ? "*" : "") + $0.indications.joined(separator: "/") }.joined(separator: "|")
+            print(String(format: "%@ %6.0f m  %@  exit=%@ line=%@ pic=%@%@%@  %.5f,%.5f%@", notes.isEmpty ? "  ok  " : "FLAG", m.alongMeters, m.instruction,
+                         m.exit.map(String.init) ?? "-", line.map { String(Int($0)) } ?? "-", shape, lanes, off, m.location.lat, m.location.lng,
                          notes.isEmpty ? "" : "  <- " + notes.joined(separator: "; ")))
             if !notes.isEmpty { flags += 1 }
         }
