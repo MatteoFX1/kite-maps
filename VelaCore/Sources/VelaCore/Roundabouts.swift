@@ -214,11 +214,13 @@ public enum Roundabouts {
             return norm(h - into)
         }
         let start = along + 6
-        // Otherwise only road straighter than any ring: 5 degrees in 20 m is a 230 m circle.
+        // Otherwise only road straighter than any ring: every 10 m of a 40 m stretch within 5 degrees
+        // of the whole (a 230 m circle), so a stretch that cuts the corner where the road leaves the
+        // ring doesn't count.
         let steady = 5.0
         var d = start
         while d + 40 <= min(total, start + 1000) {
-            if let a = heading(d, d + 20), let b = heading(d + 20, d + 40), angleGap(a, b) < steady, let h = heading(d, d + 40) {
+            if let h = heading(d, d + 40), stride(from: d, to: d + 40, by: 10).allSatisfy({ heading($0, $0 + 10).map { angleGap($0, h) < steady } ?? false }) {
                 return norm(h - into)
             }
             d += 4
