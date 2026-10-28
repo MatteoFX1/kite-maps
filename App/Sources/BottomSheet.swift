@@ -203,14 +203,3 @@ struct SheetTopKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
-
-/** A rectangle with only its top corners rounded (iOS 16 has no built-in one). */
-struct UnevenTopRounded: Shape {
-    var radius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        Path(UIBezierPath(roundedRect: CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height + 2000),
-                          byRoundingCorners: [.topLeft, .topRight],
-                          cornerRadii: CGSize(width: radius, height: radius)).cgPath)
-    }
-}

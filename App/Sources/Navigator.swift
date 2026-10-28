@@ -104,9 +104,11 @@ final class Navigator: ObservableObject {
     private var spokenWaze: Set<String> = []
     private var wazeAt = Date.distantPast
     private var wazeLoading = false
-    /** Police and crashes from OpenWeb Ninja, kept across reroutes since each ask uses one of the month's few. */
-    @Published private(set) var ninjaAlerts: [WazeAlert] = []
-    private var ninjaAt = Date.distantPast
+    /** Drivers' reports (police, crashes, hazards...) from Waze's app servers, asked every 90 seconds. */
+    @Published private(set) var liveAlerts: [WazeAlert] = []
+    private var liveAt = Date.distantPast
+    /** Closures from the live map, kept for when it doesn't answer. */
+    private var closureAlerts: [WazeAlert] = []
     private var riskAt = Date.distantPast
     private var riskPast: [PoliceRisk.Report]?
     private var riskSpokenAt = Date.distantPast
@@ -243,14 +245,39 @@ final class Navigator: ObservableObject {
     /** Cameras and speed limits along the route, from OpenStreetMap, in one query per route. */
     /** The real shape of each roundabout ahead, for the picture in the banner. */
     private func loadRoundabouts() {
-        guard route.mode != .walk, route.maneuvers.contains(where: { $0.type == .roundabout }) else { return }
-        let r = route
+        guard route.mode != .walk else { return }
+        let start = route
         Task {
-            guard let drawn = await Roundabouts.apply(to: r), self.route.id == r.id else { return }
+            var r = start
+            // Mini-roundabouts first: they add steps, so the layouts below line up with the steps as driven.
+            if let withMinis = await Roundabouts.addMinis(to: r), self.route.id == r.id {
+                self.useSteps(withMinis.maneuvers)
+                r = self.route
+            }
+            guard r.maneuvers.contains(where: { $0.type == .roundabout }),
+                  let drawn = await Roundabouts.apply(to: r), self.route.id == r.id, self.route.maneuvers.count == drawn.maneuvers.count else { return }
             // Only the roundabout layouts change; the line and steps are the same.
             for i in self.route.maneuvers.indices where i < drawn.maneuvers.count {
                 self.route.maneuvers[i].roundabout = drawn.maneuvers[i].roundabout
             }
+        }
+    }
+
+    /** New steps on the same route line: what was already said stays said, step by step. */
+    private func useSteps(_ steps: [Maneuver]) {
+        let old = route.maneuvers
+        func moved(_ i: Int) -> Int? {
+            guard i < old.count else { return nil }
+            return steps.firstIndex { $0.alongMeters == old[i].alongMeters }
+        }
+        spokenStage = Dictionary(spokenStage.compactMap { k, v in moved(k).map { ($0, v) } }, uniquingKeysWith: max)
+        toldContinue = Set(toldContinue.compactMap(moved))
+        route.maneuvers = steps
+        tracker = RouteTracker(route: route)
+        if let loc = lastFix {
+            var p = tracker.update(LatLng(loc.coordinate.latitude, loc.coordinate.longitude), accuracy: max(loc.horizontalAccuracy, 5))
+            p.remainingSeconds *= trafficScale
+            progress = p
         }
     }
 
@@ -367,7 +394,7 @@ final class Navigator: ObservableObject {
         }
     }
 
-    /** Live Waze reports along the route; asked again every three minutes, since they come and go. */
+    /** Live Waze reports along the route; asked again every 90 seconds, since they come and go. */
     private func loadWaze() {
         guard route.mode == .drive, AppSettings.shared.wazeOn, !wazeLoading, !demoAlerts else { return }
         wazeLoading = true
@@ -376,34 +403,37 @@ final class Navigator: ObservableObject {
         // Only the next 60 km: on a long drive the rest will have changed by the time you get there.
         let at = progress?.alongMeters ?? 0
         let window = Geo.slice(line, from: max(at - 200, 0), to: at + 60_000)
-        // OpenWeb Ninja only every 10 minutes, for the next 40 km: about 6 asks for an hour's drive.
-        // Not at all with both police and crashes switched off: each ask uses one of the month's few.
-        let askNinja = WazeNinja.on && !AppSettings.shared.wazeKinds.isDisjoint(with: [.police, .accident])
-            && Date().timeIntervalSince(ninjaAt) > 600
-        if askNinja { ninjaAt = Date() }
-        let near = Geo.slice(line, from: max(at - 200, 0), to: at + 40_000)
+        let here = progress.map { Geo.point(along: line, meters: $0.alongMeters) } ?? line[0]
+        let ahead = Geo.slice(line, from: max(at - 200, 0), to: at + 40_000)
         Task {
-            let found = await Waze.alongRoute(window.count >= 2 ? window : line)
-            if askNinja, near.count >= 2 {
-                let pad = 0.01
-                if let more = await WazeNinja.alerts(south: near.map(\.lat).min()! - pad, west: near.map(\.lng).min()! - pad,
-                                                     north: near.map(\.lat).max()! + pad, east: near.map(\.lng).max()! + pad) {
-                    WazeHistory.shared.record(more)
-                    self.ninjaAlerts = more
-                }
-            }
+            // Closures from the live map; everything else from Waze's app servers, for the next 40 km.
+            async let closures = Waze.alongRoute(window.count >= 2 ? window : line)
+            let live = await WazeLive.shared.alongRoute(ahead.count >= 2 ? ahead : line, here: here)
+            let found = await closures
             self.wazeLoading = false
             guard self.route.id == id else { return }
-            if let found { WazeHistory.shared.record(found) }
-            let closures = found ?? self.routeWaze.map(\.alert).filter { $0.kind == .closure }
-            self.routeWaze = Waze.project(closures + self.ninjaAlerts, on: line)
+            if let found {
+                WazeHistory.shared.record(found)
+                self.closureAlerts = found
+            }
+            if let live {
+                WazeHistory.shared.record(live)
+                self.liveAlerts = live
+                self.liveAt = Date()
+            } else if !self.liveAlerts.isEmpty, Date().timeIntervalSince(self.liveAt) > 300 {
+                // Waze hasn't answered for 5 minutes: don't keep warning about reports that may be long gone.
+                self.liveAlerts = []
+            }
+            var merged: [String: WazeAlert] = [:]
+            for a in self.closureAlerts + self.liveAlerts { merged[a.id] = a }
+            self.routeWaze = Waze.project(Array(merged.values), on: line)
         }
     }
 
     private func checkWaze(_ p: RouteTracker.Progress) {
         guard !demoAlerts else { return }
         let s = AppSettings.shared
-        if Date().timeIntervalSince(wazeAt) > 180 { loadWaze() }
+        if Date().timeIntervalSince(wazeAt) > 90 { loadWaze() }
         if let ahead = wazeAhead {
             // Keep the card up, counting down, until the report is passed.
             if let hit = routeWaze.first(where: { $0.alert.id == ahead.alert.id }), hit.along > p.alongMeters - 10 {

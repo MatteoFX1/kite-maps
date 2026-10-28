@@ -311,3 +311,34 @@ func coverage(_ limits: [SpeedLimit], total: Double) -> Double {
     }
     return known / total * 100
 }
+
+/** `swift run vela-probe rdebug lat lng lat lng`: every step with its roundabout picture, Google's steps, and the limits. */
+func roundaboutDebug() async {
+    let a = CommandLine.arguments.dropFirst(2).compactMap(Double.init)
+    guard a.count >= 4 else { return }
+    let from = LatLng(a[0], a[1]), to = LatLng(a[2], a[3])
+    if let g = try? await GoogleClient.shared.directions(from: from, to: to, mode: .drive, avoidHighways: false, avoidTolls: false, via: []).first {
+        print("-- google steps (complete \(g.stepsComplete))")
+        for m in g.maneuvers { print(String(format: "  %6.0f m  %@  exit=%@  %.5f,%.5f", m.alongMeters, m.instruction, m.exit.map(String.init) ?? "-", m.location.lat, m.location.lng)) }
+    }
+    if let o = try? await OSRM.route(from: from, to: to, mode: .drive) .first {
+        print("-- osrm steps")
+        for m in o.maneuvers { print(String(format: "  %6.0f m  %@  exit=%@  shape=%@", m.alongMeters, m.instruction, m.exit.map(String.init) ?? "-", m.roundabout.map { "\($0.exits.map { Int($0) }) taken \($0.taken)" } ?? "-")) }
+    }
+    let r = await Directions.routes(from: from, to: to, mode: .drive)
+    guard var x = r.routes.first else { print("no route \(r.error ?? "")"); return }
+    if let d = await Roundabouts.addMinis(to: x) { x = d; print("-- mini-roundabouts added") }
+    if let d = await Roundabouts.apply(to: x) { x = d; print("-- osm shapes applied") }
+    print(String(format: "== kite route %.0f m source %@", x.distanceMeters, x.source))
+    for m in x.maneuvers {
+        print(String(format: "  %6.0f m  %@%@  exit=%@  shape=%@  %.5f,%.5f", m.alongMeters, m.silent ? "(silent) " : "", m.instruction,
+                     m.exit.map(String.init) ?? "-", m.roundabout.map { "\($0.exits.map { Int($0) }) taken \($0.taken) complete \($0.complete) mini \($0.mini)" } ?? "-",
+                     m.location.lat, m.location.lng))
+    }
+    print("route line: " + x.polyline.map { String(format: "%.6f,%.6f", $0.lat, $0.lng) }.joined(separator: ";"))
+    print("osrm limits: \(x.speedLimits.map { String(format: "%.0f:%@", $0.startMeters, $0.kmh.map { String(format: "%.0f", $0 / 1.609344) } ?? "?") })")
+    if let v = await Valhalla.speedLimits(along: x.polyline) {
+        print("valhalla limits: \(v.limits.map { String(format: "%.0f:%@", $0.startMeters, $0.kmh.map { String(format: "%.0f", $0 / 1.609344) } ?? "?") })")
+        print("valhalla ways: \(v.ways.map { "\($0.id):\($0.kmh.map { String(format: "%.0f", $0 / 1.609344) } ?? "?")" })")
+    } else { print("valhalla: no answer") }
+}

@@ -131,6 +131,9 @@ final class AppModel: ObservableObject {
     @Published var mapHeading: Double = 0
 
     weak var map: MLNMapView? { didSet { glide.map = map } }
+    /** How wide the side panel is on a big screen (the open iPhone Duo), so the map centres
+     *  things in the part you can see; 0 on a phone. */
+    var sideInset: CGFloat = 0 { didSet { glide.leftInset = sideInset } }
     /** Moves the nav arrow and camera every frame between GPS fixes. */
     let glide = NavGlide()
     /** Bumped on every new route or transit request, so answers to an older one (before a
@@ -311,7 +314,8 @@ final class AppModel: ObservableObject {
         detent = .half
         guard let map else { return }
         let target = CLLocationCoordinate2D(latitude: p.location.lat, longitude: p.location.lng)
-        let pad = UIEdgeInsets(top: 120, left: 0, bottom: map.bounds.height * 0.45, right: 0)
+        let pad = sideInset > 0 ? UIEdgeInsets(top: 0, left: sideInset, bottom: 0, right: 0)
+                                : UIEdgeInsets(top: 120, left: 0, bottom: map.bounds.height * 0.45, right: 0)
         let cam = MLNMapCamera(lookingAtCenter: target, acrossDistance: 900, pitch: 0, heading: 0)
         if map.zoomLevel > 16 { cam.altitude = map.camera.altitude }
         map.setCamera(cam, withDuration: 0.6, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut),
@@ -664,16 +668,8 @@ final class AppModel: ObservableObject {
             return
         }
         let cam = MLNMapCamera(lookingAtCenter: loc.coordinate, acrossDistance: 1200, pitch: 0, heading: 0)
-        map.setCamera(cam, withDuration: 0.5, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut))
-    }
-
-    func resetNorth() {
-        guard let map else { return }
-        map.setDirection(0, animated: true)
-        let cam = map.camera
-        cam.pitch = 0
-        cam.heading = 0
-        map.setCamera(cam, animated: true)
+        map.setCamera(cam, withDuration: 0.5, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut),
+                      edgePadding: UIEdgeInsets(top: 0, left: sideInset, bottom: 0, right: 0), completionHandler: nil)
     }
 
     private func resetCamera() {
@@ -688,14 +684,18 @@ final class AppModel: ObservableObject {
         guard let map, !points.isEmpty else { return }
         if points.count == 1 {
             let c = CLLocationCoordinate2D(latitude: points[0].lat, longitude: points[0].lng)
-            map.setCamera(MLNMapCamera(lookingAtCenter: c, acrossDistance: 1200, pitch: 0, heading: 0), animated: true)
+            map.setCamera(MLNMapCamera(lookingAtCenter: c, acrossDistance: 1200, pitch: 0, heading: 0), withDuration: 0.3,
+                          animationTimingFunction: nil, edgePadding: UIEdgeInsets(top: 0, left: sideInset, bottom: 0, right: 0),
+                          completionHandler: nil)
             return
         }
         let lats = points.map(\.lat), lngs = points.map(\.lng)
         let bounds = MLNCoordinateBounds(
             sw: CLLocationCoordinate2D(latitude: lats.min()!, longitude: lngs.min()!),
             ne: CLLocationCoordinate2D(latitude: lats.max()!, longitude: lngs.max()!))
-        let pad = UIEdgeInsets(top: top, left: 40, bottom: map.bounds.height * bottomFraction + 20, right: 40)
+        // With a side panel the cards are on the left, not at the bottom.
+        let pad = sideInset > 0 ? UIEdgeInsets(top: 60, left: sideInset + 40, bottom: 60, right: 40)
+                                : UIEdgeInsets(top: top, left: 40, bottom: map.bounds.height * bottomFraction + 20, right: 40)
         let cam = map.cameraThatFitsCoordinateBounds(bounds, edgePadding: pad)
         cam.pitch = 0
         cam.heading = 0

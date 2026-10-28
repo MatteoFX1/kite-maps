@@ -3,6 +3,46 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.4
+
+- **Police, crashes and hazards from Waze drivers, free, with no key:** while you navigate, Kite
+  asks Waze's own app servers for drivers' reports along the next 25 miles every 90 seconds, the
+  way the Waze app does, with an anonymous account (no name or email). They pop up, show on the
+  map and fill the police heat map. Settings › Road alerts shows whether it's working. The way of
+  asking comes from SABRE Plus for Highway Radar (MIT licence).
+- **No more OpenWeb Ninja key:** the key box and checks counter are gone, and the saved key is wiped
+  from the phone.
+- **Gentler when Waze is down:** Kite waits longer after each failed ask (up to 10 minutes), and
+  drops drivers' reports after 5 minutes without an answer, so it never warns about old ones.
+- **Road alerts says plainly where reports come from**, with separate lines for closures and
+  drivers' reports.
+- **Tidy-up:** a few bits of unused code removed.
+- **Roundabout picture points the right way:** a "1st exit" that goes straight on was drawn
+  turning left (Chestnut Avenue, Eastleigh). The arrow now follows the way the route really
+  leaves every roundabout, big ones included (checked on 64 roundabouts in Hampshire, Wales,
+  London and Milton Keynes).
+- **Big motorway roundabouts point the right way too:** at M27 J3 (Rownhams) and J5 (Stoneham)
+  the picture pointed along the roundabout itself, not the road you leave on. It now looks at
+  where the route actually leaves the circle, so the arrow matches the exit (also Bury Road).
+- **Lanes match the road:** at roundabouts the lane boxes now show as many lanes as the road in
+  really has (3 at J3), using the Highway Code rule for which lane to be in. On a one-lane road
+  in (Bury Road) there's no lane advice, since there's nothing to choose.
+- **Mini-roundabouts in the banner:** the small painted ones (Normandy Way, Marchwood) were
+  skipped because neither Google nor the open map router mentions them. Kite now finds them on
+  the map itself and shows which exit to take, with a picture, like the big ones.
+- **Speed limit on more roads:** where the map has a limit at the start of a road but not further
+  along (Normandy Way), Kite keeps showing it until you turn onto a different road, the way the
+  last sign you passed still applies.
+- **Fewer road numbers while driving:** M27, M3 and A27 signs are spaced much further apart, so a
+  motorway junction isn't covered in them, and none sit under your arrow.
+- **No more "19" speed signs:** some British roads are mapped as "30" with no unit, which the map
+  treats as km/h (19 mph). In Britain Kite now reads those as the 30 mph on the sign.
+- **iPhone Duo support:** Kite now fills both of the foldable's screens instead of running small
+  with black bars (it's built with the newest Xcode). Opened up sideways, the search, place and
+  trip cards move into a panel on the left with a big map beside it, clear of the fold, and the
+  car drives in the middle of the map. Ordinary iPhones look the same, apart from pop-up sheets
+  like Layers taking the newer iOS rounded style.
+
 ## 0.7.3
 
 - **Police and crash alerts are back (with your own free key):** Settings › Road alerts › Police

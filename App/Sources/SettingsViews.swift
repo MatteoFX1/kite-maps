@@ -245,6 +245,7 @@ struct SettingsView: View {
                 LabeledContent("Version", value: version)
                 Link("Kite Maps on GitHub", destination: URL(string: "https://github.com/matteofx1/kite-maps")!)
                 Link("Based on Vela Maps for Android", destination: URL(string: "https://github.com/PimpinPumpkin/Vela")!)
+                Link("Live Waze reports the way SABRE Plus gets them (MIT)", destination: URL(string: "https://github.com/nicglazkov/highway-radar-sabre-plus")!)
                 Text("Free software under the GPL-3.0. Map © OpenFreeMap, OpenMapTiles, OpenStreetMap contributors. Routing © FOSSGIS OSRM. Imagery © Esri.")
                     .font(.caption).foregroundColor(.secondary)
             }
@@ -298,28 +299,30 @@ struct WazeSettingsView: View {
 
     /** Whether Waze answered last time, so it's easy to tell when it has stopped working. */
     private var connection: (text: String, color: Color) {
-        guard let s = Waze.lastStatus else { return ("Not checked yet: open the map at city zoom", .gray) }
+        guard let s = Waze.lastStatus else { return ("Closures: checked once you open the map at city zoom", .gray) }
         let mins = Int(Date().timeIntervalSince(s.at) / 60)
         let when = mins < 1 ? "just now" : "\(mins) min ago"
         switch s.code {
-        case 200: return ("Working\(s.viaPage ? " (through the live map page)" : ""): \(s.count) reports, \(when)", Color(hex: 0x188038))
-        case 0: return ("No connection (\(when))", .orange)
-        case 401, 403: return ("Waze turned Kite away (\(s.code), \(when)). It may work again later.", .red)
-        case -1: return ("Waze sent something Kite can't read (\(when))", .red)
-        default: return ("Waze error \(s.code) (\(when))", .orange)
+        case 200: return ("Closures working: \(s.count) reports, \(when)", Color(hex: 0x188038))
+        case 0: return ("Closures: no connection (\(when))", .orange)
+        case 401, 403: return ("Closures: Waze turned Kite away (\(when)). It may work again later.", .red)
+        case -1: return ("Closures: Waze sent something Kite can't read (\(when))", .red)
+        default: return ("Closures: Waze error \(s.code) (\(when))", .orange)
         }
     }
 
-    /** How OpenWeb Ninja answered last time, in plain words. */
-    private func ninjaState(_ s: Waze.Status) -> (text: String, color: Color) {
+    /** How Waze's app servers answered last time (police, crashes and the rest, while navigating). */
+    private var live: (text: String, color: Color) {
+        guard let s = WazeLive.lastStatus else { return ("Driver reports: checked once you start a drive", .gray) }
         let mins = Int(Date().timeIntervalSince(s.at) / 60)
         let when = mins < 1 ? "just now" : "\(mins) min ago"
         switch s.code {
-        case 200: return ("Working: \(s.summary), \(when)", Color(hex: 0x188038))
-        case 0: return ("No connection (\(when))", .orange)
-        case 401, 403: return ("Key not accepted: check it's copied in full", .red)
-        case 429: return ("No checks left this month", .red)
-        default: return ("OpenWeb Ninja error \(s.code) (\(when))", .orange)
+        case 200: return ("Driver reports working: \(s.summary), \(when)", Color(hex: 0x188038))
+        case 0: return ("Driver reports: no connection (\(when))", .orange)
+        case 401: return ("Driver reports: Waze turned Kite away (\(when)). It may work again later.", .red)
+        case 440: return ("Driver reports: reconnecting to Waze (\(when))", .orange)
+        case -1: return ("Driver reports: Waze sent something Kite can't read (\(when))", .red)
+        default: return ("Driver reports: Waze error \(s.code) (\(when))", .orange)
         }
     }
 
@@ -330,7 +333,7 @@ struct WazeSettingsView: View {
             } footer: {
                 Text(settings.noGoogle
                      ? "Off while \"Use Kite without Google\" is on, since Waze belongs to Google."
-                     : "Kite reads the public Waze live map, with no account. Waze sees the area you're looking at, anonymously. It doesn't officially allow other apps to do this, so it may stop working one day.")
+                     : "While you navigate, Kite asks Waze for drivers' reports the way the Waze app does, with an anonymous account Waze makes for it (no name, email or phone). Closures also come from the Waze live map. Waze sees roughly where you are, anonymously. It doesn't allow other apps to do this, so it may stop working one day.")
             }
             if settings.wazeOn {
                 Section {
@@ -338,9 +341,13 @@ struct WazeSettingsView: View {
                         Circle().fill(connection.color).frame(width: 10, height: 10)
                         Text(connection.text).font(.subheadline)
                     }
+                    HStack(spacing: 8) {
+                        Circle().fill(live.color).frame(width: 10, height: 10)
+                        Text(live.text).font(.subheadline)
+                    }
                     if let s = Waze.lastStatus, s.code == 200 {
                         // What Waze actually sent, so it's easy to see if a kind has gone missing.
-                        LabeledContent("Last answer", value: s.summary).font(.subheadline)
+                        LabeledContent("Closures, last answer", value: s.summary).font(.subheadline)
                     }
                 } header: {
                     Text("Connection")
@@ -349,27 +356,6 @@ struct WazeSettingsView: View {
                         // What the hidden live map page saw, to send to whoever looks into it.
                         Text("Details: " + WazeWeb.shared.note).font(.caption2.monospaced())
                     }
-                }
-                Section {
-                    TextField("Paste your key here", text: $settings.ninjaKey)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .font(.subheadline.monospaced())
-                    if WazeNinja.on {
-                        LabeledContent("Checks used this month", value: "\(WazeNinja.usedThisMonth) of 50")
-                        if let s = WazeNinja.lastStatus {
-                            HStack(spacing: 8) {
-                                Circle().fill(ninjaState(s).color).frame(width: 10, height: 10)
-                                Text(ninjaState(s).text).font(.subheadline)
-                            }
-                        }
-                    } else {
-                        Link("Get a free key", destination: URL(string: "https://app.openwebninja.com/api/waze")!)
-                    }
-                } header: {
-                    Text("Police and crashes")
-                } footer: {
-                    Text("Waze's live map only shares road closures now. For police, mobile speed cameras and crashes, Kite can use OpenWeb Ninja's Waze service with your own free key: sign up (no card needed), open the Waze API and copy the key in here. The free plan has 50 checks a month, so Kite only checks while you're navigating, once every 10 minutes: about 8 hour-long drives.")
                 }
                 Section("Show and warn about") {
                     // Only what Waze still shares (see Waze.shares): no switches that can't do anything.

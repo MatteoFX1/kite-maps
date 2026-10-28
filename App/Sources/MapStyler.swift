@@ -119,12 +119,26 @@ enum MapStyler {
     }
 
     private static var savedLabelSizes: [String: NSExpression] = [:]
+    private static var savedShieldSpacing: [String: NSExpression] = [:]
+    private static var savedShieldPadding: [String: NSExpression] = [:]
 
     /** Strips the map to roads, water, parks and big road names while navigating, and puts it back after. */
     static func drive(_ style: MLNStyle, on: Bool) {
         for layer in style.layers where !layer.identifier.hasPrefix("vela") {
             let id = layer.identifier
             if clutter(id) { layer.isVisible = !on; continue }
+            // Road number signs (M27, A27): Liberty repeats them every 200 points along every road, both
+            // carriageways of a motorway included, a dozen at once near a junction. While driving, one
+            // now and then is plenty, the way Waze shows them; the padding keeps two near each other apart.
+            if let s = layer as? MLNSymbolStyleLayer, id.contains("shield") {
+                if savedShieldSpacing[id] == nil {
+                    savedShieldSpacing[id] = s.symbolSpacing
+                    savedShieldPadding[id] = s.iconPadding
+                }
+                s.symbolSpacing = on ? NSExpression(forConstantValue: 900) : savedShieldSpacing[id]!
+                s.iconPadding = on ? NSExpression(forConstantValue: 30) : savedShieldPadding[id]!
+                continue
+            }
             if let s = layer as? MLNSymbolStyleLayer, id == "highway-name-major" || id == "highway-name-minor" {
                 if savedLabelSizes[id] == nil { savedLabelSizes[id] = s.textFontSize }
                 s.textFontSize = on ? NSExpression(forConstantValue: id == "highway-name-major" ? 17 : 15) : savedLabelSizes[id]!

@@ -9,6 +9,7 @@ struct NavigationOverlay: View {
     @State private var showAlong = false
     @State private var confirmEnd = false
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.sidePanel) private var panel
 
     /** "On my way to X, arriving around 5:42 PM (25 min)" with a map link. */
     private var etaText: String {
@@ -76,6 +77,7 @@ struct NavigationOverlay: View {
             }
             .padding(.horizontal, 12)
             .padding(.top, 4)
+            .inSidePanel(panel)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: nav.cameraAhead?.startMeters)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: nav.wazeAhead?.alert.id)
 
@@ -106,12 +108,16 @@ struct NavigationOverlay: View {
                         .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
+                // Under the car, which drives beside the side panel when there is one.
+                .frame(maxWidth: .infinity)
+                .padding(.leading, panel)
             }
             // Arriving answers the question: the trip bar's Done takes over.
             if confirmEnd, !nav.arrived {
                 EndTripCard(destination: nav.destination.name,
                             onKeep: { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { confirmEnd = false } },
                             onEnd: { model.endNavigation() })
+                    .inSidePanel(panel)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
                 TripBar(nav: nav, onEnd: {
@@ -119,6 +125,7 @@ struct NavigationOverlay: View {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { confirmEnd = true }
                     }
                 }, onSteps: { showSteps = true })
+                .inSidePanel(panel)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -134,8 +141,8 @@ struct NavigationOverlay: View {
                         .background(Capsule().fill(Color(hex: 0x0F172A).opacity(0.92)))
                         .overlay(Capsule().strokeBorder(Color(hex: 0x2DD4BF).opacity(0.8), lineWidth: 1.5))
                         // Between the speed sign and the mute button, which sit level with it now the car is lower.
-                        .frame(maxWidth: g.size.width - 240)
-                        .position(x: g.size.width / 2, y: NavGlide.carY(g.size.height) + 50)
+                        .frame(maxWidth: panel > 0 ? g.size.width - panel - 80 : g.size.width - 240)
+                        .position(x: panel + (g.size.width - panel) / 2, y: NavGlide.carY(g.size.height) + 50)
                 }
             }
             .ignoresSafeArea()
@@ -327,32 +334,28 @@ struct InstructionBanner: View {
 /** Which lanes to show under the turn: the mapped ones, or at a roundabout with none mapped, the Highway Code's. */
 enum LaneGuide {
     static func lanes(for m: Maneuver, leftTraffic: Bool) -> (lanes: [Lane], words: String)? {
-        if m.lanes.count > 1 {
-            let valid = m.lanes.enumerated().filter(\.element.valid).map(\.offset)
-            guard let first = valid.first, let last = valid.last else { return nil }
-            let n = m.lanes.count
-            let words: String
-            if valid.count == n { return nil }
-            // By the edge they touch: two good lanes of three on the left are "Left 2 lanes", not "Middle".
-            let count = valid.count, many = count > 1 ? "\(count) lanes" : "lane"
-            if first == 0 { words = "Left \(many)" }
-            else if last == n - 1 { words = "Right \(many)" }
-            else if count == 1 && n > 3 { words = "Lane \(first + 1) from left" }
-            else { words = count > 1 ? "Middle lanes" : "Middle lane" }
-            return (m.lanes, words)
-        }
+        if m.lanes.count > 1 { return named(m.lanes) }
         // Google's own advice ("Use the right lane") where the open map has no lanes: words only.
         if let hint = m.laneHint, !hint.localizedCaseInsensitiveContains("any lane"), m.type != .roundabout {
             let words = hint.replacingOccurrences(of: "use the ", with: "", options: .caseInsensitive)
             return ([], words.prefix(1).uppercased() + words.dropFirst())
         }
-        guard m.type == .roundabout, !m.leavesRoundabout, let shape = m.roundabout else { return nil }
-        // Two lanes, the near-side one for left and straight on, the far one for right.
-        let farSide = shape.ruleLane == 1
-        let rightLane = leftTraffic ? farSide : !farSide
-        let lanes = [Lane(indications: rightLane ? ["left", "straight"] : ["left"], valid: !rightLane),
-                     Lane(indications: ["right"], valid: rightLane)]
-        return (lanes, rightLane ? "Right lane" : "Left lane")
+        // The Highway Code's lanes, as many as the road in has.
+        guard m.type == .roundabout, !m.leavesRoundabout, let lanes = m.roundabout?.ruleLanes(leftTraffic: leftTraffic) else { return nil }
+        return named(lanes)
+    }
+
+    /** The lanes with words for the good ones, by the edge they touch: two of three on the left are "Left 2 lanes", not "Middle". */
+    static func named(_ lanes: [Lane]) -> (lanes: [Lane], words: String)? {
+        let valid = lanes.enumerated().filter(\.element.valid).map(\.offset)
+        guard let first = valid.first, let last = valid.last, valid.count < lanes.count else { return nil }
+        let n = lanes.count, count = valid.count, many = count > 1 ? "\(count) lanes" : "lane"
+        let words: String
+        if first == 0 { words = "Left \(many)" }
+        else if last == n - 1 { words = "Right \(many)" }
+        else if count == 1 && n > 3 { words = "Lane \(first + 1) from left" }
+        else { words = count > 1 ? "Middle lanes" : "Middle lane" }
+        return (lanes, words)
     }
 }
 

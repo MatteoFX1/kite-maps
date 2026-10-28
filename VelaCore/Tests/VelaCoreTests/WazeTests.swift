@@ -15,25 +15,55 @@ final class WazeTests: XCTestCase {
         XCTAssertNil(Waze.parse(Data("nope".utf8)))
     }
 
-    func testNinjaParse() {
-        let json = #"{"status":"OK","data":{"alerts":[{"alert_id":"alert-1","type":"POLICE","subtype":"POLICE_WITH_MOBILE_CAMERA","country":"GB","street":"A4202 Park Ln","latitude":51.513465,"longitude":-0.157961,"publish_datetime_utc":"2026-10-27T13:24:50.000Z","num_thumbs_up":13,"alert_reliability":0},{"alert_id":"alert-2","type":"ACCIDENT","subtype":null,"latitude":50.9,"longitude":-1.3,"publish_datetime_utc":"2026-10-27T13:00:00Z"},{"alert_id":"alert-3","type":"CHIT_CHAT","latitude":0,"longitude":0}],"jams":[]}}"#
-        let list = WazeNinja.parse(Data(json.utf8))!
-        XCTAssertEqual(list.map(\.kind), [.police, .accident])
-        XCTAssertEqual(list[0].title, "Mobile speed camera")
-        XCTAssertEqual(list[0].street, "A4202 Park Ln")
-        XCTAssertEqual(list[0].thumbsUp, 13)
-        XCTAssertEqual(list[0].location, LatLng(51.513465, -0.157961))
-        XCTAssertEqual(list[0].reportedAt, Date(timeIntervalSince1970: 1_793_107_490))
-        XCTAssertEqual(list[1].reportedAt, Date(timeIntervalSince1970: 1_793_106_000))
-        XCTAssertNil(WazeNinja.parse(Data("nope".utf8)))
+    func testLiveAlertParse() {
+        // A RealtimeAlert as Waze's app protocol sends it: police with a mobile camera west of Greenwich.
+        var pos = ProtoWriter()
+        pos.int32(101, -1_339_275)
+        pos.int32(102, 50_905_133)
+        var info = ProtoWriter()
+        info.varint(1, 2)
+        info.varint(2, 203)
+        info.message(3, pos.data)
+        info.varint(6, 270)
+        var address = ProtoWriter()
+        address.string(2, "A3024 Bursledon Rd")
+        var report = ProtoWriter()
+        report.varint(4, 1_793_107_490)
+        report.message(8, address.data)
+        report.varint(9, 12)
+        var alert = ProtoWriter()
+        alert.varint(1, 42)
+        alert.message(2, info.data)
+        alert.message(3, report.data)
+        alert.string(6, "uuid-1")
+        var action = ProtoWriter()
+        action.message(1, alert.data)
+        var element = ProtoWriter()
+        element.message(2708, action.data)
+        element.string(2001, "RmAlert,uuid-0")
+        var batch = ProtoWriter()
+        batch.message(1001, element.data)
+
+        let parsed = try! WazeLive.parseBatch(batch.data)
+        XCTAssertEqual(parsed.count, 1)
+        XCTAssertEqual(parsed[0].oldCommand, "RmAlert,uuid-0")
+        let a = parsed[0].alert!
+        XCTAssertEqual(a.id, "uuid-1")
+        XCTAssertEqual(a.kind, .police)
+        XCTAssertEqual(a.title, "Mobile speed camera")
+        XCTAssertEqual(a.location.lat, 50.905133, accuracy: 1e-6)
+        XCTAssertEqual(a.location.lng, -1.339275, accuracy: 1e-6)
+        XCTAssertEqual(a.heading, 270)
+        XCTAssertEqual(a.street, "A3024 Bursledon Rd")
+        XCTAssertEqual(a.thumbsUp, 12)
+        XCTAssertEqual(a.reportedAt, Date(timeIntervalSince1970: 1_793_107_490))
     }
 
-    func testSharesNeedNinjaKey() {
-        WazeNinja.key = nil
-        XCTAssertEqual(Waze.shares, [.closure])
-        WazeNinja.key = "k"
-        XCTAssertTrue(Waze.shares.contains(.police))
-        WazeNinja.key = nil
+    func testMapDisplayedLine() {
+        let line = WazeLive.mapDisplayed((s: 50.0, w: -1.5, n: 51.0, e: -1.0))
+        XCTAssertTrue(line.hasPrefix("MapDisplayed,-1.500000,51.000000,-1.000000,51.000000,-1.000000,50.000000,-1.500000,50.000000,-1.250000,50.500000,67186,-1.500000,51.000000"))
+        XCTAssertEqual(WazeLive.region(LatLng(51.5, -0.12)), "row")
+        XCTAssertEqual(WazeLive.region(LatLng(38.5, -121.7)), "na")
     }
 
     func testEnv() {
