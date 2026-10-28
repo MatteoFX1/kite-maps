@@ -26,6 +26,7 @@ func overnightAudit() async {
         ("Camden to Greenwich (London)", LatLng(51.5390, -0.1430), LatLng(51.4780, -0.0010)),
         ("Croydon to Wimbledon (London)", LatLng(51.3720, -0.1000), LatLng(51.4210, -0.2060)),
         ("Milton Keynes roundabouts", LatLng(52.0400, -0.7590), LatLng(52.0200, -0.7000)),
+        ("Marchwood to Eastleigh via M271, M27 J3 and J5", LatLng(50.8930, -1.4490), LatLng(50.9700, -1.3500)),
     ]
     let only = CommandLine.arguments.count > 2 ? Int(CommandLine.arguments[2]) : nil
     var flags = 0, roundabouts = 0
@@ -49,7 +50,7 @@ func overnightAudit() async {
             } else { notes.append("no picture") }
             if m.exit == nil { notes.append("no exit number") }
             let shape = m.roundabout.map { s in "[\(s.exits.map { String(Int($0)) }.joined(separator: ","))] took \(s.taken + 1)\(s.complete ? " osm" : "")\(s.mini ? " mini" : "")" } ?? "-"
-            let lanes = m.lanes.isEmpty ? "" : " lanes " + m.lanes.map { ($0.valid ? "*" : "") + $0.indications.joined(separator: "/") }.joined(separator: "|")
+            let lanes = m.lanes.isEmpty ? (m.roundabout.map { $0.mini ? "" : " rule=" + ($0.ruleLane == 1 ? "R" : "L") } ?? "") : " lanes " + m.lanes.map { ($0.valid ? "*" : "") + $0.indications.joined(separator: "/") }.joined(separator: "|")
             print(String(format: "%@ %6.0f m  %@  exit=%@ line=%@ pic=%@%@  %.5f,%.5f%@", notes.isEmpty ? "  ok  " : "FLAG", m.alongMeters, m.instruction,
                          m.exit.map(String.init) ?? "-", line.map { String(Int($0)) } ?? "-", shape, lanes, m.location.lat, m.location.lng,
                          notes.isEmpty ? "" : "  <- " + notes.joined(separator: "; ")))

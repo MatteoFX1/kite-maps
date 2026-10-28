@@ -59,7 +59,8 @@ public enum Roundabouts {
      * needs at least one exit passed to place the circle, so a 1st exit had none and was drawn
      * spread evenly round, which put a straight-on 1st exit off to the left (Chestnut Avenue,
      * Eastleigh, 2026-10-27). The route line itself says which way it goes out, so a picture whose
-     * exit doesn't agree with it is redrawn from the line.
+     * exit doesn't agree with it is redrawn from the line, and one that roughly agrees is turned
+     * to match it.
      */
     public static func settle(_ route: Route) -> Route {
         var r = route
@@ -71,8 +72,11 @@ public enum Roundabouts {
                 continue
             }
             guard let out = exitAngle(route.polyline, cumulative: cum, along: m.alongMeters) else { continue }
-            if let s = m.roundabout, s.exits.indices.contains(s.taken), angleGap(s.exits[s.taken], out) < 50 { continue }
-            r.maneuvers[i].roundabout = spread(to: out, exit: m.exit ?? 1, clockwise: Geo.drivesOnLeft(m.location))
+            if let s = m.roundabout, s.exits.indices.contains(s.taken), angleGap(s.exits[s.taken], out) < 50 {
+                r.maneuvers[i].roundabout = aim(s, at: out)
+            } else {
+                r.maneuvers[i].roundabout = spread(to: out, exit: m.exit ?? 1, clockwise: Geo.drivesOnLeft(m.location))
+            }
         }
         return r
     }

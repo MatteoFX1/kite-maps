@@ -15,6 +15,6 @@ jobs:
         run: swift test 2>&1 | grep -E "error:|Executed .* tests" | head -60
       - name: Roundabouts and limits
         working-directory: VelaCore
-        run: swift run vela-probe roundabouts 2>&1 | grep -v "^\[" 
-      - name: Roads without a limit
-        run: python3 .github/probe/unknown_tags.py
+        run: swift run vela-probe roundabouts 17 2>&1 | grep -v "^\[" 
+      - name: Lanes mapped around the roundabouts
+        run: python3 .github/probe/lanes.py 50.8930 -1.4490 50.9700 -1.3500

@@ -136,10 +136,13 @@ final class RoundaboutTests: XCTestCase {
         let s2 = try XCTUnwrap(Roundabouts.settle(r2).maneuvers[0].roundabout)
         XCTAssertLessThan(Roundabouts.angleGap(s2.exits[s2.taken], 270), 15)
 
-        // A sketch that already agrees with the line is kept.
+        // A sketch that roughly agrees with the line keeps its exits, turned to match it.
         var sketched = route
         sketched.maneuvers[0].roundabout = RoundaboutShape(exits: [265, 5], taken: 1, clockwise: true, complete: false)
-        XCTAssertEqual(Roundabouts.settle(sketched).maneuvers[0].roundabout?.exits, [265, 5])
+        let kept = try XCTUnwrap(Roundabouts.settle(sketched).maneuvers[0].roundabout)
+        XCTAssertEqual(kept.exits.count, 2)
+        XCTAssertLessThan(Roundabouts.angleGap(kept.exits[0], 265), 10)
+        XCTAssertLessThan(Roundabouts.angleGap(kept.exits[1], 0), 15)
     }
 
     /**
