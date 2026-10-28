@@ -46,8 +46,13 @@ public enum Roundabouts {
             // 2026-10-25's Hampshire drives that held for 17 of 24, and the rest keep the router's sketch.
             if let s = shape(ways, entry: m.location, line: route.polyline, cumulative: cum, along: m.alongMeters,
                              clockwise: clockwise, exitNumber: m.exit), m.exit == nil || s.taken + 1 == m.exit {
-                let out = exitAngle(route.polyline, cumulative: cum, along: m.alongMeters)
+                let out = exitAngle(route.polyline, cumulative: cum, along: m.alongMeters, leaving: wayOff(r.maneuvers, i))
                 r.maneuvers[i].roundabout = out.map { aim(s, at: $0) } ?? s
+                changed = true
+            }
+            // How many lanes the road in has at the give-way line, for the lane advice.
+            if r.maneuvers[i].roundabout != nil, let n = entryLanes(ways, line: route.polyline, cumulative: cum, along: m.alongMeters) {
+                r.maneuvers[i].roundabout?.entryLanes = n
                 changed = true
             }
         }
@@ -71,7 +76,7 @@ public enum Roundabouts {
                 if i > 0, r.maneuvers[i - 1].type == .roundabout { r.maneuvers[i].roundabout = r.maneuvers[i - 1].roundabout }
                 continue
             }
-            guard let out = exitAngle(route.polyline, cumulative: cum, along: m.alongMeters) else { continue }
+            guard let out = exitAngle(route.polyline, cumulative: cum, along: m.alongMeters, leaving: wayOff(r.maneuvers, i)) else { continue }
             if let s = m.roundabout, s.exits.indices.contains(s.taken), angleGap(s.exits[s.taken], out) < 50 {
                 r.maneuvers[i].roundabout = aim(s, at: out)
             } else {
@@ -112,6 +117,35 @@ public enum Roundabouts {
         return s
     }
 
+    /** Where the route comes off the roundabout entered at step [i]: the "exit roundabout" step after it. */
+    public static func wayOff(_ steps: [Maneuver], _ i: Int) -> Double? {
+        guard i + 1 < steps.count, steps[i + 1].leavesRoundabout else { return nil }
+        return steps[i + 1].alongMeters
+    }
+
+    /**
+     * The lanes of the road the route comes in on, just before the roundabout at [along]: the
+     * OpenStreetMap way under the line 15 m back, its `lanes` (or the ones going this way on a
+     * two-way road). Nil when the map doesn't say.
+     */
+    static func entryLanes(_ ways: [Way], line: [LatLng], cumulative cum: [Double], along: Double) -> Int? {
+        guard along > 30 else { return nil }
+        let p = Geo.point(along: line, meters: along - 15, cumulative: cum)
+        let back = Geo.point(along: line, meters: along - 30, cumulative: cum)
+        let roads = ways.filter { !$0.isRing && $0.tags["highway"] != nil }
+        guard let w = roads.min(by: { distance(p, $0) < distance(p, $1) }), distance(p, w) < 10 else { return nil }
+        func count(_ k: String) -> Int? { w.tags[k].flatMap { Int($0.trimmingCharacters(in: .whitespaces)) } }
+        let n: Int?
+        if onewayDirection(w.tags) != 0 {
+            n = count("lanes")
+        } else {
+            // Along the way's own order or against it.
+            let forward = Geo.project(p, on: w.points).along > Geo.project(back, on: w.points).along
+            n = count(forward ? "lanes:forward" : "lanes:backward") ?? count("lanes").map { max(1, $0 / 2) }
+        }
+        return n.flatMap { (1...6).contains($0) ? $0 : nil }
+    }
+
     /** [exit] exits, the last one at [out] and the ones before it spaced evenly on the way round. */
     static func spread(to out: Double, exit: Int, clockwise: Bool) -> RoundaboutShape {
         let n = max(exit, 1)
@@ -127,24 +161,32 @@ public enum Roundabouts {
     /**
      * Which way [line] leaves the roundabout it reaches at [along], in the picture's terms: degrees
      * clockwise from straight ahead, so 0 is straight on, 90 right, 270 left and 180 back the way
-     * it came. The way out is the first 40 m of steady road after the circle.
+     * it came. The way out is the first 40 m of steady road after the circle: from [leaving], where
+     * the route comes off it, when that's known. On a big roundabout the circle itself is nearly
+     * straight for 40 m, and reading it from just after the way in took the ring for the way out
+     * (Rownhams, M27 junction 3, 2026-10-28: the M27 east exit drawn as straight on).
      */
-    public static func exitAngle(_ line: [LatLng], cumulative cum: [Double], along: Double) -> Double? {
+    public static func exitAngle(_ line: [LatLng], cumulative cum: [Double], along: Double, leaving: Double? = nil) -> Double? {
         let total = cum.last ?? 0
         func heading(_ a: Double, _ b: Double) -> Double? {
             let p = Geo.point(along: line, meters: max(0, a), cumulative: cum), q = Geo.point(along: line, meters: min(total, b), cumulative: cum)
             return p.distance(to: q) > 3 ? Geo.bearing(p, q) : nil
         }
         guard let into = heading(along - 40, along - 6) else { return nil }
-        var d = along + 6
-        while d + 40 <= min(total, along + 400) {
-            if let a = heading(d, d + 20), let b = heading(d + 20, d + 40), angleGap(a, b) < 10, let h = heading(d, d + 40) {
+        let off = leaving.flatMap { $0 > along && $0 < along + 1500 ? $0 : nil }
+        let start = (off ?? along) + 6
+        // Without the way off, only road straighter than any ring: 5 degrees in 20 m is a 230 m circle.
+        let steady = off == nil ? 5.0 : 10.0
+        var d = start
+        while d + 40 <= min(total, start + 400) {
+            if let a = heading(d, d + 20), let b = heading(d + 20, d + 40), angleGap(a, b) < steady, let h = heading(d, d + 40) {
                 return norm(h - into)
             }
             d += 4
         }
-        // The route ends just after it: the last bit of road there is.
-        return heading(along + 10, total).map { norm($0 - into) }
+        // The route ends just after it: the last bit of road there is. A road that never settles: its first 60 m.
+        if total < start + 60 { return heading(along + 10, total).map { norm($0 - into) } }
+        return heading(start, start + 60).map { norm($0 - into) }
     }
 
     /**

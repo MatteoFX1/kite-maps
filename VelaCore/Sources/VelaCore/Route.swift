@@ -85,6 +85,8 @@ public struct RoundaboutShape: Hashable, Sendable {
     public var complete: Bool
     /** A mini-roundabout (a painted circle, one lane): no "which lane" advice. */
     public var mini = false
+    /** Lanes on the road in at the give-way line, when OpenStreetMap says. */
+    public var entryLanes: Int?
 
     public init(exits: [Double], taken: Int, entriesOnly: [Double] = [], clockwise: Bool, complete: Bool) {
         self.exits = exits
@@ -109,6 +111,31 @@ public struct RoundaboutShape: Hashable, Sendable {
      */
     public var ruleLane: Int {
         turn(taken) > 200 ? 1 : 0
+    }
+
+    /**
+     * The lanes to draw when none have arrows mapped, left to right, by the Highway Code: as many
+     * as the road in has (two when the map doesn't say), the kerb-side one for the first exits, all
+     * but the far one for straight on, the far one for going right round. Nil for a one-lane road
+     * in or a mini-roundabout, where there's no lane to pick. A 3-lane approach was drawn as two
+     * (Rownhams, M27 junction 3), and a one-lane one got "Left lane" (Bury Road, Marchwood).
+     */
+    public func ruleLanes(leftTraffic: Bool) -> [Lane]? {
+        if mini { return nil }
+        let n = entryLanes ?? 2
+        guard n > 1, exits.indices.contains(taken) else { return nil }
+        let t = turn(taken)
+        // Counted from the kerb: 0 is the lane nearest it.
+        let good: ClosedRange<Int>
+        if t > 200 { good = (n - 1)...(n - 1) }
+        else if t > 135 { good = 0...max(0, n - 2) }
+        else { good = 0...0 }
+        let near = leftTraffic ? "left" : "right", far = leftTraffic ? "right" : "left"
+        let fromKerb = (0..<n).map { k -> Lane in
+            let ind = k == 0 ? (n == 2 ? [near, "straight"] : [near]) : k == n - 1 ? [far] : ["straight"]
+            return Lane(indications: ind, valid: good.contains(k))
+        }
+        return leftTraffic ? fromKerb : fromKerb.reversed()
     }
 }
 
