@@ -220,7 +220,7 @@ public enum Roundabouts {
         let steady = 5.0
         var d = start
         while d + 40 <= min(total, start + 1000) {
-            if let h = heading(d, d + 40), stride(from: d, to: d + 40, by: 10).allSatisfy({ heading($0, $0 + 10).map { angleGap($0, h) < steady } ?? false }) {
+            if let h = heading(d, d + 40), stride(from: d, to: d + 40, by: 10).allSatisfy({ a in heading(a, a + 10).map { angleGap($0, h) < steady } ?? false }) {
                 return norm(h - into)
             }
             d += 4
