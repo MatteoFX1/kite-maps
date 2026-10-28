@@ -16,6 +16,4 @@ jobs:
       - name: Roundabouts and limits
         working-directory: VelaCore
         run: |
-          for n in 17 18 10 1 2; do swift run vela-probe roundabouts $n 2>&1 | grep -v "^\[" ; done
-      - name: Lanes mapped around the roundabouts
-        run: python3 .github/probe/lanes.py 50.8880 -1.4420 50.9620 -1.3640
+          for n in 17 19 10 0 5 6; do swift run vela-probe roundabouts $n 2>&1 | grep -v "^\[" ; done

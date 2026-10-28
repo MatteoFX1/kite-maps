@@ -42,12 +42,19 @@ public enum Roundabouts {
                 }
                 continue
             }
+            // Where the route comes off the circle, from the circle itself; the router's step otherwise.
+            let leave = leaving(ways, entry: m.location, line: route.polyline, cumulative: cum, along: m.alongMeters) ?? wayOff(r.maneuvers, i)
+            let out = exitAngle(route.polyline, cumulative: cum, along: m.alongMeters, leaving: leave)
             // The map's picture only if it counts the exits the way the spoken "Nth exit" does; on
             // 2026-10-25's Hampshire drives that held for 17 of 24, and the rest keep the router's sketch.
             if let s = shape(ways, entry: m.location, line: route.polyline, cumulative: cum, along: m.alongMeters,
                              clockwise: clockwise, exitNumber: m.exit), m.exit == nil || s.taken + 1 == m.exit {
-                let out = exitAngle(route.polyline, cumulative: cum, along: m.alongMeters, leaving: wayOff(r.maneuvers, i))
                 r.maneuvers[i].roundabout = out.map { aim(s, at: $0) } ?? s
+                changed = true
+            } else if let out, let s = m.roundabout, s.exits.indices.contains(s.taken), angleGap(s.exits[s.taken], out) > 1 {
+                // The router's sketch, pointed at the way out found from the circle.
+                r.maneuvers[i].roundabout = angleGap(s.exits[s.taken], out) < 50 ? aim(s, at: out)
+                    : spread(to: out, exit: m.exit ?? 1, clockwise: clockwise)
                 changed = true
             }
             // How many lanes the road in has at the give-way line, for the lane advice.
@@ -115,6 +122,34 @@ public enum Roundabouts {
         s.exits = shape.exits.indices.map { $0 == shape.taken ? angle(to) : move(shape.exits[$0]) }
         s.entriesOnly = shape.entriesOnly.map(move)
         return s
+    }
+
+    /**
+     * Where [line] comes off the roundabout it enters at [along]: the first point more than 20 m
+     * from every part of the circle (the mapped ring ways at [entry] and any joined to them).
+     */
+    static func leaving(_ ways: [Way], entry: LatLng, line: [LatLng], cumulative cum: [Double], along: Double) -> Double? {
+        let rings = ways.filter(\.isRing)
+        guard let first = rings.min(by: { distance(entry, $0) < distance(entry, $1) }), distance(entry, first) < 40 else { return nil }
+        var ring = [first]
+        var nodes = Set(first.nodes)
+        var grew = true
+        while grew {
+            grew = false
+            for w in rings where !ring.contains(where: { $0.id == w.id }) && w.nodes.contains(where: nodes.contains) {
+                ring.append(w)
+                nodes.formUnion(w.nodes)
+                grew = true
+            }
+        }
+        let total = cum.last ?? 0
+        var d = along + 10
+        while d < min(total, along + 2500) {
+            let p = Geo.point(along: line, meters: d, cumulative: cum)
+            if ring.allSatisfy({ distance(p, $0) > 20 }) { return d }
+            d += 4
+        }
+        return nil
     }
 
     /** Where the route comes off the roundabout entered at step [i]: the "exit roundabout" step after it. */
