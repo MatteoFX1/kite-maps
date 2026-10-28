@@ -16,4 +16,4 @@ jobs:
       - name: Roundabouts and limits
         working-directory: VelaCore
         run: |
-          for n in 17 19 10 0 5 6; do swift run vela-probe roundabouts $n 2>&1 | grep -v "^\[" ; done
+          for n in 17 19 10 6 7 1; do swift run vela-probe roundabouts $n 2>&1 | grep -v "^\[" ; done

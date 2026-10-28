@@ -146,7 +146,7 @@ public enum Roundabouts {
         var d = along + 10
         while d < min(total, along + 2500) {
             let p = Geo.point(along: line, meters: d, cumulative: cum)
-            if ring.allSatisfy({ distance(p, $0) > 20 }) { return d }
+            if ring.allSatisfy({ distance(p, $0) > 20 }) { return max(along + 10, d - 15) }
             d += 4
         }
         return nil
@@ -196,8 +196,8 @@ public enum Roundabouts {
     /**
      * Which way [line] leaves the roundabout it reaches at [along], in the picture's terms: degrees
      * clockwise from straight ahead, so 0 is straight on, 90 right, 270 left and 180 back the way
-     * it came. The way out is the first 40 m of steady road after the circle: from [leaving], where
-     * the route comes off it, when that's known. On a big roundabout the circle itself is nearly
+     * it came. The way out is the first 60 m of road from [leaving], where the route comes off the
+     * circle, when that's known, or else the first 40 m of steady road after it. On a big roundabout the circle itself is nearly
      * straight for 40 m, and reading it from just after the way in took the ring for the way out
      * (Rownhams, M27 junction 3, 2026-10-28: the M27 east exit drawn as straight on).
      */
@@ -208,10 +208,14 @@ public enum Roundabouts {
             return p.distance(to: q) > 3 ? Geo.bearing(p, q) : nil
         }
         guard let into = heading(along - 40, along - 6) else { return nil }
-        let off = leaving.flatMap { $0 > along && $0 < along + 1500 ? $0 : nil }
-        let start = (off ?? along) + 6
-        // Without the way off, only road straighter than any ring: 5 degrees in 20 m is a 230 m circle.
-        let steady = off == nil ? 5.0 : 10.0
+        // Known where it comes off: the first 60 m of road from there, the way it looks at the exit
+        // (a slip road that bends away later still leaves the circle the way it starts).
+        if let off = leaving, off > along, off < along + 1500, off + 30 < total, let h = heading(off + 5, min(total, off + 65)) {
+            return norm(h - into)
+        }
+        let start = along + 6
+        // Otherwise only road straighter than any ring: 5 degrees in 20 m is a 230 m circle.
+        let steady = 5.0
         var d = start
         while d + 40 <= min(total, start + 400) {
             if let a = heading(d, d + 20), let b = heading(d + 20, d + 40), angleGap(a, b) < steady, let h = heading(d, d + 40) {
