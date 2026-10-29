@@ -57,11 +57,6 @@ func rampAudit() async {
                 let words = matches(#"\"[A-Za-z][^"]{0,80}\""#, in: f).suffix(6).joined(separator: " ")
                 print("  G icon \(matches(#"dir-tt-[a-z-]+"#, in: f).last ?? "?")  \(words)")
             }
-            if n == 7 || n == 1, let r = raw.range(of: "slip road") ?? raw.range(of: "junction") {
-                let a = raw.index(r.lowerBound, offsetBy: -700, limitedBy: raw.startIndex) ?? raw.startIndex
-                let b = raw.index(r.upperBound, offsetBy: 700, limitedBy: raw.endIndex) ?? raw.endIndex
-                print("  RAW " + raw[a..<b])
-            }
         } else { print("  G  no answer") }
         let r = await Directions.routes(from: d.1, to: d.2, mode: .drive)
         guard var x = r.routes.first else { print("FLAG no route: \(r.error ?? "")"); continue }
