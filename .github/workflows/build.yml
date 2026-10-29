@@ -10,8 +10,11 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - name: Lanes at M27 J3 from the M271
-        run: python3 .github/probe/lanes.py 50.8880 -1.4420 50.9620 -1.3640 || true
+      - name: Lane arrows into roundabouts
+        run: python3 .github/probe/turnlanes.py || true
+      - name: Unit tests
+        working-directory: VelaCore
+        run: swift test 2>&1 | grep -E "error:|Executed .* tests" | head -60
       - name: Slip roads
         working-directory: VelaCore
         run: swift run vela-probe ramps 2>&1 | grep -v "^\[" | grep -v "^Building\|^Compiling\|^Build of"

@@ -51,6 +51,8 @@ public struct Maneuver: Hashable, Sendable {
     public var leavesRoundabout = false
     /** Only the road's name changes here ("Continue on Millbrook Flyover"): kept for the road name, never shown or said. */
     public var silent = false
+    /** A slip road Google names without saying which side it leaves on ("Take the M3 slip road"): the side comes from the route line once it's placed. */
+    var sideUnknown = false
 
     public init(type: ManeuverType, instruction: String, location: LatLng, alongMeters: Double, distanceMeters: Double,
                 road: String? = nil, laneHint: String? = nil, lanes: [Lane] = [], exit: Int? = nil,
