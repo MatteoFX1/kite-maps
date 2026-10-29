@@ -196,6 +196,20 @@ final class RoundaboutTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [false, false, true, true])
         s.taken = 0
         XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [true, true, false, false])
+        // Google's advice beats both (Basingstoke M3 junction 6: all four painted straight on, the M3 from the left three).
+        s.entryArrows = ["left;through", "through", "through", "through"]
+        s.taken = 2
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true, hint: "Use the left 3 lanes")).map(\.valid), [true, true, true, false])
+        s.entryArrows = nil
+        s.entryLanes = 2
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true, hint: "Use the right 2 lanes")).map(\.valid), [false, true, true])
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true, hint: "Use the lane 2nd from the left")).map(\.valid), [false, true, false])
+        // Words that don't fit the road ("middle lane" of two) or "any lane": the rule as before.
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true, hint: "Use the middle lane")).map(\.valid), [false, true])
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true, hint: "Use any lane")).map(\.valid), [false, true])
+        // A one-lane road in that Google says has a lane to pick: Google's word.
+        s.entryLanes = 1
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true, hint: "Use the left lane")).map(\.valid), [true, false])
     }
 
     /**

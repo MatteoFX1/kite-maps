@@ -126,12 +126,24 @@ public struct RoundaboutShape: Hashable, Sendable {
      * the far lane for going all the way round. Nil for a one-lane road in or a mini-roundabout,
      * where there's no lane to pick.
      */
-    public func ruleLanes(leftTraffic: Bool) -> [Lane]? {
+    public func ruleLanes(leftTraffic: Bool, hint: String? = nil) -> [Lane]? {
         if mini { return nil }
-        let n = entryLanes ?? 2
-        guard n > 1, exits.indices.contains(taken) else { return nil }
+        var n = entryLanes ?? 2
+        guard exits.indices.contains(taken) else { return nil }
         let t = turn(taken)
         let near = leftTraffic ? "left" : "right", far = leftTraffic ? "right" : "left"
+        // Google's own advice ("Use the left 3 lanes"), the few times it gives one, beats any rule:
+        // on the A339 into Basingstoke's M3 junction 6 all four lanes are painted straight on, and
+        // the M3 (3rd exit) is from the left three.
+        if let hint, let picked = Self.hintLanes(hint, count: &n) {
+            let lanes = (0..<n).map { k -> Lane in
+                let a = entryArrows?.count == n ? entryArrows![k].split(separator: ";").map { $0 == "through" ? "straight" : String($0) } : []
+                let ind = !a.isEmpty && !a.contains("none") ? a : k == 0 ? [near, "straight"] : k == n - 1 ? [far, "straight"] : ["straight"]
+                return Lane(indications: ind, valid: picked.contains(k))
+            }
+            return lanes
+        }
+        guard n > 1 else { return nil }
         if let arrows = entryArrows, arrows.count == n {
             // Painted arrows: the lanes whose arrow points the exit's way.
             let lanes = arrows.map { a -> Lane in
@@ -158,6 +170,31 @@ public struct RoundaboutShape: Hashable, Sendable {
             return Lane(indications: ind, valid: good.contains(k))
         }
         return leftTraffic ? fromKerb : fromKerb.reversed()
+    }
+}
+
+extension RoundaboutShape {
+    /**
+     * Which lanes, left to right, Google's lane advice means, out of [count] (raised when the advice
+     * needs more, as "the left 3 lanes" on a road the map gives two). Nil for "any lane" or words it
+     * doesn't know.
+     */
+    static func hintLanes(_ hint: String, count n: inout Int) -> ClosedRange<Int>? {
+        let h = hint.lowercased()
+        func number(_ pattern: String) -> Int? {
+            guard let r = h.range(of: pattern, options: .regularExpression) else { return nil }
+            return Int(h[r].filter(\.isNumber))
+        }
+        if h.contains("any lane") { return nil }
+        if let k = number(#"left \d lanes"#) { n = max(n, k + 1); return 0...(k - 1) }
+        if let k = number(#"right \d lanes"#) { n = max(n, k + 1); return (n - k)...(n - 1) }
+        if let k = number(#"lane \d(st|nd|rd|th) from the left"#) { n = max(n, k + 1); return (k - 1)...(k - 1) }
+        if let k = number(#"lane \d(st|nd|rd|th) from the right"#) { n = max(n, k + 1); return (n - k)...(n - k) }
+        if h.contains("left lane") { n = max(n, 2); return 0...0 }
+        if h.contains("right lane") { n = max(n, 2); return (n - 1)...(n - 1) }
+        if h.contains("middle lane") { guard n == 3 else { return nil }; return 1...1 }
+        if h.contains("middle 2 lanes") { guard n == 4 else { return nil }; return 1...2 }
+        return nil
     }
 }
 

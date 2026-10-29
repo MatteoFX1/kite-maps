@@ -67,7 +67,7 @@ func rampAudit() async {
         guard var x = r.routes.first else { print("FLAG no route: \(r.error ?? "")"); continue }
         if let a = await Roundabouts.apply(to: x) { x = a }
         for m in x.maneuvers where m.type == .roundabout && !m.leavesRoundabout {
-            let rule = m.roundabout.map { s in "in=\(s.entryLanes.map(String.init) ?? "?")\(s.entryArrows.map { " arrows=" + $0.joined(separator: "|") } ?? "") rule=" + (s.ruleLanes(leftTraffic: true)?.map { $0.valid ? "*" : "." }.joined() ?? "none") } ?? "no picture"
+            let rule = m.roundabout.map { s in "in=\(s.entryLanes.map(String.init) ?? "?")\(s.entryArrows.map { " arrows=" + $0.joined(separator: "|") } ?? "") rule=" + (s.ruleLanes(leftTraffic: true, hint: m.laneHint)?.map { $0.valid ? "*" : "." }.joined() ?? "none") } ?? "no picture"
             let mapped = m.lanes.isEmpty ? "" : " mapped=" + m.lanes.map { ($0.valid ? "*" : "") + $0.indications.joined(separator: "/") }.joined(separator: "|")
             print(String(format: "  RB %6.0f m  \"%@\"  hint=%@  %@%@  %.5f,%.5f", m.alongMeters, m.instruction, m.laneHint ?? "-", rule, mapped, m.location.lat, m.location.lng))
         }
