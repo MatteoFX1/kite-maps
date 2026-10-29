@@ -15,5 +15,275 @@ jobs:
         run: swift test 2>&1 | grep -E "error:|Executed .* tests" | head -60
       - name: Roundabouts and limits
         working-directory: VelaCore
+        continue-on-error: true
+        timeout-minutes: 4
+        run: swift run vela-probe uk
+      - name: Live turn-by-turn audit (Southampton)
+        working-directory: VelaCore
+        continue-on-error: true
+        timeout-minutes: 4
+        run: swift run vela-probe audit
+      - name: Live Google check (UK)
+        working-directory: VelaCore
+        continue-on-error: true
+        timeout-minutes: 4
+        run: swift run vela-probe google
+      - name: Live Waze reports check (app protocol, UK)
+        working-directory: VelaCore
+        continue-on-error: true
+        timeout-minutes: 4
+        run: swift run vela-probe wazert
+      - name: Live Google police check
+        working-directory: VelaCore
+        continue-on-error: true
+        timeout-minutes: 3
+        run: swift run vela-probe incidents
+      - name: Live Google search check
+        working-directory: VelaCore
+        continue-on-error: true
+        timeout-minutes: 2
+        run: swift run vela-probe "pizza" 40.7484 -73.9857
+
+  ipa:
+    name: Build Kite.ipa
+    # Xcode 27.1 (the iOS 27.1 SDK) is what lets Kite fill the iPhone Duo's screens; built with an
+    # older Xcode it runs there small, with black bars.
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Make the Xcode project
+        run: xcodegen generate
+      - name: Build (unsigned)
         run: |
-          for n in 17 19 1 5; do swift run vela-probe roundabouts $n 2>&1 | grep -v "^\[" ; done
+          set -o pipefail
+          xcodebuild \
+            -project Kite.xcodeproj \
+            -scheme Kite \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build | tail -n 200
+      - name: Stamp the build number
+        # AltStore and SideStore spot updates by this number, so each build gets its own.
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" \
+            build/Build/Products/Release-iphoneos/Kite.app/Info.plist
+      - name: Ad-hoc sign
+        # An app with no signature at all is read as broken by some sideloaders. An ad-hoc
+        # signature fixes that; the sideloader still re-signs with your Apple ID.
+        run: |
+          APP=build/Build/Products/Release-iphoneos/Kite.app
+          for f in "$APP"/Frameworks/*.framework; do
+            codesign --force --sign - --timestamp=none "$f"
+          done
+          codesign --force --sign - --timestamp=none "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+      - name: Package .ipa
+        run: |
+          mkdir -p Payload
+          ditto build/Build/Products/Release-iphoneos/Kite.app Payload/Kite.app
+          zip -qr -X Kite.ipa Payload
+          unzip -l Kite.ipa | tail -n 3
+          unzip -tq Kite.ipa
+      - name: Upload .ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kite-ipa
+          path: Kite.ipa
+      - name: Release notes
+        id: notes
+        # The version from project.yml, and its "What's new" from CHANGELOG.md.
+        run: |
+          VERSION=$(sed -n 's/.*MARKETING_VERSION: "\(.*\)"/\1/p' project.yml | head -1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "## What's new in $VERSION"
+            echo
+            awk -v v="## $VERSION" '$0 ~ "^## " { if (on) exit; if (index($0, v) == 1) { on = 1; next } } on' CHANGELOG.md
+            echo
+            echo "---"
+            echo "Unsigned app for sideloading. Download **Kite.ipa** below and install it with AltStore or Sideloadly. Kite Maps is an unofficial iPhone port of [Vela Maps](https://github.com/PimpinPumpkin/Vela). Every version is listed in [CHANGELOG.md](CHANGELOG.md)."
+          } > notes.md
+          cat notes.md
+      - name: Publish release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.notes.outputs.version }}
+          name: Kite Maps ${{ steps.notes.outputs.version }}
+          body_path: notes.md
+          files: Kite.ipa
+      - name: Update the AltStore source
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # Writes apps.json to the altstore branch, the link people add in AltStore or SideStore.
+        run: |
+          APP=build/Build/Products/Release-iphoneos/Kite.app
+          codesign -d --entitlements :- "$APP" > ents.plist 2>/dev/null || : > ents.plist
+          mkdir -p source
+          python3 .github/altstore/make_source.py "$APP" Kite.ipa ents.plist \
+            v${{ steps.notes.outputs.version }} "${{ github.repository }}" source/apps.json
+          cd source
+          git init -q -b altstore
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add apps.json && git commit -qm "AltStore source for build ${{ github.run_number }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" altstore
+
+  duo:
+    name: Screenshots (iPhone Duo)
+    runs-on: xcode-27
+    # Only a look at the foldable; never holds up the build.
+    continue-on-error: true
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Make the Xcode project
+        run: xcodegen generate
+      - name: Build for the simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project Kite.xcodeproj -scheme Kite -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
+            || { grep -E "error:" build.log | sort -u | head -40; tail -n 20 build.log; exit 1; }
+          tail -n 3 build.log
+      - name: Take screenshots, closed and open
+        # The simulated Duo starts closed (the outer screen, display "primary"); DeviceHub opens it
+        # (the inner screen, "primary-1"), then turns it upright.
+        run: |
+          DEV=$(xcrun simctl create Duo com.apple.CoreSimulator.SimDeviceType.iPhone-Duo com.apple.CoreSimulator.SimRuntime.iOS-27-1)
+          xcrun simctl boot $DEV; xcrun simctl bootstatus $DEV -b > /dev/null
+          xcrun simctl ui $DEV appearance dark
+          xcrun simctl location $DEV set 50.9097,-1.4044
+          xcrun simctl install $DEV simbuild/Build/Products/Debug-iphonesimulator/Kite.app
+          xcrun simctl privacy $DEV grant location app.vela.ios || true
+          mkdir -p shots
+          shoot() { # name, display, steps...
+            n=$1; disp=$2; shift 2
+            for step in "$@"; do
+              xcrun simctl launch --terminate-running-process $DEV app.vela.ios -demo $step > /dev/null
+              case $step in browse) t=16;; place) t=28;; directions) t=38;; nav) t=44;; *) t=12;; esac
+              sleep $t
+              xcrun simctl io $DEV screenshot --display=$disp "shots/$n-$step.png" > /dev/null 2>&1 || echo "no shot $n-$step"
+            done
+          }
+          shoot closed primary browse place nav
+          bash .github/duo/pose.sh open
+          shoot open primary-1 browse place directions nav settings saved
+          bash .github/duo/pose.sh rotate
+          shoot upright primary-1 browse place nav
+          ls shots
+      - name: Save screenshots to the duo-screenshots branch
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        run: |
+          cd shots
+          for f in *.png; do sips -s format jpeg -s formatOptions 70 -Z 1400 "$f" --out "${f%.png}.jpg" >/dev/null; done
+          rm -f *.png
+          git init -q -b duo-screenshots
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add . && git commit -qm "iPhone Duo screenshots for ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" duo-screenshots
+
+  screens:
+    name: Screenshots (simulator)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Make the Xcode project
+        run: xcodegen generate
+      - name: Build for the simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project Kite.xcodeproj -scheme Kite -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
+            || { grep -E "error:" build.log | sort -u | head -40; tail -n 20 build.log; exit 1; }
+          tail -n 5 build.log
+      - name: Take screenshots
+        run: |
+          set -x
+          DEV=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k in sorted(d, reverse=True) if 'iOS' in k for x in d[k] if x['name'].startswith('iPhone 16') or x['name'].startswith('iPhone 15')))")
+          xcrun simctl boot "$DEV"
+          xcrun simctl bootstatus "$DEV" -b
+          xcrun simctl ui "$DEV" appearance dark
+          xcrun simctl location "$DEV" set 38.5449,-121.7405
+          xcrun simctl install "$DEV" simbuild/Build/Products/Debug-iphonesimulator/Kite.app
+          xcrun simctl privacy "$DEV" grant location app.vela.ios || true
+          mkdir -p shots
+          for step in browse search place directions nav cameras layers transit board mine stops rail welcome camalert streetview svtest svtest90 lookaround copy wazelink googlelink listscroll wazealert wazedemo wazetap wazeroute wazesettings wazemap wazeintro searchfocus settings saved pickhome locationoff longname longdir addstop allalerts endtrip; do
+            xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo "$step"
+            case $step in browse) t=16;; search) t=24;; place) t=28;; directions) t=38;; nav) t=44;; cameras) t=110;; layers) t=12;; transit) t=40;; board) t=24;; mine) t=14;; stops) t=40;; rail) t=30;; welcome) t=10;; camalert) t=52;; streetview) t=40;; svtest) t=12;; svtest90) t=12;; lookaround) t=40;; copy) t=34;; wazelink) t=16;; googlelink) t=24;; listscroll) t=30;; wazealert) t=44;; wazedemo) t=16;; wazemap) t=55;; wazeintro) t=10;; wazetap) t=18;; wazeroute) t=40;; wazesettings) t=12;; searchfocus) t=14;; settings) t=10;; saved) t=10;; pickhome) t=12;; locationoff) t=14;; longname) t=20;; longdir) t=32;; addstop) t=34;; allalerts) t=48;; endtrip) t=44;; esac
+            sleep $t
+            xcrun simctl io "$DEV" screenshot "shots/$step.png"
+          done
+          xcrun simctl ui "$DEV" appearance light
+          xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo place
+          sleep 28
+          xcrun simctl io "$DEV" screenshot shots/place-light.png
+          for step in browse directions transit nav searchfocus; do
+            xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo "$step"
+            case $step in browse) t=16;; directions) t=38;; transit) t=40;; nav) t=44;; searchfocus) t=14;; esac
+            sleep $t
+            xcrun simctl io "$DEV" screenshot "shots/light-$step.png"
+          done
+          # Bigger text (the largest size short of the accessibility ones), back in dark mode.
+          xcrun simctl ui "$DEV" appearance dark
+          xcrun simctl ui "$DEV" content_size extra-extra-extra-large
+          for step in browse place directions transit nav searchfocus settings allalerts longdir welcome wazeintro; do
+            xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo "$step"
+            case $step in browse) t=16;; place) t=28;; directions) t=38;; transit) t=40;; nav) t=44;; searchfocus) t=14;; settings) t=10;; allalerts) t=48;; longdir) t=32;; welcome) t=10;; wazeintro) t=10;; esac
+            sleep $t
+            xcrun simctl io "$DEV" screenshot "shots/big-$step.png"
+          done
+          xcrun simctl ui "$DEV" content_size large
+          xcrun simctl location "$DEV" set 56.4120,-3.4700
+          xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo uk
+          sleep 50
+          xcrun simctl io "$DEV" screenshot shots/uk.png
+          xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo roundabout
+          sleep 50
+          xcrun simctl io "$DEV" screenshot shots/roundabout.png
+          xcrun simctl ui "$DEV" appearance light
+          xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo roundabout
+          sleep 50
+          xcrun simctl io "$DEV" screenshot shots/light-roundabout.png
+          xcrun simctl ui "$DEV" appearance dark
+          # A long transit trip in England, from Reading into London, planned live by Transitous.
+          xcrun simctl location "$DEV" set 51.4545,-0.9781
+          xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo transituk
+          sleep 40
+          xcrun simctl io "$DEV" screenshot shots/transituk.png
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: shots
+      - name: Save screenshots to the ci-screenshots branch
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        # Only a convenience for reviewing; never fails the build.
+        continue-on-error: true
+        run: |
+          cd shots
+          for f in *.png; do sips -s format jpeg -s formatOptions 70 -Z 1200 "$f" --out "${f%.png}.jpg" >/dev/null; done
+          rm -f *.png
+          git init -q -b ci-screenshots
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add . && git commit -qm "Screenshots for ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-screenshots

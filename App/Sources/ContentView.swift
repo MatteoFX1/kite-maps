@@ -9,6 +9,11 @@ struct ContentView: View {
     @ObservedObject private var launch = LaunchAction.shared
     @ObservedObject private var settings = AppSettings.shared
     @Environment(\.colorScheme) private var systemScheme
+    @Environment(\.horizontalSizeClass) private var hClass
+    @Environment(\.verticalSizeClass) private var vClass
+    @State private var screen: CGSize = .zero
+    /** The side panel's width on a big screen held sideways (the open iPhone Duo), 0 on a phone. */
+    private var panel: CGFloat { SidePanel.width(for: screen, h: hClass, v: vClass) }
 
     private var dark: Bool { settings.colorScheme.map { $0 == .dark } ?? (systemScheme == .dark) }
 
@@ -19,12 +24,12 @@ struct ContentView: View {
             if let nav = model.nav {
                 NavigationOverlay(model: model, nav: nav)
             } else if model.directions != nil {
-                DirectionsOverlay(model: model)
+                DirectionsOverlay(model: model).inSidePanel(panel)
             } else {
                 switch model.tab {
                 case .map: BrowseOverlay(model: model)
-                case .saved: SavedPage(model: model).transition(.opacity)
-                case .settings: SettingsPage(model: model).transition(.opacity)
+                case .saved: SavedPage(model: model).sidePage(panel).transition(.opacity)
+                case .settings: SettingsPage(model: model).sidePage(panel).transition(.opacity)
                 }
             }
             if let info = model.wazeInfo, model.nav == nil, model.tab == .map {
@@ -34,6 +39,7 @@ struct ContentView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                     Spacer()
                 }
+                .inSidePanel(panel)
                 .task(id: info.id) {
                     // Out of the way by itself after a while, like a toast.
                     guard !DemoScript.active else { return }
@@ -53,6 +59,14 @@ struct ContentView: View {
                 }
             }
         }
+        .background(GeometryReader { g in
+            Color.clear
+                .onAppear { screen = g.size }
+                .onChange(of: g.size) { screen = $0 }
+        })
+        .environment(\.sidePanel, panel)
+        .onAppear { model.sideInset = panel }
+        .onChange(of: panel) { model.sideInset = $0 }
         .animation(.easeOut(duration: 0.25), value: model.wazeInfo?.id)
         .animation(.easeOut(duration: 0.2), value: model.tab)
         .kiteType()
@@ -111,6 +125,7 @@ struct BrowseOverlay: View {
     @StateObject private var voice = VoiceSearch()
     @FocusState private var searchFocused: Bool
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.sidePanel) private var panel
 
     private var hasSheet: Bool { model.selected != nil || !model.results.isEmpty }
     /** Only the map and the dock when nothing is open. */
@@ -148,9 +163,10 @@ struct BrowseOverlay: View {
                             }
                         }
                     }
-                    .padding(.top, idle ? 176 : 86)
+                    // With a side panel the search box isn't above them: they go to the top right.
+                    .padding(.top, panel > 0 ? 10 : idle ? 176 : 86)
                     Spacer()
-                    if sheetH < full * 0.6 {
+                    if sheetH < full * 0.6 || panel > 0 {
                         HStack(alignment: .bottom) {
                             if idle { WazeMapChips(model: model) }
                             Spacer()
@@ -168,8 +184,10 @@ struct BrowseOverlay: View {
                                     Button { model.saveParking() } label: { Label("I parked here", systemImage: "parkingsign") }
                                 }
                         }
-                        .padding(.bottom, hasSheet ? max(sheetH - geo.safeAreaInsets.bottom, 0) + 14
-                                                   : max(dockTop - geo.safeAreaInsets.bottom, 0) + 16)
+                        .padding(.bottom, panel > 0 ? 16
+                                 : hasSheet ? max(sheetH - geo.safeAreaInsets.bottom, 0) + 14
+                                 : max(dockTop - geo.safeAreaInsets.bottom, 0) + 16)
+                        .padding(.leading, panel)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -180,6 +198,7 @@ struct BrowseOverlay: View {
                         sheet(full: full)
                     }
                     .ignoresSafeArea(edges: .bottom)
+                    .inSidePanel(panel)
                     .transition(.move(edge: .bottom))
                 }
 
@@ -189,6 +208,7 @@ struct BrowseOverlay: View {
                         KiteDock(model: model, bottomInset: geo.safeAreaInsets.bottom)
                     }
                     .ignoresSafeArea(edges: .bottom)
+                    .inSidePanel(panel)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
@@ -205,6 +225,7 @@ struct BrowseOverlay: View {
                     if !searchFocused { StatusCards(location: model.location) }
                 }
                 .padding(.top, 6)
+                .inSidePanel(panel)
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.85), value: hasSheet)
             .animation(.easeOut(duration: 0.2), value: idle)
