@@ -29,21 +29,38 @@ func rampAudit() async {
     for (n, d) in drives.enumerated() where only == nil || only == n {
         print("##### \(n): \(d.0)")
         // Google's own markup, for its maneuver names and sides.
-        if let body = try? await GoogleClient.shared.directionsBody(from: d.1, to: d.2, mode: .drive) {
+        if let raw = try? await GoogleClient.shared.directionsBody(from: d.1, to: d.2, mode: .drive) {
+            let body = raw.replacingOccurrences(of: "\\u003c", with: "<").replacingOccurrences(of: "\\u003e", with: ">")
+                .replacingOccurrences(of: "\\u0027", with: "'").replacingOccurrences(of: "\\u0026", with: "&").replacingOccurrences(of: "\\\"", with: "\"")
             var seen = Set<String>()
             let steps = matches(#"<step [^>]*>.*?</step>"#, in: body)
             for s in steps where seen.insert(s).inserted {
                 let lower = s.lowercased()
-                guard ["ramp", "merge", "fork", "keep", "slip", "exit"].contains(where: lower.contains), !lower.contains("roundabout") else { continue }
+                guard ["ramp", "merge", "fork", "keep", "slip", "exit", "lane"].contains(where: lower.contains) else { continue }
                 let attrs = matches(#"(maneuver|side|type)='[^']+'"#, in: s).joined(separator: " ")
                 let words = s.replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)
                     .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
                 print("  G  \(attrs.isEmpty ? "(no maneuver)" : attrs)  \"\(words)\"")
             }
-            for icon in Set(matches(#"dir-tt-[a-z-]+"#, in: body)).sorted() { print("  G icon \(icon)") }
+            // Every icon with the words Google put just before it (folded steps, and steps whose markup has no maneuver).
+            for f in matches(#"[^<>]{0,300}dir-tt-[a-z-]+"#, in: body) where !f.contains("roundabout") && !f.contains("dir-tt-straight") {
+                let words = matches(#"\"[A-Za-z][^"]{0,80}\""#, in: f).suffix(6).joined(separator: " ")
+                print("  G icon \(matches(#"dir-tt-[a-z-]+"#, in: f).last ?? "?")  \(words)")
+            }
+            if n == 7 || n == 1, let r = raw.range(of: "slip road") ?? raw.range(of: "junction") {
+                let a = raw.index(r.lowerBound, offsetBy: -700, limitedBy: raw.startIndex) ?? raw.startIndex
+                let b = raw.index(r.upperBound, offsetBy: 700, limitedBy: raw.endIndex) ?? raw.endIndex
+                print("  RAW " + raw[a..<b])
+            }
         } else { print("  G  no answer") }
         let r = await Directions.routes(from: d.1, to: d.2, mode: .drive)
-        guard let x = r.routes.first else { print("FLAG no route: \(r.error ?? "")"); continue }
+        guard var x = r.routes.first else { print("FLAG no route: \(r.error ?? "")"); continue }
+        if let a = await Roundabouts.apply(to: x) { x = a }
+        for m in x.maneuvers where m.type == .roundabout && !m.leavesRoundabout {
+            let rule = m.roundabout.map { s in "in=\(s.entryLanes.map(String.init) ?? "?") rule=" + (s.ruleLanes(leftTraffic: true)?.map { $0.valid ? "*" : "." }.joined() ?? "none") } ?? "no picture"
+            let mapped = m.lanes.isEmpty ? "" : " mapped=" + m.lanes.map { ($0.valid ? "*" : "") + $0.indications.joined(separator: "/") }.joined(separator: "|")
+            print(String(format: "  RB %6.0f m  \"%@\"  hint=%@  %@%@  %.5f,%.5f", m.alongMeters, m.instruction, m.laneHint ?? "-", rule, mapped, m.location.lat, m.location.lng))
+        }
         let line = x.polyline, cum = Geo.cumulative(line), total = cum.last ?? 0
         func heading(_ a: Double, _ b: Double) -> Double? {
             let p = Geo.point(along: line, meters: max(0, a), cumulative: cum), q = Geo.point(along: line, meters: min(total, b), cumulative: cum)
