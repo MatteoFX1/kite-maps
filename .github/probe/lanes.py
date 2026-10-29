@@ -1,32 +1,43 @@
-# Raw lane data around each roundabout on a route: what the open router says, and what OpenStreetMap maps.
-import json, sys, urllib.request, urllib.parse, time
+# Prints the lanes OSRM gives on the way into each roundabout of a few UK drives, with how far
+# before the roundabout each one sits, so the lane guidance can be checked against real data.
+import json, math, urllib.request
+
 UA = {"User-Agent": "KiteMaps-iOS-probe/0.1 (+https://github.com/matteofx1/kite-maps)"}
-a = [float(x) for x in sys.argv[1:5]]
-url = "https://routing.openstreetmap.de/routed-car/route/v1/driving/%f,%f;%f,%f?steps=true&overview=false" % (a[1], a[0], a[3], a[2])
-r = json.load(urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60))
-steps = r["routes"][0]["legs"][0]["steps"]
-spots = []
-for i, s in enumerate(steps):
-    m = s["maneuver"]
-    if m["type"] in ("roundabout", "rotary", "exit roundabout", "exit rotary"):
-        print("STEP %d %s %s exit=%s name=%r at %.5f,%.5f" % (i, m["type"], m.get("modifier"), m.get("exit"), s.get("name") or s.get("ref"), m["location"][1], m["location"][0]))
-        for k in ([i - 1] if i > 0 else []) + [i]:
-            for x in steps[k]["intersections"][-3:] if k < i else steps[k]["intersections"]:
+
+drives = [
+    ("M271 to Redbridge roundabout, 1st exit A33", (50.9890, -1.4970), (50.9077, -1.4136)),
+    ("M271 to Redbridge roundabout, to Totton", (50.9890, -1.4970), (50.9190, -1.4900)),
+    ("Park Gate to Southampton", (50.8655, -1.2800), (50.9090, -1.4040)),
+    ("Whiteley to Portsmouth", (50.8850, -1.2440), (50.8000, -1.0900)),
+]
+
+def dist(a, b):
+    k = math.cos(math.radians(a[1]))
+    return math.hypot((a[0] - b[0]) * 111320 * k, (a[1] - b[1]) * 110540)
+
+def lanes(x):
+    return " | ".join(("*" if l["valid"] else "") + "/".join(l["indications"]) for l in x.get("lanes", []))
+
+for name, a, b in drives:
+    url = ("https://routing.openstreetmap.de/routed-car/route/v1/driving/%f,%f;%f,%f"
+           "?overview=false&steps=true" % (a[1], a[0], b[1], b[0]))
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as r:
+            steps = json.load(r)["routes"][0]["legs"][0]["steps"]
+    except Exception as e:
+        print("OSRM failed", name, e); continue
+    print("=== %s" % name)
+    for i, s in enumerate(steps):
+        m = s["maneuver"]
+        if m["type"] not in ("roundabout", "rotary"):
+            continue
+        at = m["location"]
+        print("-- step %d exit=%s onto %r/%r at %s" % (i, m.get("exit"), s.get("name"), s.get("ref"), at))
+        print("   entry lanes: %s" % (lanes(s["intersections"][0]) or "none"))
+        if i > 0:
+            p = steps[i - 1]
+            print("   step before: %s %r, %.0f m" % (p["maneuver"]["type"], p.get("name") or p.get("ref"), p["distance"]))
+            for x in p["intersections"]:
                 if "lanes" in x:
-                    print("   step %d lanes at %.5f,%.5f: %s" % (k, x["location"][1], x["location"][0],
-                          " | ".join(("*" if l["valid"] else "") + "/".join(l["indications"]) for l in x["lanes"])))
-        if m["type"] in ("roundabout", "rotary"): spots.append(m["location"])
-for lng, lat in spots:
-    q = '[out:json][timeout:60];way(around:150,%f,%f)[highway][~"^(lanes|turn:lanes.*|lanes:forward)$"~"."];out tags center;' % (lat, lng)
-    for host in ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"]:
-        try:
-            els = json.load(urllib.request.urlopen(urllib.request.Request(host, data=urllib.parse.urlencode({"data": q}).encode(), headers=UA), timeout=90))["elements"]
-            break
-        except Exception as e:
-            print("overpass failed", host, e); els = []
-    print("OSM near %.5f,%.5f" % (lat, lng))
-    for e in els:
-        t = e.get("tags", {})
-        keep = {k: v for k, v in t.items() if "lanes" in k or k in ("oneway", "junction", "highway")}
-        print("   way %s %r %s %.5f,%.5f" % (e["id"], t.get("name") or t.get("ref"), keep, e["center"]["lat"], e["center"]["lon"]))
-    time.sleep(2)
+                    print("     %5.0f m before: %s  (bearings %s, can enter %s, in %s, out %s)" % (
+                        dist(x["location"], at), lanes(x), x.get("bearings"), x.get("entry"), x.get("in"), x.get("out")))
