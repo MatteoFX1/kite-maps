@@ -89,6 +89,8 @@ public struct RoundaboutShape: Hashable, Sendable {
     public var mini = false
     /** Lanes on the road in at the give-way line, when OpenStreetMap says. */
     public var entryLanes: Int?
+    /** The arrows painted on those lanes, left to right ("left", "through;right"…), when OpenStreetMap maps them. */
+    public var entryArrows: [String]?
 
     public init(exits: [Double], taken: Int, entriesOnly: [Double] = [], clockwise: Bool, complete: Bool) {
         self.exits = exits
@@ -116,25 +118,43 @@ public struct RoundaboutShape: Hashable, Sendable {
     }
 
     /**
-     * The lanes to draw when none have arrows mapped, left to right, by the Highway Code: as many
-     * as the road in has (two when the map doesn't say), the kerb-side one for the first exits, all
-     * but the far one for straight on, the far one for going right round. Nil for a one-lane road
-     * in or a mini-roundabout, where there's no lane to pick. A 3-lane approach was drawn as two
-     * (Rownhams, M27 junction 3), and a one-lane one got "Left lane" (Bury Road, Marchwood).
+     * The lanes to draw when the router has none, left to right: the road's painted arrows when
+     * OpenStreetMap maps them, or else by the Highway Code, as many as the road in has (two when
+     * the map doesn't say). The kerb-side lane for the first exits, all but the far one for
+     * straight on, and for going right round, the far one, or on three lanes or more the far half
+     * (the middle lane of three takes the right too: Rownhams, M27 junction 3, 2026-10-29). Only
+     * the far lane for going all the way round. Nil for a one-lane road in or a mini-roundabout,
+     * where there's no lane to pick.
      */
     public func ruleLanes(leftTraffic: Bool) -> [Lane]? {
         if mini { return nil }
         let n = entryLanes ?? 2
         guard n > 1, exits.indices.contains(taken) else { return nil }
         let t = turn(taken)
+        let near = leftTraffic ? "left" : "right", far = leftTraffic ? "right" : "left"
+        if let arrows = entryArrows, arrows.count == n {
+            // Painted arrows: the lanes whose arrow points the exit's way.
+            let lanes = arrows.map { a -> Lane in
+                let ind = a.split(separator: ";").map { String($0) }.filter { !$0.isEmpty && $0 != "none" }
+                let ok = (ind.isEmpty ? ["through"] : ind).contains { d in
+                    if d.hasSuffix(near) { return t <= 150 }
+                    if d == "through" { return t >= 120 && t <= 240 }
+                    if d.hasSuffix(far) { return t >= 210 }
+                    if d == "reverse" { return t >= 300 }
+                    return false
+                }
+                return Lane(indications: ind.isEmpty ? ["straight"] : ind.map { $0 == "through" ? "straight" : $0 == "reverse" ? "uturn" : $0.replacingOccurrences(of: "_", with: " ") }, valid: ok)
+            }
+            if lanes.contains(where: \.valid) { return lanes }
+        }
         // Counted from the kerb: 0 is the lane nearest it.
         let good: ClosedRange<Int>
-        if t > 200 { good = (n - 1)...(n - 1) }
+        if t > 300 || (t > 200 && n < 3) { good = (n - 1)...(n - 1) }
+        else if t > 200 { good = (n / 2)...(n - 1) }
         else if t > 135 { good = 0...max(0, n - 2) }
         else { good = 0...0 }
-        let near = leftTraffic ? "left" : "right", far = leftTraffic ? "right" : "left"
         let fromKerb = (0..<n).map { k -> Lane in
-            let ind = k == 0 ? (n == 2 ? [near, "straight"] : [near]) : k == n - 1 ? [far] : ["straight"]
+            let ind = k == 0 ? (n == 2 ? [near, "straight"] : [near]) : k == n - 1 ? [far] : ["straight", far]
             return Lane(indications: ind, valid: good.contains(k))
         }
         return leftTraffic ? fromKerb : fromKerb.reversed()

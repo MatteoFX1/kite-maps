@@ -173,7 +173,8 @@ final class RoundaboutTests: XCTestCase {
     func testRuleLanesFollowTheRoadIn() throws {
         var s = RoundaboutShape(exits: [270, 0, 90], taken: 2, clockwise: true, complete: true)
         s.entryLanes = 3
-        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [false, false, true])
+        // Right on three lanes: the middle one too (Rownhams, M27 junction 3, from the M271).
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [false, true, true])
         s.taken = 1
         XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [true, true, false])
         s.taken = 0
@@ -182,6 +183,19 @@ final class RoundaboutTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [true, false])
         s.entryLanes = 1
         XCTAssertNil(s.ruleLanes(leftTraffic: true))
+        // All the way round: the far lane only, however many there are.
+        var lap = RoundaboutShape(exits: [270, 0, 90, 170], taken: 3, clockwise: true, complete: true)
+        lap.entryLanes = 3
+        XCTAssertEqual(try XCTUnwrap(lap.ruleLanes(leftTraffic: true)).map(\.valid), [false, false, true])
+        // Painted arrows where the map has them (A339 into Basingstoke's M3 junction 6): those, not the rule.
+        s.entryLanes = 4
+        s.entryArrows = ["left", "left", "through", "through;right"]
+        s.taken = 2
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [false, false, false, true])
+        s.taken = 1
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [false, false, true, true])
+        s.taken = 0
+        XCTAssertEqual(try XCTUnwrap(s.ruleLanes(leftTraffic: true)).map(\.valid), [true, true, false, false])
     }
 
     /**

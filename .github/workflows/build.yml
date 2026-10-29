@@ -10,8 +10,6 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - name: Lane arrows into roundabouts
-        run: python3 .github/probe/turnlanes.py || true
       - name: Unit tests
         working-directory: VelaCore
         run: swift test 2>&1 | grep -E "error:|Executed .* tests" | head -60

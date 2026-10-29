@@ -23,6 +23,16 @@ func rampAudit() async {
         ("Heathrow to the M25 and M4", LatLng(51.4700, -0.4540), LatLng(51.5100, -0.6000)),
         ("M1 Luton to Milton Keynes", LatLng(51.8800, -0.4200), LatLng(52.0400, -0.7590)),
         ("Cardiff onto the M4 (Wales)", LatLng(51.4810, -3.1790), LatLng(51.5880, -2.9970)),
+        ("Birmingham onto the M6 and M42", LatLng(52.4800, -1.9000), LatLng(52.4500, -1.7300)),
+        ("Manchester onto the M60", LatLng(53.4800, -2.2400), LatLng(53.4300, -2.3500)),
+        ("Leeds onto the M62", LatLng(53.8000, -1.5500), LatLng(53.7300, -1.6500)),
+        ("Bristol onto the M32 and M4", LatLng(51.4550, -2.5900), LatLng(51.5300, -2.5100)),
+        ("Glasgow onto the M8 (Scotland)", LatLng(55.8600, -4.2500), LatLng(55.8600, -4.4200)),
+        ("Edinburgh bypass (Scotland)", LatLng(55.9300, -3.2900), LatLng(55.9000, -3.1000)),
+        ("Newcastle onto the A1(M)", LatLng(54.9700, -1.6100), LatLng(54.9000, -1.5800)),
+        ("London North Circular to the M1", LatLng(51.5900, -0.2200), LatLng(51.6400, -0.2700)),
+        ("Reading onto the M4", LatLng(51.4500, -0.9700), LatLng(51.4300, -1.1200)),
+        ("Swindon Magic Roundabout onto the M4", LatLng(51.5600, -1.7800), LatLng(51.5200, -1.7200)),
     ]
     let only = CommandLine.arguments.count > 2 ? Int(CommandLine.arguments[2]) : nil
     var flags = 0, checked = 0
@@ -57,7 +67,7 @@ func rampAudit() async {
         guard var x = r.routes.first else { print("FLAG no route: \(r.error ?? "")"); continue }
         if let a = await Roundabouts.apply(to: x) { x = a }
         for m in x.maneuvers where m.type == .roundabout && !m.leavesRoundabout {
-            let rule = m.roundabout.map { s in "in=\(s.entryLanes.map(String.init) ?? "?") rule=" + (s.ruleLanes(leftTraffic: true)?.map { $0.valid ? "*" : "." }.joined() ?? "none") } ?? "no picture"
+            let rule = m.roundabout.map { s in "in=\(s.entryLanes.map(String.init) ?? "?")\(s.entryArrows.map { " arrows=" + $0.joined(separator: "|") } ?? "") rule=" + (s.ruleLanes(leftTraffic: true)?.map { $0.valid ? "*" : "." }.joined() ?? "none") } ?? "no picture"
             let mapped = m.lanes.isEmpty ? "" : " mapped=" + m.lanes.map { ($0.valid ? "*" : "") + $0.indications.joined(separator: "/") }.joined(separator: "|")
             print(String(format: "  RB %6.0f m  \"%@\"  hint=%@  %@%@  %.5f,%.5f", m.alongMeters, m.instruction, m.laneHint ?? "-", rule, mapped, m.location.lat, m.location.lng))
         }
