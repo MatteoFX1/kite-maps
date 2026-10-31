@@ -13,6 +13,13 @@ the middle number for big milestones.
 - **Police and drivers' reports on the map all the time:** not just along a route while you
   navigate. Open the map at city zoom and Kite asks Waze about the area on screen, at most every
   2 minutes or when you move the map well away (navigating, it still asks along the route).
+- **The police heat map works straight away, for the whole UK:** it now comes from Highway
+  Radar's own heat map (built from its drivers' reports over time) instead of only the reports
+  this phone had seen, which took a week of driving to fill. It's their private server, so it may
+  stop one day. Thanks to Ausbloke's fork for finding it.
+- **Waze is asked less often while you drive:** the map was asking several times a second; now
+  at most every 90 seconds while navigating, and every 5 seconds while browsing.
+- **One police warning, not two:** the same police car listed twice by Waze was said twice.
 - **The drive time on a place card matches the route:** it said "23 min drive" for a 29 min
   drive, as it came from the open router without traffic. It now asks the same way the
   directions do, with traffic and your avoid settings.

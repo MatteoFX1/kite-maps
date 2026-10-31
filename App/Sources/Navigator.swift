@@ -469,7 +469,10 @@ final class Navigator: ObservableObject {
                 && $0.along > p.alongMeters && $0.along - p.alongMeters <= lead
         }) else { return }
         // Reports a few meters apart are one warning.
-        for w in routeWaze where abs(w.along - next.along) < 60 { spokenWaze.insert(w.alert.id) }
+        // So are two of the same kind close together: the live map and Waze's app servers can list one
+        // police car under two ids, and London got "Police reported ahead" twice in 7 seconds.
+        for w in routeWaze where abs(w.along - next.along) < 60
+            || (w.alert.kind == next.alert.kind && abs(w.along - next.along) < 400) { spokenWaze.insert(w.alert.id) }
         let ahead = next.along - p.alongMeters
         wazeAhead = WazeAhead(alert: next.alert, meters: ahead, startMeters: max(ahead, 1))
         wazeWarned += 1

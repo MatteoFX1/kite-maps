@@ -408,7 +408,7 @@ struct WazeSettingsView: View {
                             Button("Forget them all", role: .destructive) { confirmClear = true }
                         }
                     } footer: {
-                        Text("A glow where police get reported most, and a low, medium or high risk for the road ahead (counting reports made at this time of day most). Waze only shares what's live now, so Kite remembers the reports it sees on this phone, for 90 days and never anywhere else, and both fill in the more you use it.")
+                        Text("Heat map: where police get reported most, across the whole UK, from Highway Radar's own map (built from its drivers' reports; it may stop working one day). Risk score: low, medium or high for the road ahead (counting reports made at this time of day most), from the Waze reports Kite remembers on this phone, for 90 days and never anywhere else.")
                     }
                 }
             }
@@ -423,7 +423,7 @@ struct WazeSettingsView: View {
         .kiteList()
         .navigationTitle("Road alerts")
         .onAppear { remembered = WazeHistory.shared.sightings.count }
-        .confirmationDialog("Forget the \(remembered) police reports Kite remembered? The heat map and risk score start again from nothing.",
+        .confirmationDialog("Forget the \(remembered) police reports Kite remembered? The risk score starts again from nothing.",
                             isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Forget them", role: .destructive) {
                 WazeHistory.shared.clear()

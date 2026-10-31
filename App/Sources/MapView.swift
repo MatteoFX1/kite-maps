@@ -94,6 +94,10 @@ struct VelaMapView: UIViewRepresentable {
         private var wazeFetch: Task<Void, Never>?
         /** When Waze last didn't answer: wait a minute before asking again, rather than on every pan. */
         private var wazeFailedAt = Date.distantPast
+        private var wazeAskedAt = Date.distantPast
+        /** The police heat map, from Highway Radar's tiles. */
+        let heatTiles = HighwayHeat()
+        private var wazeRetryQueued = false
         private var lastWazeKey = ""
         /** The box the drawn rail lines cover, so panning inside it asks nothing. */
         private var railBox: (s: Double, w: Double, n: Double, e: Double, z: Int)?
@@ -113,6 +117,7 @@ struct VelaMapView: UIViewRepresentable {
             MapIcons.register(in: style)
             addVelaLayers(style)
             styleReady = true
+            heatTiles.styleReloaded()
             styledDriving = nil
             repaint(mapView)
             lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""; lastSignalsKey = ""; lastWazeKey = ""
@@ -452,6 +457,7 @@ struct VelaMapView: UIViewRepresentable {
             renderCameras(style)
             renderSignals(style)
             renderWaze(style)
+            updateHeat(map)
             renderMine(style)
             if s.transitLines { loadRail(map) }
         }
@@ -541,20 +547,15 @@ struct VelaMapView: UIViewRepresentable {
                 return f
             }
             (style.source(withIdentifier: "vela-waze") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
-            let heatOn = s.wazeOn && s.wazeHeatmap && s.wazePolice
-            style.layer(withIdentifier: "vela-waze-heat")?.isVisible = heatOn
-            guard heatOn else { return }
-            var seen = Set(history.map(\.id))
-            var pts = history.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
-            for a in all where a.kind == .police && seen.insert(a.id).inserted {
-                pts.append(CLLocationCoordinate2D(latitude: a.location.lat, longitude: a.location.lng))
-            }
-            let heat: [MLNPointFeature] = pts.map { c in
-                let f = MLNPointFeature()
-                f.coordinate = c
-                return f
-            }
-            (style.source(withIdentifier: "vela-waze-heat") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: heat)
+            // The heat map comes from Highway Radar's tiles now (see HighwayHeat), not from the
+            // reports this phone has seen, which took a week of driving to fill.
+            style.layer(withIdentifier: "vela-waze-heat")?.isVisible = false
+        }
+
+        /** Highway Radar's police heat map for what's on screen, when it's switched on. */
+        func updateHeat(_ map: MLNMapView) {
+            let s = model.settings
+            heatTiles.update(map, on: styleReady && s.wazeOn && s.wazeHeatmap && s.wazePolice, below: "vela-waze-heat")
         }
 
         /** Live Waze reports for the view and a margin, asked again after two minutes or when the map leaves the box. */
@@ -569,6 +570,19 @@ struct VelaMapView: UIViewRepresentable {
             }
             guard s.wazeOn, s.wazeOnMap || s.wazeHeatmap, map.zoomLevel >= 10, wazeFetch == nil, !DemoScript.fakeWaze,
                   Date().timeIntervalSince(wazeFailedAt) > 60 else { return }
+            // Never more than every 5 s, and while navigating (the map moving all the time) every 90 s:
+            // a London drive asked about 45 times in 6 minutes. Held back, it asks once the time is up.
+            let wait = (model.nav != nil ? 90 : 5) - Date().timeIntervalSince(wazeAskedAt)
+            if wait > 0 {
+                if !wazeRetryQueued {
+                    wazeRetryQueued = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + wait + 0.1) { [weak self, weak map] in
+                        self?.wazeRetryQueued = false
+                        if let self, let map { self.loadWaze(map) }
+                    }
+                }
+                return
+            }
             let b = map.visibleCoordinateBounds
             if let r = wazeBox, b.sw.latitude >= r.s, b.sw.longitude >= r.w, b.ne.latitude <= r.n, b.ne.longitude <= r.e,
                Date().timeIntervalSince(wazeAt) < 120 { return }
@@ -583,6 +597,7 @@ struct VelaMapView: UIViewRepresentable {
             let hLat = min((box.n - box.s) / 2, 0.15), hLng = min((box.e - box.w) / 2, 0.25)
             let liveBox = (s: mid.lat - hLat, w: mid.lng - hLng, n: mid.lat + hLat, e: mid.lng + hLng)
             let askLive = model.nav == nil && !DemoScript.active
+            wazeAskedAt = Date()
             wazeFetch = Task { [weak self, weak map] in
                 async let closures = Waze.alerts(south: box.s, west: box.w, north: box.n, east: box.e)
                 let live = askLive ? await WazeLive.shared.alerts(boxes: [liveBox], near: mid) : nil
@@ -950,6 +965,7 @@ struct VelaMapView: UIViewRepresentable {
                 loadCameras(mapView)
                 loadSurveillance(mapView)
                 loadWaze(mapView)
+                updateHeat(mapView)
                 loadRail(mapView)
                 noteHeading(mapView)
             }
