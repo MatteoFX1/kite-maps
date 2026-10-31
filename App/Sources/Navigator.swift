@@ -638,7 +638,7 @@ final class Navigator: ObservableObject {
                     : ". Use the \(g.words.lowercased())"
             } ?? ""
             // "In 200 yards, your destination is on the left", the way Google says it.
-            let words = m.type == .arrive ? destinationSide.map { "your destination is on the \($0)" } ?? m.instruction.lowercasedFirst
+            let words = m.type == .arrive ? destinationSide.map { "your destination is on the \($0)" } ?? "your destination is ahead"
                 : m.instruction.lowercasedFirst
             speak("In \(Fmt.spokenDistance(d)), \(words)\(lane)")
         } else if d <= far && d > near + 150 && stage < 1 && m.type != .arrive {

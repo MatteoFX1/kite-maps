@@ -115,7 +115,7 @@ final class HighwayHeat {
                 let k = (t - 0.5) / 0.5
                 r = 249 + (220 - 249) * k; g = 115 + (38 - 115) * k; b = 22 + (38 - 22) * k
             }
-            let a = 0.12 + 0.6 * t
+            let a = 0.12 + 0.43 * t
             // Premultiplied.
             rgba[i * 4] = UInt8(r * a); rgba[i * 4 + 1] = UInt8(g * a); rgba[i * 4 + 2] = UInt8(b * a)
             rgba[i * 4 + 3] = UInt8(a * 255)
@@ -178,7 +178,8 @@ final class HighwayHeat {
             let src = MLNImageSource(identifier: id, coordinateQuad: Self.quad(t), image: img)
             style.addSource(src)
             let layer = MLNRasterStyleLayer(identifier: id, source: src)
-            layer.rasterOpacity = NSExpression(forConstantValue: 0.75)
+            // Close in, a hotspot city centre would otherwise be one flat red sheet over the streets.
+            layer.rasterOpacity = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 10, 0.75, 13, 0.5, 16, 0.3])
             layer.rasterFadeDuration = NSExpression(forConstantValue: 0)
             if let under = style.layer(withIdentifier: below) { style.insertLayer(layer, below: under) } else { style.addLayer(layer) }
         }

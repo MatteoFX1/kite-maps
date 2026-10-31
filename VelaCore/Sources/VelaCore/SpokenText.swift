@@ -38,6 +38,10 @@ public enum SpokenText {
             s = s.replacingOccurrences(of: "(?<=(?:Road|Street|Avenue|Lane|Way|Drive|Bridge|Hill|Parade) )\(d)(?![\\p{L}'])",
                                        with: w, options: .regularExpression)
         }
+        // "W Approach Road" is West Approach Road: a lone compass letter starting a name.
+        for (d, w) in [("N", "North"), ("S", "South"), ("E", "East"), ("W", "West")] {
+            s = s.replacingOccurrences(of: "(?<![\\p{L}\\d'.])(?<!\\d )\(d)(?= \\p{Lu}\\p{Ll})", with: w, options: .regularExpression)
+        }
         return s
     }
 }
