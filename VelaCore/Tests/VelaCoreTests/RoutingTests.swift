@@ -315,6 +315,9 @@ final class SpokenTextTests: XCTestCase {
         XCTAssertEqual(SpokenText.forVoice("At St Mary's Roundabout, take the 2nd exit"), "At Saint Mary's Roundabout, take the 2nd exit")
         XCTAssertEqual(SpokenText.forVoice("Merge onto A33 N"), "Merge onto A33 north")
         XCTAssertEqual(SpokenText.forVoice("Merge onto A57(M)"), "Merge onto A57 M")
+        XCTAssertEqual(SpokenText.forVoice("Turn left onto Cowbridge Road E"), "Turn left onto Cowbridge Road East")
+        XCTAssertEqual(SpokenText.forVoice("Continue onto Waterloo Brg"), "Continue onto Waterloo Bridge")
+        XCTAssertEqual(SpokenText.forVoice("Turn right onto Holloway Rd W."), "Turn right onto Holloway Road West.")
         XCTAssertEqual(SpokenText.forVoice("Turn left onto Princes St. Then turn right"), "Turn left onto Princes Street. Then turn right")
         XCTAssertEqual(SpokenText.forVoice("Starting route. Head toward Highfield Rd."), "Starting route. Head toward Highfield Road.")
         // Words that only start like a short form stay as they are.

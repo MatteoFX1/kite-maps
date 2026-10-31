@@ -12,7 +12,7 @@ public enum SpokenText {
         ("Dr", "Drive"), ("Pl", "Place"), ("Cres", "Crescent"), ("Cl", "Close"), ("Gdns", "Gardens"),
         ("Sq", "Square"), ("Hwy", "Highway"), ("Pkwy", "Parkway"), ("Blvd", "Boulevard"), ("Ct", "Court"),
         ("Gr", "Grove"), ("Tce", "Terrace"), ("Terr", "Terrace"), ("Rdbt", "roundabout"), ("Rbt", "roundabout"),
-        ("Jct", "junction"), ("Nr", "near"), ("Ctr", "Centre"), ("Ind Est", "Industrial Estate"),
+        ("Jct", "junction"), ("Brg", "Bridge"), ("Nr", "near"), ("Ctr", "Centre"), ("Ind Est", "Industrial Estate"),
         ("So'ton", "Southampton"), ("Soton", "Southampton"), ("Pompey", "Portsmouth"),
     ]
 
@@ -32,6 +32,11 @@ public enum SpokenText {
         // "N", "S", "E", "W" after a road number: "A33 N" is "A33 north".
         for (d, w) in [("N", "north"), ("S", "south"), ("E", "east"), ("W", "west")] {
             s = s.replacingOccurrences(of: "(?<=\\d) \(d)(?![\\p{L}'])", with: " \(w)", options: .regularExpression)
+        }
+        // "Cowbridge Road E" is Cowbridge Road East: a lone compass letter after the road's own word.
+        for (d, w) in [("N", "North"), ("S", "South"), ("E", "East"), ("W", "West")] {
+            s = s.replacingOccurrences(of: "(?<=(?:Road|Street|Avenue|Lane|Way|Drive|Bridge|Hill|Parade) )\(d)(?![\\p{L}'])",
+                                       with: w, options: .regularExpression)
         }
         return s
     }

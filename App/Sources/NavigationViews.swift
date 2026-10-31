@@ -777,13 +777,13 @@ struct RouteWazeSummary: View {
     }
 }
 
-/** The heat map's key, top left of the map while it's on: blue for a few police reports, red for many. */
+/** The heat map's key, top left of the map while it's on: yellow for a few police reports, red for many. */
 struct HeatLegend: View {
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundColor(Color(hex: 0xE91E63))
+            Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundColor(Color(hex: 0xDC2626))
             Text("Police").font(.caption2.weight(.semibold))
-            LinearGradient(colors: [Color(hex: 0x4285F4), Color(hex: 0x7C4DFF), Color(hex: 0xE91E63), Color(hex: 0xD50000)],
+            LinearGradient(colors: [Color(hex: 0xFFD600), Color(hex: 0xF97316), Color(hex: 0xDC2626)],
                            startPoint: .leading, endPoint: .trailing)
                 .frame(width: 54, height: 6).clipShape(Capsule())
             Text("often").font(.caption2).foregroundColor(.secondary)

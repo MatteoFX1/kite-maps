@@ -742,6 +742,8 @@ final class Navigator: ObservableObject {
         recentFixes.removeAll { loc.timestamp.timeIntervalSince($0.timestamp) > 20 }
     }
 
+    private func latLng(_ loc: CLLocation) -> LatLng { LatLng(loc.coordinate.latitude, loc.coordinate.longitude) }
+
     private func reroute(from loc: CLLocation, quiet: Bool = false) {
         Self.trace.info("reroute from \(String(format: "%.5f,%.5f", loc.coordinate.latitude, loc.coordinate.longitude), privacy: .public) heading \(self.heading(loc).map { Int($0) } ?? -1)")
         rerouting = true
@@ -752,7 +754,10 @@ final class Navigator: ObservableObject {
                 toldNoSignal = true
                 speak("No signal. Keep going, and Kite will find a new route when it's back.")
             }
-        } else if !quiet && Date().timeIntervalSince(rerouteSpokenAt) > 45 {
+        } else if !quiet && Date().timeIntervalSince(rerouteSpokenAt) > 45
+                    // Right by the destination a new route is only a few metres: saying "Rerouting"
+                    // just before "You have arrived" (a simulated drive to Cardiff Castle) is noise.
+                    && latLng(loc).distance(to: destination.location) > 150 {
             rerouteSpokenAt = Date()
             speak("Rerouting.")
         }

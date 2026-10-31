@@ -19,6 +19,13 @@ the middle number for big milestones.
   stop one day. Thanks to Ausbloke's fork for finding it.
 - **Waze is asked less often while you drive:** the map was asking several times a second; now
   at most every 90 seconds while navigating, and every 5 seconds while browsing.
+- **The heat map is softer and its key matches:** close in it no longer tints whole streets
+  orange in big squares, and the little key now shows the same yellow-to-red as the map (it
+  showed blue to red).
+- **No "Rerouting" just before "You have arrived":** a last-second reroute right by the
+  destination stays quiet.
+- **Road names read out in full:** "Waterloo Brg" is said "Waterloo Bridge", and "Cowbridge Road E"
+  is "Cowbridge Road East".
 - **One police warning, not two:** the same police car listed twice by Waze was said twice.
 - **The drive time on a place card matches the route:** it said "23 min drive" for a 29 min
   drive, as it came from the open router without traffic. It now asks the same way the

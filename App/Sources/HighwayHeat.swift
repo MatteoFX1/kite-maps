@@ -39,7 +39,9 @@ final class HighwayHeat {
     /** How the last ask went, for Settings: true when tiles came back. */
     private(set) var lastOK: Bool?
 
-    static let minZoom = 5, maxZoom = 12
+    // Past zoom 10 the server's tiles are blocky squares that tint whole streets orange (seen in
+    // London on the simulator), so closer in Kite stretches the zoom 10 tiles smoothly instead.
+    static let minZoom = 5, maxZoom = 10
 
     nonisolated static func url(_ t: Tile) -> URL {
         URL(string: "https://tiles.cmbe.cc/heat_map/get/\(t.z)/\(t.x)/\(t.y).webp")!
@@ -102,9 +104,9 @@ final class HighwayHeat {
         var rgba = [UInt8](repeating: 0, count: w * h * 4)
         for i in 0..<(w * h) {
             let v = Double(grey[i])
-            guard v > 8 else { continue }
+            guard v > 16 else { continue }
             // 0 → yellow (255, 214, 0), 0.5 → orange (249, 115, 22), 1 → red (220, 38, 38).
-            let t = min((v - 8) / 170, 1)
+            let t = min((v - 16) / 170, 1)
             let r: Double, g: Double, b: Double
             if t < 0.5 {
                 let k = t / 0.5
@@ -113,7 +115,7 @@ final class HighwayHeat {
                 let k = (t - 0.5) / 0.5
                 r = 249 + (220 - 249) * k; g = 115 + (38 - 115) * k; b = 22 + (38 - 22) * k
             }
-            let a = 0.25 + 0.55 * t
+            let a = 0.12 + 0.6 * t
             // Premultiplied.
             rgba[i * 4] = UInt8(r * a); rgba[i * 4 + 1] = UInt8(g * a); rgba[i * 4 + 2] = UInt8(b * a)
             rgba[i * 4 + 3] = UInt8(a * 255)
@@ -156,7 +158,7 @@ final class HighwayHeat {
                 if let img = Self.colour(data) { fresh[t] = img; self.remember(t.key, img) }
             }
             if !want.isEmpty { self.lastOK = !fresh.isEmpty }
-            Self.trace.info("heat map: \(fresh.count) of \(want.count) tiles at zoom \(want.first?.z ?? 0)")
+            if !want.isEmpty { Self.trace.info("heat map: \(fresh.count) of \(want.count) tiles at zoom \(want.first?.z ?? 0)") }
             guard let map, let style = map.style else { return }
             self.show(fresh, in: style, below: below)
         }
@@ -176,7 +178,7 @@ final class HighwayHeat {
             let src = MLNImageSource(identifier: id, coordinateQuad: Self.quad(t), image: img)
             style.addSource(src)
             let layer = MLNRasterStyleLayer(identifier: id, source: src)
-            layer.rasterOpacity = NSExpression(forConstantValue: 0.8)
+            layer.rasterOpacity = NSExpression(forConstantValue: 0.75)
             layer.rasterFadeDuration = NSExpression(forConstantValue: 0)
             if let under = style.layer(withIdentifier: below) { style.insertLayer(layer, below: under) } else { style.addLayer(layer) }
         }
