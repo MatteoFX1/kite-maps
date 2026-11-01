@@ -63,8 +63,9 @@ fun DirectionsOverlay(model: AppModel) {
     val statusTop = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val d = model.directions
+        val full = maxHeight
         Box(Modifier.align(Alignment.BottomCenter)) {
-            BottomSheet(model.detent, { model.detent = it }, maxHeight, if (d?.transit == true) 200.dp else 300.dp,
+            BottomSheet(model.detent, { model.detent = it }, full, if (d?.transit == true) 200.dp else 300.dp,
                 topClearance = statusTop + 6.dp + cardHeight + 16.dp,
                 header = { TripHeader(model) }, content = { TripBody(model) })
         }

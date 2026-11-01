@@ -79,12 +79,13 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val h = maxHeight
+        val w = maxWidth
         // The road you're on, just under the arrow.
         val road = nav.currentRoad
         if (nav.following && !nav.arrived && !chipShowing && road != null) {
             Box(Modifier.fillMaxWidth().offset(y = NavGlide.carY(h.value).dp + 50.dp - 18.dp), contentAlignment = Alignment.TopCenter) {
                 Text(road, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = maxWidth - 240.dp).height(36.dp).clip(CircleShape)
+                    modifier = Modifier.widthIn(max = w - 240.dp).height(36.dp).clip(CircleShape)
                         .background(hex(0x0F172A).copy(alpha = 0.92f)).border(1.5.dp, hex(0x2DD4BF).copy(alpha = 0.8f), CircleShape)
                         .padding(horizontal = 14.dp).wrapContentHeight(Alignment.CenterVertically))
             }
