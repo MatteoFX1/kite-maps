@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package app.kite.ui
 
 import androidx.compose.animation.AnimatedVisibility
@@ -320,7 +322,7 @@ fun StreetViewTile(model: AppModel, place: Place, height: Dp) {
             AsyncImage(StreetView.thumbnailUrl(p, heading), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().background(secondaryText.copy(alpha = 0.15f)))
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.55f))))
             Row(Modifier.align(Alignment.BottomStart).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.ThreeSixty, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.Streetview, null, tint = Color.White, modifier = Modifier.size(16.dp))
                 Text("Street View", fontSize = KType.caption, fontWeight = FontWeight.SemiBold, color = Color.White)
             }
         }

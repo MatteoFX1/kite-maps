@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package app.kite.ui
 
 import androidx.compose.animation.core.Spring
@@ -57,6 +59,8 @@ fun BottomSheet(
     onDetent: (SheetDetent) -> Unit,
     containerHeight: Dp,
     peekHeight: Dp = 230.dp,
+    /** Room kept clear above the sheet at full height (the directions from/to card). */
+    topClearance: Dp = 0.dp,
     header: @Composable ColumnScope.() -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -67,7 +71,7 @@ fun BottomSheet(
         when (d) {
             SheetDetent.PEEK -> peekHeight.toPx()
             SheetDetent.HALF -> containerHeight.toPx() * 0.46f
-            SheetDetent.FULL -> containerHeight.toPx() * 0.94f
+            SheetDetent.FULL -> if (topClearance > 0.dp) containerHeight.toPx() - topClearance.toPx() else containerHeight.toPx() * 0.94f
         }
     }
     var drag by remember { mutableFloatStateOf(0f) }

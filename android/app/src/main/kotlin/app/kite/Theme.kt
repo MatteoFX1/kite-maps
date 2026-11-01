@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package app.kite
 
 import androidx.compose.foundation.background
@@ -291,8 +293,8 @@ fun PlaceMetaLine(place: Place, showStars: Boolean = true, here: LatLng? = null)
 fun maneuverIcon(t: ManeuverType): ImageVector = when (t) {
     ManeuverType.DEPART, ManeuverType.STRAIGHT, ManeuverType.UNKNOWN -> Icons.Filled.ArrowUpward
     ManeuverType.ARRIVE -> Icons.Filled.Place
-    ManeuverType.TURN_LEFT -> Icons.AutoMirrored.Filled.TurnLeft
-    ManeuverType.TURN_RIGHT -> Icons.AutoMirrored.Filled.TurnRight
+    ManeuverType.TURN_LEFT -> Icons.Filled.TurnLeft
+    ManeuverType.TURN_RIGHT -> Icons.Filled.TurnRight
     ManeuverType.SLIGHT_LEFT, ManeuverType.KEEP_LEFT, ManeuverType.RAMP_LEFT, ManeuverType.FORK_LEFT -> Icons.Filled.TurnSlightLeft
     ManeuverType.SLIGHT_RIGHT, ManeuverType.KEEP_RIGHT, ManeuverType.RAMP_RIGHT, ManeuverType.FORK_RIGHT -> Icons.Filled.TurnSlightRight
     ManeuverType.SHARP_LEFT -> Icons.Filled.TurnSharpLeft
