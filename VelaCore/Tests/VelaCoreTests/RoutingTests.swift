@@ -305,6 +305,16 @@ final class RoutingTests: XCTestCase {
     }
 }
 
+final class SteadySuggestionTests: XCTestCase {
+    func testRowsStayPut() {
+        let old = ["roundhay park", "roundhay park photos", "roundhay park leeds"]
+        let new = ["roundhay park photos", "roundhay park", "roundhay park cafe", "roundhay park leeds"]
+        XCTAssertEqual(SuggestParser.steady(new, after: old, key: { $0 }),
+                       ["roundhay park", "roundhay park photos", "roundhay park leeds", "roundhay park cafe"])
+        XCTAssertEqual(SuggestParser.steady(["a", "b"], after: ["x", "y", "b"], key: { $0 }), ["a", "b"])
+    }
+}
+
 final class SpokenTextTests: XCTestCase {
     func testRoadNamesSaidInFull() {
         XCTAssertEqual(SpokenText.forVoice("Take the exit toward Stoneham Wy."), "Take the exit toward Stoneham Way.")
@@ -315,6 +325,16 @@ final class SpokenTextTests: XCTestCase {
         XCTAssertEqual(SpokenText.forVoice("At St Mary's Roundabout, take the 2nd exit"), "At Saint Mary's Roundabout, take the 2nd exit")
         XCTAssertEqual(SpokenText.forVoice("Merge onto A33 N"), "Merge onto A33 north")
         XCTAssertEqual(SpokenText.forVoice("Merge onto A57(M)"), "Merge onto A57 M")
+        XCTAssertEqual(SpokenText.forVoice("Turn left onto Cowbridge Road E"), "Turn left onto Cowbridge Road East")
+        XCTAssertEqual(SpokenText.forVoice("Continue onto Waterloo Brg"), "Continue onto Waterloo Bridge")
+        XCTAssertEqual(SpokenText.forVoice("Turn left onto W Approach Rd"), "Turn left onto West Approach Road")
+        XCTAssertEqual(SpokenText.forVoice("Turn left onto Copperas Hl"), "Turn left onto Copperas Hill")
+        XCTAssertEqual(SpokenText.forScreen("Slight right to stay on W Approach Rd"), "Slight right to stay on West Approach Rd")
+        XCTAssertEqual(SpokenText.forScreen("Turn left onto Cowbridge Rd E"), "Turn left onto Cowbridge Rd East")
+        XCTAssertEqual(SpokenText.forScreen("Merge onto A33 N"), "Merge onto A33 N")
+        XCTAssertEqual(SpokenText.forVoice("Slight right to stay on W Approach Road"), "Slight right to stay on West Approach Road")
+        XCTAssertEqual(SpokenText.forVoice("Merge onto A33 N Then keep left"), "Merge onto A33 north Then keep left")
+        XCTAssertEqual(SpokenText.forVoice("Turn right onto Holloway Rd W."), "Turn right onto Holloway Road West.")
         XCTAssertEqual(SpokenText.forVoice("Turn left onto Princes St. Then turn right"), "Turn left onto Princes Street. Then turn right")
         XCTAssertEqual(SpokenText.forVoice("Starting route. Head toward Highfield Rd."), "Starting route. Head toward Highfield Road.")
         // Words that only start like a short form stay as they are.

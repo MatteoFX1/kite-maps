@@ -12,7 +12,7 @@ public enum SpokenText {
         ("Dr", "Drive"), ("Pl", "Place"), ("Cres", "Crescent"), ("Cl", "Close"), ("Gdns", "Gardens"),
         ("Sq", "Square"), ("Hwy", "Highway"), ("Pkwy", "Parkway"), ("Blvd", "Boulevard"), ("Ct", "Court"),
         ("Gr", "Grove"), ("Tce", "Terrace"), ("Terr", "Terrace"), ("Rdbt", "roundabout"), ("Rbt", "roundabout"),
-        ("Jct", "junction"), ("Nr", "near"), ("Ctr", "Centre"), ("Ind Est", "Industrial Estate"),
+        ("Jct", "junction"), ("Brg", "Bridge"), ("Hl", "Hill"), ("Nr", "near"), ("Ctr", "Centre"), ("Ind Est", "Industrial Estate"),
         ("So'ton", "Southampton"), ("Soton", "Southampton"), ("Pompey", "Portsmouth"),
     ]
 
@@ -32,6 +32,25 @@ public enum SpokenText {
         // "N", "S", "E", "W" after a road number: "A33 N" is "A33 north".
         for (d, w) in [("N", "north"), ("S", "south"), ("E", "east"), ("W", "west")] {
             s = s.replacingOccurrences(of: "(?<=\\d) \(d)(?![\\p{L}'])", with: " \(w)", options: .regularExpression)
+        }
+        s = compass(s)
+        return s
+    }
+
+    /** For the screen: Google's short "Rd" and "St" are fine to read, but "W Approach Rd" isn't. */
+    public static func forScreen(_ text: String) -> String { compass(text) }
+
+    /** A lone compass letter in a road's name, written out: "W Approach Rd", "Cowbridge Road E". */
+    static func compass(_ text: String) -> String {
+        var s = text
+        // "Cowbridge Road E" is Cowbridge Road East: a lone compass letter after the road's own word.
+        for (d, w) in [("N", "North"), ("S", "South"), ("E", "East"), ("W", "West")] {
+            s = s.replacingOccurrences(of: "(?<=(?:Road|Rd|Street|St|Avenue|Ave|Lane|Ln|Way|Drive|Dr|Bridge|Hill|Parade) )\(d)(?![\\p{L}'])",
+                                       with: w, options: .regularExpression)
+        }
+        // "W Approach Road" is West Approach Road: a lone compass letter starting a name.
+        for (d, w) in [("N", "North"), ("S", "South"), ("E", "East"), ("W", "West")] {
+            s = s.replacingOccurrences(of: "(?<![\\p{L}\\d'.])(?<!\\d )\(d)(?= \\p{Lu}\\p{Ll})", with: w, options: .regularExpression)
         }
         return s
     }

@@ -314,7 +314,7 @@ struct InstructionBanner: View {
     static func headline(_ m: Maneuver?) -> String {
         guard let m else { return "Follow the route" }
         if m.type == .roundabout, let n = m.exit { return "\(ordinal(n)) exit" }
-        return m.instruction
+        return SpokenText.forScreen(m.instruction)
     }
 
     static func ordinal(_ n: Int) -> String {
@@ -522,14 +522,39 @@ struct ArrivedCard: View {
     @State private var parked = false
 
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "flag.checkered").font(.system(size: 38, weight: .bold))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("You've arrived").font(.system(size: 26, weight: .heavy))
-                Text(name).font(.system(size: 18, weight: .semibold)).lineLimit(1)
-                if let note { Text(note).font(.subheadline).opacity(0.85).lineLimit(2) }
+        // The whole card on one row when it fits; on a narrow screen the flag goes first, then the
+        // buttons move under the words, so "You've arrived" and the name are never cut short.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) { flag; words(fit: true); Spacer(minLength: 0); buttons }
+            HStack(spacing: 14) { words(fit: true); Spacer(minLength: 0); buttons }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 14) { flag; words(fit: false) }
+                HStack(spacing: 14) { Spacer(minLength: 0); buttons }
             }
-            Spacer()
+        }
+        .foregroundColor(.white)
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Vela.navGreen))
+        .shadow(color: .black.opacity(0.4), radius: 12, y: 5)
+    }
+
+    private var flag: some View {
+        Image(systemName: "flag.checkered").font(.system(size: 38, weight: .bold))
+    }
+
+    /** [fit]: at full width or not at all, so the row is only used when nothing is cut short. */
+    private func words(fit: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("You've arrived").font(.system(size: 26, weight: .heavy)).lineLimit(1).minimumScaleFactor(fit ? 1 : 0.7)
+                .fixedSize(horizontal: fit, vertical: false)
+            Text(name).font(.system(size: 18, weight: .semibold)).lineLimit(fit ? 1 : 3)
+                .fixedSize(horizontal: fit, vertical: !fit)
+            if let note { Text(note).font(.subheadline).opacity(0.85).lineLimit(2) }
+        }
+    }
+
+    private var buttons: some View {
+        HStack(spacing: 14) {
             if let onPark, !parked {
                 Button { onPark(); parked = true } label: {
                     Image(systemName: "parkingsign").font(.system(size: 22, weight: .bold))
@@ -539,15 +564,11 @@ struct ArrivedCard: View {
                 .accessibilityLabel("Save parking")
             }
             Button(action: done) {
-                Text("Done").font(.system(size: 20, weight: .bold))
-                    .padding(.horizontal, 20).frame(height: 56)
+                Text("Done").font(.system(size: 20, weight: .bold)).lineLimit(1).fixedSize()
+                    .padding(.horizontal, 18).frame(height: 56)
                     .background(Capsule().fill(Color.white.opacity(0.22)))
             }
         }
-        .foregroundColor(.white)
-        .padding(18)
-        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Vela.navGreen))
-        .shadow(color: .black.opacity(0.4), radius: 12, y: 5)
     }
 }
 
@@ -756,13 +777,13 @@ struct RouteWazeSummary: View {
     }
 }
 
-/** The heat map's key, top left of the map while it's on: blue for a few police reports, red for many. */
+/** The heat map's key, top left of the map while it's on: yellow for a few police reports, red for many. */
 struct HeatLegend: View {
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundColor(Color(hex: 0xE91E63))
+            Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundColor(Color(hex: 0xDC2626))
             Text("Police").font(.caption2.weight(.semibold))
-            LinearGradient(colors: [Color(hex: 0x4285F4), Color(hex: 0x7C4DFF), Color(hex: 0xE91E63), Color(hex: 0xD50000)],
+            LinearGradient(colors: [Color(hex: 0xFFD600), Color(hex: 0xF97316), Color(hex: 0xDC2626)],
                            startPoint: .leading, endPoint: .trailing)
                 .frame(width: 54, height: 6).clipShape(Capsule())
             Text("often").font(.caption2).foregroundColor(.secondary)
