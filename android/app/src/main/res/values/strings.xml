@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kite</string>
+    <string name="shortcut_home">Go home</string>
+    <string name="shortcut_work">Go to work</string>
+    <string name="shortcut_car">Find my car</string>
+</resources>
