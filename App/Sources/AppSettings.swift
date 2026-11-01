@@ -103,7 +103,8 @@ final class AppSettings: ObservableObject {
             ?? [.police, .accident, .hazard, .weather]
         wazeOnMap = d.object(forKey: "wazeOnMap") as? Bool ?? true
         wazeVoice = d.object(forKey: "wazeVoice") as? Bool ?? true
-        wazeHeatmap = d.bool(forKey: "wazeHeatmap")
+        // On from the start, browsing and driving (Matteo: "heat map always on").
+        wazeHeatmap = d.object(forKey: "wazeHeatmap") as? Bool ?? true
         wazeMaxAge = d.object(forKey: "wazeMaxAge") as? Int ?? 120
         policeRisk = d.object(forKey: "policeRisk") as? Bool ?? true
         policeAircraft = d.bool(forKey: "policeAircraft")

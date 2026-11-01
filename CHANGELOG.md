@@ -19,6 +19,8 @@ the middle number for big milestones.
   stop one day. Thanks to Ausbloke's fork for finding it.
 - **Waze is asked less often while you drive:** the map was asking several times a second; now
   at most every 90 seconds while navigating, and every 5 seconds while browsing.
+- **The police heat map is on from the start**, on the map and while you drive (you can still
+  turn it off in Settings).
 - **The heat map is softer and its key matches:** close in it no longer tints whole streets
   orange in big squares, and fades further as you zoom into a busy city centre, and the little key now shows the same yellow-to-red as the map (it
   showed blue to red).
