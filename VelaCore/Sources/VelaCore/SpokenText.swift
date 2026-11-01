@@ -33,9 +33,19 @@ public enum SpokenText {
         for (d, w) in [("N", "north"), ("S", "south"), ("E", "east"), ("W", "west")] {
             s = s.replacingOccurrences(of: "(?<=\\d) \(d)(?![\\p{L}'])", with: " \(w)", options: .regularExpression)
         }
+        s = compass(s)
+        return s
+    }
+
+    /** For the screen: Google's short "Rd" and "St" are fine to read, but "W Approach Rd" isn't. */
+    public static func forScreen(_ text: String) -> String { compass(text) }
+
+    /** A lone compass letter in a road's name, written out: "W Approach Rd", "Cowbridge Road E". */
+    static func compass(_ text: String) -> String {
+        var s = text
         // "Cowbridge Road E" is Cowbridge Road East: a lone compass letter after the road's own word.
         for (d, w) in [("N", "North"), ("S", "South"), ("E", "East"), ("W", "West")] {
-            s = s.replacingOccurrences(of: "(?<=(?:Road|Street|Avenue|Lane|Way|Drive|Bridge|Hill|Parade) )\(d)(?![\\p{L}'])",
+            s = s.replacingOccurrences(of: "(?<=(?:Road|Rd|Street|St|Avenue|Ave|Lane|Ln|Way|Drive|Dr|Bridge|Hill|Parade) )\(d)(?![\\p{L}'])",
                                        with: w, options: .regularExpression)
         }
         // "W Approach Road" is West Approach Road: a lone compass letter starting a name.

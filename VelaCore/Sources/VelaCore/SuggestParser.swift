@@ -17,6 +17,23 @@ public enum SuggestParser {
         }
     }
 
+    /**
+     * The new list, with every row that's still there kept on the line it was on: suggestions come
+     * in as you type, and a list that reshuffles under your finger opens the one below the one you
+     * tapped ("roundhay park" opened "roundhay park photos").
+     */
+    public static func steady<T>(_ new: [T], after old: [T], key: (T) -> String) -> [T] {
+        let newKeys = Set(new.map(key))
+        var slots = [T?](repeating: nil, count: new.count)
+        var placed = Set<String>()
+        for (i, o) in old.enumerated() where i < new.count && newKeys.contains(key(o)) {
+            slots[i] = new.first { key($0) == key(o) }
+            placed.insert(key(o))
+        }
+        var rest = new.filter { !placed.contains(key($0)) }.makeIterator()
+        return slots.compactMap { $0 ?? rest.next() }
+    }
+
     static func parse(_ body: String, near: LatLng?) -> Result {
         guard let payload = unwrap(body), let root = GoogleJSON.parse(payload),
               let rows = arr(at(root, 0, 1)) else { return Result() }

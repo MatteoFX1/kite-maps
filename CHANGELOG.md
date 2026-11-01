@@ -29,6 +29,14 @@ the middle number for big milestones.
 - **"In 250 yards, your destination is ahead"** instead of "In 250 yards, you have arrived".
 - **Search puts the nearby place first:** "Covent Garden Market" came up in Canada before London,
   in the results and in the suggestions while you type.
+- **The turn banner writes compass letters out:** "W Approach Rd" reads "West Approach Rd".
+- **Search suggestions stay put while you type:** a row no longer moves under your finger as
+  more suggestions arrive, so you open the one you tapped.
+- **Places off the road end the trip properly:** a pin in a park, on a pier or under a motorway
+  counts as reached when you get near it or park within 150 m, instead of sending you round the
+  block again and again.
+- **Quieter on phone calls:** drivers' reports, police hotspots and police aircraft show on
+  screen but aren't spoken over your call. Speed cameras are still said.
 - **No old turns while a new route loads:** after a wrong turn, Kite could still read out a turn
   from the route you'd just left.
 - **One police warning, not two:** the same police car listed twice by Waze was said twice.

@@ -358,7 +358,7 @@ struct StepsList: View {
                         .font(.system(size: 22, weight: .bold))
                         .frame(width: 30)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(m.instruction).font(.system(size: 18, weight: .medium))
+                        Text(SpokenText.forScreen(m.instruction)).font(.system(size: 18, weight: .medium))
                         if let lane = m.laneHint { Text(lane).font(.subheadline).foregroundColor(.secondary) }
                         if m.distanceMeters > 0 {
                             Text(Fmt.distance(m.distanceMeters)).font(.subheadline).foregroundColor(.secondary)

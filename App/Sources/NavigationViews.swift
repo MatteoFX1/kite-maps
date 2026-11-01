@@ -314,7 +314,7 @@ struct InstructionBanner: View {
     static func headline(_ m: Maneuver?) -> String {
         guard let m else { return "Follow the route" }
         if m.type == .roundabout, let n = m.exit { return "\(ordinal(n)) exit" }
-        return m.instruction
+        return SpokenText.forScreen(m.instruction)
     }
 
     static func ordinal(_ n: Int) -> String {

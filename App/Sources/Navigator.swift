@@ -190,16 +190,20 @@ final class Navigator: ObservableObject {
         progress = p
         // Parked in a car park short of the pin, or on the far side of the building: that's
         // arriving too, or the trip (and full-power GPS) would never end.
-        if loc.speed >= 0 && loc.speed < 1, p.remainingMeters < 150 {
+        // The pin itself counts too, not only the route's end: a place in a park, out on a pier or
+        // under a motorway has its route end on some road nearby, and simulated drives to Exeter
+        // services and Spaghetti Junction went round in circles next to the pin.
+        let toPin = latLng(loc).distance(to: destination.location)
+        if loc.speed >= 0 && loc.speed < 1, p.remainingMeters < 150 || toPin < 150 {
             if stoppedNearEnd == nil { stoppedNearEnd = loc.timestamp }
         } else {
             stoppedNearEnd = nil
         }
         // Off the road into a car park (or right at the end): 20 seconds stopped. Still on the road
         // short of it, it could be a red light or a queue, so a minute and a half.
-        let offRoad = p.offsetMeters > 20 || p.remainingMeters < 40
+        let offRoad = p.offsetMeters > 20 || p.remainingMeters < 40 || toPin < 60
         let parked = stoppedNearEnd.map { loc.timestamp.timeIntervalSince($0) > (offRoad ? 20 : 90) } ?? false
-        if p.arrived || parked {
+        if p.arrived || parked || (route.mode == .drive && toPin < 40) {
             arrived = true
             speak("You have arrived at \(destination.name)" + (destinationSide.map { ", on the \($0)." } ?? "."))
             // Parked, the phone goes in a pocket: let the screen sleep, and a few minutes on, end
@@ -215,7 +219,8 @@ final class Navigator: ObservableObject {
         // wrong turn, so no "Rerouting" every few seconds until the car has reached the route once
         // (or has clearly gone another way).
         if p.offsetMeters < 40 { joinedRoute = true }
-        if p.offRoute && !rerouting && (joinedRoute || p.offsetMeters > 400) && Date().timeIntervalSince(lastReroute) > 8 {
+        // Right by the pin, a new route is only a U-turn round the block: let the car park instead.
+        if p.offRoute && !rerouting && toPin > 150 && (joinedRoute || p.offsetMeters > 400) && Date().timeIntervalSince(lastReroute) > 8 {
             reroute(from: loc)
             return
         }
@@ -477,7 +482,9 @@ final class Navigator: ObservableObject {
         wazeAhead = WazeAhead(alert: next.alert, meters: ahead, startMeters: max(ahead, 1))
         wazeWarned += 1
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
-        if s.wazeVoice {
+        // On a phone call drivers' reports stay on screen only: the voice would talk over the
+        // call (speed cameras, which mean a fine, are still said).
+        if s.wazeVoice && !onCall {
             chime()
             // "Police reported ahead, in 400 yards."
             speak("\(String(next.alert.spoken.dropLast())), in \(Fmt.spokenDistance(ahead)).")
@@ -500,7 +507,7 @@ final class Navigator: ObservableObject {
         policeRisk = score
         // Like Highway Radar's hot zone sound: once when it turns high, at most every 10 minutes. Only
         // for a place police keep being seen; a live report already has its own warning.
-        if PoliceRisk.level(score) == .high, was != .high, s.wazeVoice, Date().timeIntervalSince(riskSpokenAt) > 600,
+        if PoliceRisk.level(score) == .high, was != .high, s.wazeVoice, !onCall, Date().timeIntervalSince(riskSpokenAt) > 600,
            live == 0 || PoliceRisk.level(PoliceRisk.score(ahead: ahead, past: riskPast ?? [], live: 0)) == .high {
             riskSpokenAt = Date()
             speak("Police hotspot ahead.")
@@ -527,7 +534,7 @@ final class Navigator: ObservableObject {
                 self.spokenAircraft.insert(a.id)
                 UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 self.chime()
-                self.speak("\(a.title) nearby.")
+                if !self.onCall { self.speak("\(a.title) nearby.") }
             }
         }
     }

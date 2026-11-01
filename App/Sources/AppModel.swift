@@ -246,6 +246,9 @@ final class AppModel: ObservableObject {
             if let user {
                 r.places = r.places.map { var p = $0; p.distanceMeters = user.distance(to: p.location); return p }
             }
+            let was = suggestions
+            r.places = SuggestParser.steady(r.places, after: was.places, key: \.id)
+            r.queries = SuggestParser.steady(r.queries, after: was.queries, key: { $0 })
             suggestions = r
         }
     }
