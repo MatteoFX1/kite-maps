@@ -37,6 +37,18 @@ object DemoScript {
         delay(6000)
         when (step) {
             "browse", "icons" -> return
+            "puckflat", "puckpitch" -> {
+                // The car arrow alone on the map, to check it draws the same flat and tilted.
+                val m = model.map ?: return
+                val at = org.maplibre.android.geometry.LatLng(51.4543, -0.9731)
+                m.moveCamera(CameraUpdateFactory.newCameraPosition(org.maplibre.android.camera.CameraPosition.Builder()
+                    .target(at).zoom(17.0).tilt(if (step == "puckpitch") 50.0 else 0.0).bearing(30.0).build()))
+                val style = m.style ?: return
+                (style.getSource(NavGlide.PUCK) as? org.maplibre.android.style.sources.GeoJsonSource)?.setGeoJson(
+                    org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.Point.fromLngLat(at.longitude, at.latitude))
+                        .apply { addNumberProperty("bearing", 30.0) })
+                return
+            }
             "welcome" -> { st.welcomed = false; return }
             "wazeintro" -> { st.welcomed = true; st.noGoogle = false; st.wazeAsked = false; return }
             "layers" -> { model.showLayers = true; return }

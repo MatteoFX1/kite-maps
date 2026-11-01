@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
         Connectivity.start(applicationContext)
         LocationService.refreshPermission()
         Voice.warmUp()
+        WazeWeb.install(this)
         handle(intent)
         setContent { KiteTheme { KiteScreen(model, this) } }
     }

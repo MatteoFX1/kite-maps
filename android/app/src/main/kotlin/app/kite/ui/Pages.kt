@@ -159,7 +159,10 @@ private fun SavedRow(p: Place, icon: ImageVector, color: Color, distance: String
 
 private enum class SettingsScreen(val title: String) {
     MENU("Settings"), DRIVING("Voice & driving"), CAMERAS("Cameras & speed"), WAZE("Road alerts"), MAP("Map & display"),
-    PLACES("My places"), PRIVACY("Privacy"), ABOUT("About")
+    PLACES("My places"), PRIVACY("Privacy"), ABOUT("About"), DIAGNOSTICS("Diagnostics");
+
+    /** Where the back button goes. */
+    val parent: SettingsScreen get() = if (this == DIAGNOSTICS) ABOUT else MENU
 }
 
 /** The Settings page of the dock: a short menu like Waze's, each row opening a page with its switches. */
@@ -173,10 +176,10 @@ fun SettingsPage(model: AppModel) {
                 Text("Settings", fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, color = primaryText, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 8.dp))
             } else {
                 Box(Modifier.fillMaxWidth().height(56.dp)) {
-                    Row(Modifier.align(Alignment.CenterStart).padding(start = 4.dp).clip(RoundedCornerShape(8.dp)).tap { screen = SettingsScreen.MENU }
+                    Row(Modifier.align(Alignment.CenterStart).padding(start = 4.dp).clip(RoundedCornerShape(8.dp)).tap { screen = screen.parent }
                         .padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Vela.accentText(dark))
-                        Text("Settings", fontSize = KType.body, color = Vela.accentText(dark), modifier = Modifier.padding(start = 4.dp))
+                        Text(screen.parent.title, fontSize = KType.body, color = Vela.accentText(dark), modifier = Modifier.padding(start = 4.dp))
                     }
                     Text(screen.title, fontSize = KType.headline, fontWeight = FontWeight.SemiBold, color = primaryText, modifier = Modifier.align(Alignment.Center))
                 }
@@ -192,14 +195,15 @@ fun SettingsPage(model: AppModel) {
                         SettingsScreen.MAP -> MapSettings()
                         SettingsScreen.PLACES -> PlacesSettings(model)
                         SettingsScreen.PRIVACY -> PrivacySettings()
-                        SettingsScreen.ABOUT -> AboutSettings()
+                        SettingsScreen.ABOUT -> AboutSettings { screen = SettingsScreen.DIAGNOSTICS }
+                        SettingsScreen.DIAGNOSTICS -> DiagnosticsSettings(model)
                     }
                 }
             }
         }
         KiteDock(model, Modifier.align(Alignment.BottomCenter))
     }
-    BackHandler { if (screen != SettingsScreen.MENU) screen = SettingsScreen.MENU else { model.reloadRoutes(); model.tab = AppTab.MAP } }
+    BackHandler { if (screen != SettingsScreen.MENU) screen = screen.parent else { model.reloadRoutes(); model.tab = AppTab.MAP } }
 }
 
 /** A rounded group of rows, like the iPhone's Settings. */
@@ -357,7 +361,7 @@ private fun PrivacySettings() {
 }
 
 @Composable
-private fun AboutSettings() {
+private fun AboutSettings(openDiagnostics: () -> Unit) {
     val ctx = LocalContext.current
     val dark = LocalDark.current
     @Composable
@@ -378,6 +382,13 @@ private fun AboutSettings() {
         HorizontalDivider()
         Text("Free software under the GPL-3.0. Map © OpenFreeMap, OpenMapTiles, OpenStreetMap contributors. Routing © FOSSGIS OSRM. Imagery © Esri.",
             fontSize = KType.caption, color = secondaryText, modifier = Modifier.padding(14.dp))
+    }
+    SettingsGroup(footer = "Makes a small file to send with a bug report.") {
+        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).tap(openDiagnostics).padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            SettingLabel("Share diagnostics", Icons.Filled.BugReport, 0x64748B, Modifier.weight(1f))
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = secondaryText)
+        }
     }
     SettingsGroup("Thanks to") {
         link("Surveillance cameras, saved-place matching, GPS warnings and diagnostics from Ausbloke's Kite fork", "https://github.com/NotDiscordOfficial/kite-maps")
@@ -424,7 +435,8 @@ private fun WazeSettings() {
         ToggleRow("Use Waze reports", null, 0, s.waze, enabled = !s.noGoogle) { s.waze = it }
     }
     if (s.wazeOn) {
-        SettingsGroup("Connection") {
+        // What the hidden live map page saw, to send to whoever looks into it.
+        SettingsGroup("Connection", footer = Waze.lastStatus?.takeIf { it.code != 200 }?.let { "Details: " + WazeWeb.note }) {
             for ((text, color) in listOf(connection, live)) {
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(color))
