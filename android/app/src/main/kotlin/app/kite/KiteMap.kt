@@ -45,6 +45,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
     }
 
     var dark = true
+        private set
     private var map: MapLibreMap? = null
     private var view: MapView? = null
     private val scope get() = model.scope
@@ -167,7 +168,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
         m.moveCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(f.coord.ml(), 15.0))
     }
 
-    fun setDark(d: Boolean) {
+    fun applyDark(d: Boolean) {
         if (dark == d) return
         dark = d
         repaint()

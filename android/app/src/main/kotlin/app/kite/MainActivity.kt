@@ -85,7 +85,7 @@ fun KiteScreen(model: AppModel, activity: MainActivity) {
         LocationService.onUpdate = { f -> modelUpdate?.invoke(f); kiteMap.pushFix(f) }
         onDispose { LocationService.onUpdate = modelUpdate }
     }
-    LaunchedEffect(dark) { kiteMap.setDark(dark) }
+    LaunchedEffect(dark) { kiteMap.applyDark(dark) }
 
     // Redraw the map's layers whenever anything they show changes.
     LaunchedEffect(Unit) {
