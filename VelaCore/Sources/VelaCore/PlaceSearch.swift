@@ -41,7 +41,7 @@ public enum PlaceSearch {
     static let nearMeters = 100_000.0, farMeters = 300_000.0
 
     /** Results within 100 km keep Google's order but go ahead of any more than 300 km away. */
-    static func nearFirst(_ places: [Place], center: LatLng) -> [Place] {
+    public static func nearFirst(_ places: [Place], center: LatLng) -> [Place] {
         guard let top = places.first, top.location.distance(to: center) > farMeters,
               places.contains(where: { $0.location.distance(to: center) < nearMeters }) else { return places }
         let near = places.filter { $0.location.distance(to: center) <= farMeters }

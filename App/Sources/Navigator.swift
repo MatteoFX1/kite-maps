@@ -610,6 +610,9 @@ final class Navigator: ObservableObject {
     }
 
     private func announce(_ p: RouteTracker.Progress) {
+        // Waiting for a new route, the old one's turns are wrong: a Liverpool drive heard "turn
+        // right onto Whetstone Lane" from the route just left, seconds before the new one came.
+        guard !rerouting else { return }
         guard let i = p.nextIndex, i < route.maneuvers.count else { return }
         let m = route.maneuvers[i]
         let d = p.distanceToNext

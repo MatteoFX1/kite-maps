@@ -318,6 +318,7 @@ final class SpokenTextTests: XCTestCase {
         XCTAssertEqual(SpokenText.forVoice("Turn left onto Cowbridge Road E"), "Turn left onto Cowbridge Road East")
         XCTAssertEqual(SpokenText.forVoice("Continue onto Waterloo Brg"), "Continue onto Waterloo Bridge")
         XCTAssertEqual(SpokenText.forVoice("Turn left onto W Approach Rd"), "Turn left onto West Approach Road")
+        XCTAssertEqual(SpokenText.forVoice("Turn left onto Copperas Hl"), "Turn left onto Copperas Hill")
         XCTAssertEqual(SpokenText.forVoice("Slight right to stay on W Approach Road"), "Slight right to stay on West Approach Road")
         XCTAssertEqual(SpokenText.forVoice("Merge onto A33 N Then keep left"), "Merge onto A33 north Then keep left")
         XCTAssertEqual(SpokenText.forVoice("Turn right onto Holloway Rd W."), "Turn right onto Holloway Road West.")

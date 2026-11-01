@@ -12,7 +12,7 @@ public enum SpokenText {
         ("Dr", "Drive"), ("Pl", "Place"), ("Cres", "Crescent"), ("Cl", "Close"), ("Gdns", "Gardens"),
         ("Sq", "Square"), ("Hwy", "Highway"), ("Pkwy", "Parkway"), ("Blvd", "Boulevard"), ("Ct", "Court"),
         ("Gr", "Grove"), ("Tce", "Terrace"), ("Terr", "Terrace"), ("Rdbt", "roundabout"), ("Rbt", "roundabout"),
-        ("Jct", "junction"), ("Brg", "Bridge"), ("Nr", "near"), ("Ctr", "Centre"), ("Ind Est", "Industrial Estate"),
+        ("Jct", "junction"), ("Brg", "Bridge"), ("Hl", "Hill"), ("Nr", "near"), ("Ctr", "Centre"), ("Ind Est", "Industrial Estate"),
         ("So'ton", "Southampton"), ("Soton", "Southampton"), ("Pompey", "Portsmouth"),
     ]
 

@@ -242,6 +242,7 @@ final class AppModel: ObservableObject {
                 r.places = (try? await Photon.search(q, near: vp.center, limit: 8)) ?? []
             }
             guard !Task.isCancelled else { return }
+            r.places = PlaceSearch.nearFirst(r.places, center: vp.center)
             if let user {
                 r.places = r.places.map { var p = $0; p.distanceMeters = user.distance(to: p.location); return p }
             }
