@@ -4,6 +4,12 @@ import app.kite.core.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.maplibre.android.camera.CameraUpdateFactory
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.dp
 
 /**
  * Screenshot runs only (the build starts Kite with an extra "demo" saying which screen): puts
@@ -30,7 +36,7 @@ object DemoScript {
         val st = AppSettings
         delay(6000)
         when (step) {
-            "browse" -> return
+            "browse", "icons" -> return
             "welcome" -> { st.welcomed = false; return }
             "wazeintro" -> { st.welcomed = true; st.noGoogle = false; st.wazeAsked = false; return }
             "layers" -> { model.showLayers = true; return }
@@ -78,6 +84,19 @@ object DemoScript {
             "camalert" -> model.nav?.showDemoAlerts()
             "wazealert" -> model.nav?.showDemoWaze()
             "allalerts" -> { model.nav?.showDemoAlerts(); model.nav?.showDemoWaze() }
+        }
+    }
+}
+
+/** Screenshot runs only: the map's own pictures on plain backgrounds, to check they draw right. */
+@androidx.compose.runtime.Composable
+fun DemoIcons() {
+    val pics = listOf(MapIcons.puck(false), MapIcons.puck(true), MapIcons.turnHead(), MapIcons.waze(WazeAlert.Kind.POLICE))
+    androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize()) {
+        for (bg in listOf(androidx.compose.ui.graphics.Color(0xFFF2F0EC), androidx.compose.ui.graphics.Color(0xFF1E293B))) {
+            androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.weight(1f).fillMaxWidth().background(bg)) {
+                pics.forEach { androidx.compose.foundation.Image(it.asImageBitmap(), null, androidx.compose.ui.Modifier.size(96.dp)) }
+            }
         }
     }
 }

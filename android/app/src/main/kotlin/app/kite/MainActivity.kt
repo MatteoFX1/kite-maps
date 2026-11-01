@@ -166,4 +166,5 @@ fun KiteScreen(model: AppModel, activity: MainActivity) {
     if (!s.welcomed || s.needsWazeChoice) {
         if (s.welcomed) WazeIntroScreen() else WelcomeScreen()
     }
+    if (DemoScript.step == "icons") DemoIcons()
 }
