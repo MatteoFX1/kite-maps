@@ -109,6 +109,102 @@ object Waze {
         else -> type.lowercase()
     }
 
+    /** Waze keeps the Americas, Israel and the rest of the world on separate servers. */
+    fun env(p: LatLng): String {
+        if (p.lat > 29 && p.lat < 33.6 && p.lng > 34 && p.lng < 36) return "il"
+        return if (p.lng < -25) "na" else "row"
+    }
+
+    fun url(south: Double, west: Double, north: Double, east: Double): String {
+        val env = env(LatLng((south + north) / 2, (west + east) / 2))
+        val q = String.format(java.util.Locale.US, "top=%.5f&bottom=%.5f&left=%.5f&right=%.5f", north, south, west, east)
+        return "https://www.waze.com/live-map/api/georss?$q&env=$env&types=alerts"
+    }
+
+    const val pageURL = "https://www.waze.com/live-map/"
+    private val headers = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Linux; Android 16; Pixel 10 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36",
+        "Referer" to pageURL,
+        "Accept" to "application/json, text/plain, */*",
+    )
+    /** Keeps the live map page's cookies between requests, the way a browser would. */
+    private val session = Http.client(20, Http.MemoryCookies())
+
+    /** How many reports of each Waze type an answer holds, including types Kite doesn't show. */
+    fun types(data: ByteArray): Map<String, Int> {
+        val out = LinkedHashMap<String, Int>()
+        for (a in Json.obj(data)?.get("alerts").asMaps() ?: emptyList()) {
+            val t = a["type"] as? String ?: "?"
+            out[t] = (out[t] ?: 0) + 1
+        }
+        return out
+    }
+
+    /** Asks for a URL the way the live map page itself would (a hidden WebView in the app), when Waze turns plain requests away. */
+    @Volatile var fallback: (suspend (String) -> ByteArray?)? = null
+    @Volatile var lastStatus: Status? = null
+        private set
+    @Volatile private var openedPage = false
+
+    /**
+     * Reports in a box (road closures since October 2026). Null when Waze didn't answer, so the
+     * caller can keep what it had. When the feed turns us away, open the live map page first, as a
+     * browser would have, and ask once more; then let [fallback] ask from inside the page itself.
+     */
+    suspend fun alerts(south: Double, west: Double, north: Double, east: Double): List<WazeAlert>? {
+        val u = url(south, west, north, east)
+        val fb = fallback
+        if (lastStatus?.viaPage == true && fb != null) {
+            val data = fb(u)
+            val list = data?.let { parse(it) }
+            if (data != null && list != null) {
+                lastStatus = Status(System.currentTimeMillis(), 200, list.size, true, types(data))
+                return list
+            }
+        }
+        var status = 0
+        for (attempt in 0 until 2) {
+            if (attempt == 1) {
+                if (openedPage) break
+                openedPage = true
+                Http.getOrNull(pageURL, headers, session)
+            }
+            val r = Http.getOrNull(u, headers, session)
+            if (r == null) { status = 0; break }
+            status = r.code
+            if (status == 200) {
+                val list = parse(r.body)
+                lastStatus = Status(System.currentTimeMillis(), if (list == null) -1 else 200, list?.size ?: 0, false, types(r.body))
+                return list
+            }
+            if (status != 403 && status != 401) break
+        }
+        if ((status == 403 || status == 401) && fb != null) {
+            val data = fb(u)
+            val list = data?.let { parse(it) }
+            if (data != null && list != null) {
+                lastStatus = Status(System.currentTimeMillis(), 200, list.size, true, types(data))
+                return list
+            }
+        }
+        lastStatus = Status(System.currentTimeMillis(), status, 0)
+        return null
+    }
+
+    /** Reports along a route, one box per ~15 km piece. Null when every box failed. */
+    suspend fun alongRoute(line: List<LatLng>): List<WazeAlert>? {
+        if (line.size < 2) return emptyList()
+        val found = LinkedHashMap<String, WazeAlert>()
+        var answered = false
+        for (piece in Overpass.pieces(line, 15_000.0)) {
+            val pad = 0.004
+            val list = alerts(piece.minOf { it.lat } - pad, piece.minOf { it.lng } - pad, piece.maxOf { it.lat } + pad, piece.maxOf { it.lng } + pad) ?: continue
+            answered = true
+            for (a in list) found[a.id] = a
+        }
+        return if (answered) found.values.toList() else null
+    }
+
     fun kind(type: String, subtype: String): WazeAlert.Kind? = when (type) {
         "POLICE", "POLICEMAN" -> WazeAlert.Kind.POLICE
         "ACCIDENT" -> WazeAlert.Kind.ACCIDENT
