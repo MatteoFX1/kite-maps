@@ -92,6 +92,9 @@ data class WazeAlert(
 data class PlacedAlert(val alert: WazeAlert, val along: Double)
 
 object Waze {
+    /** The kinds Kite can get (all of them, through the app protocol). */
+    val shares: Set<WazeAlert.Kind> = WazeAlert.Kind.entries.toSet()
+
     /** How the last ask went, for Settings' status line: when, the HTTP code (0 = no network), how many reports. */
     data class Status(val atMillis: Long, val code: Int, val count: Int, val viaPage: Boolean = false, val types: Map<String, Int> = emptyMap()) {
         val summary: String
