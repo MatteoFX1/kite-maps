@@ -1,0 +1,14 @@
+Categories:
+  - Navigation
+License: GPL-3.0-only
+AuthorName: Kite Maps
+SourceCode: https://github.com/MatteoFX1/kite-maps
+IssueTracker: https://github.com/MatteoFX1/kite-maps/issues
+Name: Kite Maps
+Summary: Driving-first maps with speed cameras, lanes and live road alerts
+Description: |-
+  Kite is a maps and sat nav app built for driving: a big, clear driving screen,
+  lane guidance and real roundabout pictures, speed cameras with direction, the
+  speed limit and your speed, live road alerts and a police heat map.
+
+  No account and no tracking. Works without Google Play Services.

@@ -99,3 +99,66 @@ jobs:
           tag_name: v${{ steps.version.outputs.version }}
           name: Kite Maps ${{ steps.version.outputs.version }}
           files: Kite.apk
+
+      - name: Publish to Kite's F-Droid repo
+        # Only real releases (main), and only once the signing key secret is set: F-Droid needs
+        # every update signed with the same key.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: .
+        env:
+          KITE_KEYSTORE_BASE64: ${{ secrets.KITE_KEYSTORE_BASE64 }}
+          KITE_KEYSTORE_PASSWORD: ${{ secrets.KITE_KEYSTORE_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$KITE_KEYSTORE_BASE64" ]; then echo "No signing key secret yet: skipping F-Droid."; exit 0; fi
+          sudo apt-get update -qq && sudo apt-get install -y -qq fdroidserver >/dev/null
+          .github/fdroid/publish.sh "$PWD/Kite.apk" "${{ steps.version.outputs.version }}"
+
+  shots:
+    name: Screenshots on an Android emulator
+    # A look at every main screen after each change, saved to the android-screenshots branch.
+    needs: apk
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Kite-apk
+
+      - name: Let the emulator use the processor's virtualisation
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Take screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            mkdir -p shots
+            adb install -r Kite.apk
+            adb shell pm grant app.kite android.permission.ACCESS_FINE_LOCATION
+            adb shell pm grant app.kite android.permission.ACCESS_COARSE_LOCATION
+            adb shell pm grant app.kite android.permission.POST_NOTIFICATIONS || true
+            adb emu geo fix -0.9731 51.4543
+            for step in welcome wazeintro browse search place directions nav camalert allalerts roundabout uk layers settings saved pickhome wazemap; do adb shell am force-stop app.kite; adb emu geo fix -0.9731 51.4543; adb shell am start -n app.kite/.MainActivity --es demo $step > /dev/null; case $step in nav|camalert|allalerts|roundabout|uk) sleep 45;; search|place|directions) sleep 30;; *) sleep 14;; esac; adb exec-out screencap -p > shots/$step.png; done
+            adb shell cmd uimode night yes
+            for step in browse place nav allalerts; do adb shell am force-stop app.kite; adb shell am start -n app.kite/.MainActivity --es demo $step > /dev/null; case $step in nav|allalerts) sleep 45;; place) sleep 30;; *) sleep 14;; esac; adb exec-out screencap -p > shots/dark-$step.png; done
+            adb logcat -d -s AndroidRuntime:E KiteApp:* > shots/crash-log.txt || true
+
+      - name: Save screenshots to the android-screenshots branch
+        if: always()
+        run: |
+          cd shots || exit 0
+          git init -q -b android-screenshots
+          git config user.name "Kite build"
+          git config user.email "kite-build@users.noreply.github.com"
+          git add . && git commit -qm "Android screenshots for ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" android-screenshots

@@ -32,6 +32,8 @@ object Voice {
     private val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
         .setAudioAttributes(attrs).build()
     private var speaking = 0
+    /** Screenshot runs: never a sound. */
+    var silent = false
 
     fun warmUp() {
         if (tts != null) return
@@ -72,6 +74,7 @@ object Voice {
 
     /** Says [text]; [urgent] cuts off whatever is being said first. */
     fun say(text: String, urgent: Boolean = false) {
+        if (silent) return
         val said = SpokenText.forVoice(text)
         Log.i("KiteVoice", "say: $said")
         val t = tts
@@ -96,6 +99,7 @@ object Voice {
 
     /** A short tone before a camera warning, the way Waze does it. */
     fun chime() {
+        if (silent) return
         am.requestAudioFocus(focus)
         tone?.startTone(ToneGenerator.TONE_PROP_BEEP2, 220)
         main.postDelayed({ if (!isSpeaking) am.abandonAudioFocusRequest(focus) }, 600)

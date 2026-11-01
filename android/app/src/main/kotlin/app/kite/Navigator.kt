@@ -119,10 +119,11 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     }
 
     /** The posted limit where the user is now, in km/h. */
-    val speedLimitKmh: Double? get() = route.speedLimit(progress?.alongMeters ?: 0.0)
+    val speedLimitKmh: Double? get() = demoLimitKmh ?: route.speedLimit(progress?.alongMeters ?: 0.0)
 
     val nextManeuver: Maneuver?
         get() {
+            demoManeuver?.let { return it }
             val i = progress?.nextIndex
             if (i == null || i >= route.maneuvers.size) return route.maneuvers.firstOrNull()
             return route.maneuvers[i]
@@ -156,7 +157,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     fun handle(loc: Fix) {
         if (arrived) return
         lastFix = loc
-        speedMps = max(0.0, loc.speed)
+        if (!demoAlerts) speedMps = max(0.0, loc.speed)
         val course = heading(loc)
         noteFix(loc)
         val p = update(loc, course)
@@ -325,6 +326,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     }
 
     private fun checkCameras(p: RouteTracker.Progress) {
+        if (demoAlerts) return
         val meters = routeCameras.map { it.along }
         cameraAhead?.let { ahead ->
             val next = meters.firstOrNull { it > p.alongMeters }
@@ -351,6 +353,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
 
     /** Live Waze reports along the route; asked again every 90 seconds, since they come and go. */
     private fun loadWaze() {
+        if (demoAlerts) return
         if (route.mode != TravelMode.DRIVE || !AppSettings.wazeOn || wazeLoading) return
         wazeLoading = true
         wazeAt = now()
@@ -380,6 +383,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     }
 
     private fun checkWaze(p: RouteTracker.Progress) {
+        if (demoAlerts) return
         val s = AppSettings
         if (since(wazeAt) > 90) loadWaze()
         wazeAhead?.let { ahead ->
@@ -407,6 +411,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
 
     /** The police risk for the next 3 km, worked out again every 20 seconds. */
     private fun checkRisk(p: RouteTracker.Progress) {
+        if (demoAlerts) return
         val s = AppSettings
         if (route.mode != TravelMode.DRIVE || !s.wazeOn || !s.policeRisk || !s.wazePolice) { policeRisk = null; return }
         if (since(riskAt) <= 20) return
@@ -428,6 +433,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
 
     /** Police aircraft near the user, asked every 30 seconds while driving. */
     private fun checkAircraft(loc: Fix) {
+        if (demoAlerts) return
         if (route.mode != TravelMode.DRIVE || !AppSettings.policeAircraft) { aircraftNear = null; return }
         val here = loc.coord
         aircraftNear?.let { aircraftNear = it.copy(meters = it.aircraft.location.distanceTo(here)) }
@@ -452,6 +458,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
 
     /** Average speed checks: say when one starts and ends, and keep the user's average on screen. */
     private fun checkZones(p: RouteTracker.Progress) {
+        if (demoAlerts) return
         val at = p.alongMeters
         val inside = zones.indexOfFirst { at >= it.startMeters && at <= it.endMeters }.takeIf { it >= 0 }
         zoneEntry?.let { if (it.index != inside) {
@@ -477,6 +484,41 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
 
     /** Tapping the Waze card puts it away; the report still won't be warned about again. */
     fun dismissWaze() { wazeAhead = null }
+
+    // For the build's screenshots only: made-up warnings, so every run shows the same thing.
+    private var demoAlerts = false
+    private var demoLimitKmh: Double? = null
+    var demoManeuver by mutableStateOf<Maneuver?>(null); private set
+
+    fun showDemoRoundabout() {
+        demoManeuver = Maneuver(ManeuverType.ROUNDABOUT, "At the roundabout, take the 6th exit onto M27", LatLng(50.87, -1.27), 0.0, 400.0,
+            road = "M27", exit = 6, roundabout = RoundaboutShape(exits = listOf(262.0, 300.0, 338.0, 20.0, 62.0, 108.0), taken = 5,
+                entriesOnly = listOf(150.0), clockwise = true, complete = true))
+    }
+
+    fun showDemoAlerts() {
+        demoAlerts = true
+        cameraAhead = CameraAlert(RoadCamera.Kind.SPEED, 180.0, 400.0, 48.3)
+        averageCheck = AverageCheck(80.5, 77.0, 2400.0)
+        // 38 in a 30, so the screenshots show the speed sign gone red.
+        showDemoSpeed(48.3, 38.0)
+    }
+
+    fun showDemoSpeed(limitKmh: Double, mph: Double) {
+        demoAlerts = true
+        demoLimitKmh = limitKmh
+        speedMps = mph / 2.23694
+    }
+
+    fun showDemoWaze() {
+        demoAlerts = true
+        val here = progress?.let { Geo.point(route.polyline, it.alongMeters + 300) } ?: route.polyline.firstOrNull() ?: LatLng(0.0, 0.0)
+        val a = WazeAlert(id = "demo-police", kind = WazeAlert.Kind.POLICE, subtype = "POLICE_HIDING", location = here, street = "A9",
+            reportedAtMillis = System.currentTimeMillis() - 7 * 60_000, thumbsUp = 3, reliability = 8)
+        wazeAhead = WazeAhead(a, 260.0, 600.0)
+        policeRisk = 72
+        aircraftNear = AircraftNear(PoliceAircraft(id = "demo-heli", callsign = "NPAS15", location = here, altitudeFeet = 1400.0, helicopter = true), 3200.0)
+    }
 
     private fun chime() {
         if (muted || stopped || Voice.onCall) return
