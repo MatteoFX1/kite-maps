@@ -57,6 +57,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
     private var lastRouteKey = ""
     private var lastMineKey = ""
     private var lastPuckKey = ""
+    private var lastHeadKey = ""
     private var styledDriving: Boolean? = null
     private var lastCameraKey = ""
     private var lastSignalsKey = ""
@@ -119,7 +120,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
         heatTiles.styleReloaded()
         styledDriving = null
         repaint()
-        lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""; lastSignalsKey = ""; lastWazeKey = ""
+        lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastHeadKey = ""; lastCameraKey = ""; lastSignalsKey = ""; lastWazeKey = ""
         enableLocation(style)
         render()
         loadCameras(m); loadWaze(m); updateHeat(m)
@@ -313,10 +314,12 @@ class KiteMap(private val model: AppModel, private val context: Context) {
         arrowShadow.setFilter(shaft)
         val arrowEdge = line("vela-turn-arrow-edge", "vela-turn-arrow", c(0x0F766E), 15f); arrowEdge.setFilter(shaft)
         val arrowLine = line("vela-turn-arrow", "vela-turn-arrow", Color.WHITE, 9f); arrowLine.setFilter(shaft)
-        val head = SymbolLayer("vela-turn-arrow-head", "vela-turn-arrow").withProperties(
+        // The head has a source of its own, updated only when the turn changes: the map fades a symbol
+        // in afresh each time its source changes, which would keep the head see-through.
+        src("vela-turn-head")
+        val head = SymbolLayer("vela-turn-arrow-head", "vela-turn-head").withProperties(
             iconImage("turn-head"), iconRotate(get("bearing")), iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
             iconAllowOverlap(true), iconIgnorePlacement(true))
-        head.setFilter(eq(get("part"), literal("head")))
         listOf(arrowShadow, arrowEdge, arrowLine, head).forEach { style.addLayer(it) }
 
         src(NavGlide.PUCK)
@@ -603,7 +606,8 @@ class KiteMap(private val model: AppModel, private val context: Context) {
         } ?: emptyList())
         val r = main
         if (r == null) {
-            for (id in listOf("vela-route", "vela-route-traffic", "vela-route-bubbles", "vela-route-done", "vela-turn-arrow")) setShape(style, id, emptyList())
+            for (id in listOf("vela-route", "vela-route-traffic", "vela-route-bubbles", "vela-route-done", "vela-turn-arrow", "vela-turn-head")) setShape(style, id, emptyList())
+            lastHeadKey = ""
             return
         }
         val cum = Geo.cumulative(r.polyline)
@@ -622,6 +626,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
         val m = n?.nextManeuver
         val p = n?.progress
         var arrow = emptyList<Feature>()
+        var head: Pair<LatLng, Double>? = null
         if (n != null && m != null && p != null && m.type != ManeuverType.ARRIVE && m.type != ManeuverType.DEPART &&
             m.type != ManeuverType.STRAIGHT && m.alongMeters - p.alongMeters < 600) {
             var end = m.alongMeters + 22
@@ -634,10 +639,16 @@ class KiteMap(private val model: AppModel, private val context: Context) {
             val shaft = Geo.slice(r.polyline, a, b, cum)
             if (shaft.size >= 2) {
                 val tip = shaft.last(); val prev = Geo.point(r.polyline, max(a, b - 4), cum)
-                arrow = listOf(polyline(shaft, mapOf("part" to "shaft")), point(tip, mapOf("part" to "head", "bearing" to Geo.bearing(prev, tip))))
+                arrow = listOf(polyline(shaft, mapOf("part" to "shaft")))
+                head = tip to Geo.bearing(prev, tip)
             }
         }
         setShape(style, "vela-turn-arrow", arrow)
+        val headKey = head?.let { (t, b) -> String.format(java.util.Locale.US, "%.6f,%.6f,%.0f", t.lat, t.lng, b) } ?: ""
+        if (headKey != lastHeadKey) {
+            lastHeadKey = headKey
+            setShape(style, "vela-turn-head", head?.let { (t, b) -> listOf(point(t, mapOf("bearing" to b))) } ?: emptyList())
+        }
         if (n != null || d == null) { setShape(style, "vela-route-bubbles", emptyList()); return }
         val bubbles = d.current.mapIndexed { i, route ->
             val others = d.current.filterIndexed { j, _ -> j != i }.map { it.polyline }

@@ -82,6 +82,14 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val h = maxHeight
         val w = maxWidth
+        // The car, while the camera follows it: always at the same spot, pointing up the screen and
+        // lying flat on the tilted map.
+        if (model.glide.carOnScreen) {
+            val puck = remember(dark) { MapIcons.puck(dark).asImageBitmap() }
+            Box(Modifier.fillMaxWidth().offset(y = NavGlide.carY(h.value).dp - 38.dp), contentAlignment = Alignment.TopCenter) {
+                Image(puck, null, Modifier.size(76.dp).graphicsLayer { scaleY = 0.64f })
+            }
+        }
         // The road you're on, just under the arrow.
         val road = nav.currentRoad
         if (nav.following && !nav.arrived && !chipShowing && road != null) {

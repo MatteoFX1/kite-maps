@@ -1,6 +1,9 @@
 package app.kite
 
 import android.view.Choreographer
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import app.kite.core.*
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -19,6 +22,15 @@ class NavGlide : Choreographer.FrameCallback {
     var map: MapLibreMap? = null
     /** The map's height in dp. */
     var heightDp = 800f
+    /**
+     * True while the camera follows the car: the car then always sits at the same spot on screen,
+     * so the navigation screen draws it there itself (steady, never fading) instead of the map.
+     */
+    var carOnScreen by mutableStateOf(false); private set
+    private var puckOnMap = false
+    private var puckPushedAt = 0L
+    private var puckPushed: LatLng? = null
+    private var puckPushedBearing = 0.0
 
     companion object {
         /** Where the car sits on screen while following: 70% of the way down. */
@@ -88,6 +100,13 @@ class NavGlide : Choreographer.FrameCallback {
         shownAlong = null
         shownCoord = null
         lastFrame = 0
+        carOnScreen = false
+        clearPuck()
+        puckOnMap = false
+        puckPushed = null
+    }
+
+    private fun clearPuck() {
         (map?.style?.getSource(PUCK) as? GeoJsonSource)?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(emptyList()))
     }
 
@@ -138,8 +157,21 @@ class NavGlide : Choreographer.FrameCallback {
         shownAcross += (targetAcross - shownAcross) * (if (dt == 0.0) 1.0 else 1 - exp(-dt / 1.0))
 
         val style = m.style ?: return
-        (style.getSource(PUCK) as? GeoJsonSource)?.setGeoJson(
-            Feature.fromGeometry(Point.fromLngLat(coordNow.lng, coordNow.lat)).apply { addNumberProperty("bearing", shownBearing) })
+        if (n.following) {
+            if (!carOnScreen) carOnScreen = true
+            if (puckOnMap) { clearPuck(); puckOnMap = false }
+        } else {
+            if (carOnScreen) carOnScreen = false
+            // On the map, moved only now and then: each new spot makes the map fade the arrow in again.
+            val now = System.nanoTime()
+            val last = puckPushed
+            val turned = abs(((shownBearing - puckPushedBearing + 540) % 360) - 180)
+            if (last == null || now - puckPushedAt > 1_000_000_000L || last.distanceTo(coordNow) > 25 || turned > 20) {
+                (style.getSource(PUCK) as? GeoJsonSource)?.setGeoJson(
+                    Feature.fromGeometry(Point.fromLngLat(coordNow.lng, coordNow.lat)).apply { addNumberProperty("bearing", shownBearing) })
+                puckPushed = coordNow; puckPushedAt = now; puckPushedBearing = shownBearing; puckOnMap = true
+            }
+        }
         if (n.following) {
             val d = KiteApp.app.resources.displayMetrics.density.toDouble()
             // A pitched camera sees farther than the same zoom flat: zoom in a little to match the iPhone's distance.
