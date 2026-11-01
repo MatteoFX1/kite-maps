@@ -118,7 +118,7 @@ jobs:
     name: Screenshots on an Android emulator
     # A look at every main screen after each change, saved to the android-screenshots branch.
     needs: apk
-    if: github.ref != 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
