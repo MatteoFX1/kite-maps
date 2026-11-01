@@ -152,6 +152,8 @@ jobs:
             adb shell cmd uimode night yes
             for step in browse place nav allalerts; do adb shell am force-stop app.kite; adb shell am start -n app.kite/.MainActivity --es demo $step > /dev/null; t=15; case $step in nav|allalerts) t=45;; place) t=30;; esac; i=0; while [ $i -lt $t ]; do adb emu geo fix -0.9731 51.4543 > /dev/null; sleep 3; i=$((i+3)); done; adb exec-out screencap -p > shots/dark-$step.png; done
             adb logcat -d -s AndroidRuntime:E KiteApp:* > shots/crash-log.txt || true
+            adb logcat -d -s Mbgl:* MapLibre:* > shots/map-log.txt || true
+            curl -s -o /dev/null -w 'glyphs from the runner: %{http_code} %{size_download} bytes' 'https://tiles.openfreemap.org/fonts/Noto%20Sans%20Bold/0-255.pbf' >> shots/map-log.txt || true
 
       - name: Save screenshots to the android-screenshots branch
         if: always()
