@@ -64,6 +64,8 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
     var showSteps by remember { mutableStateOf(false) }
     var showAlong by remember { mutableStateOf(false) }
     var confirmEnd by remember { mutableStateOf(false) }
+    // Screenshot run: the end trip question.
+    if (DemoScript.step == "endtrip") LaunchedEffect(Unit) { kotlinx.coroutines.delay(4000); confirmEnd = true }
 
     val mainCards = if (nav.arrived) 0 else listOf(nav.cameraAhead != null, nav.wazeAhead != null, nav.averageCheck != null).count { it }
     // With two other cards up, a police aircraft shrinks to a chip by the speed badge.

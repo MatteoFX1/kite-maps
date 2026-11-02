@@ -53,7 +53,15 @@ object DemoScript {
             "wazeintro" -> { st.welcomed = true; st.noGoogle = false; st.wazeAsked = false; return }
             "layers" -> { model.showLayers = true; return }
             "pickhome" -> { model.picking = PickKind.HOME; return }
-            "settings" -> { model.tab = AppTab.SETTINGS; return }
+            "settings", "wazesettings", "diagnostics" -> { if (step == "wazesettings") st.waze = true; model.tab = AppTab.SETTINGS; return }
+            "transit" -> {
+                // Reading to London Paddington: trains.
+                val to = Place("demo-paddington", "London Paddington", LatLng(51.5154, -0.1755), "demo")
+                model.select(to); delay(2000)
+                model.openDirections(to)
+                model.showTransit()
+                return
+            }
             "cameras" -> { center(model, 48.137, 11.575, 12.5); return }
             "wazemap" -> {
                 st.waze = true; st.wazeOnMap = true; st.wazeHeatmap = true
@@ -88,8 +96,10 @@ object DemoScript {
         delay(5000)
         if (step == "place") return
         model.openDirections(first)
+        if (step == "stops") model.visibleResults.drop(1).firstOrNull()?.let { model.addStop(it) }
         delay(8000)
-        if (step == "directions") return
+        if (step == "directions" || step == "stops") return
+        if (step == "addstop") { model.addingStop = true; return }
         model.startNavigation()
         delay(4000)
         when (step) {

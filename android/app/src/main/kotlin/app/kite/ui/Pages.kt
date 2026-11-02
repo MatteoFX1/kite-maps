@@ -169,7 +169,11 @@ private enum class SettingsScreen(val title: String) {
 @Composable
 fun SettingsPage(model: AppModel) {
     val dark = LocalDark.current
-    var screen by rememberSaveable { mutableStateOf(SettingsScreen.MENU) }
+    var screen by rememberSaveable { mutableStateOf(when (DemoScript.step) {
+        "wazesettings" -> SettingsScreen.WAZE
+        "diagnostics" -> SettingsScreen.DIAGNOSTICS
+        else -> SettingsScreen.MENU
+    }) }
     Box(Modifier.fillMaxSize().background(Vela.ground(dark))) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             if (screen == SettingsScreen.MENU) {
