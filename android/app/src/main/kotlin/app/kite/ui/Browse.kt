@@ -147,7 +147,7 @@ private fun LocateButton(model: AppModel) {
         DropdownMenu(menu, { menu = false }) {
             model.userLatLng?.let { u ->
                 DropdownMenuItem(text = { Text("Share my location") }, leadingIcon = { Icon(Icons.Filled.Share, null) },
-                    onClick = { menu = false; ctx.share("https://maps.google.com/?q=${u.lat},${u.lng}") })
+                    onClick = { menu = false; ctx.share("https://maps.google.com/?q=${u.lat.plain()},${u.lng.plain()}") })
                 DropdownMenuItem(text = { Text("Copy my coordinates") }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
                     onClick = { menu = false; ctx.copy(String.format(Locale.US, "%.6f, %.6f", u.lat, u.lng)) })
             }

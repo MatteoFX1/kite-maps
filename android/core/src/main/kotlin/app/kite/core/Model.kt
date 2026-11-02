@@ -48,7 +48,7 @@ data class Place(
             placeId?.let {
                 return "https://www.google.com/maps/search/?api=1&query=" + enc(name) + "&query_place_id=" + enc(it)
             }
-            return "https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}"
+            return "https://www.google.com/maps/search/?api=1&query=${location.lat.plain()},${location.lng.plain()}"
         }
 
     companion object {

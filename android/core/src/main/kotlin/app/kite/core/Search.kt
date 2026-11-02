@@ -11,7 +11,7 @@ object Photon {
 
     suspend fun search(query: String, near: LatLng?, limit: Int = 20): List<Place> {
         var url = base + "?q=" + urlEnc(query) + "&limit=$limit"
-        if (near != null) url += "&lat=${near.lat}&lon=${near.lng}"
+        if (near != null) url += "&lat=${near.lat.plain()}&lon=${near.lng.plain()}"
         val lang = Locale.getDefault().language
         url += "&lang=" + if (lang in langs) lang else "en"
         return parse(Http.get(url, mapOf("User-Agent" to UA), Http.client(15)).body, near)
@@ -19,7 +19,7 @@ object Photon {
 
     /** The address at a point, for a dropped pin. */
     suspend fun reverse(p: LatLng): Place? {
-        val r = Http.getOrNull("https://photon.komoot.io/reverse?lat=${p.lat}&lon=${p.lng}&limit=1", mapOf("User-Agent" to UA), Http.client(10)) ?: return null
+        val r = Http.getOrNull("https://photon.komoot.io/reverse?lat=${p.lat.plain()}&lon=${p.lng.plain()}&limit=1", mapOf("User-Agent" to UA), Http.client(10)) ?: return null
         val place = parse(r.body, null).firstOrNull() ?: return null
         place.location = p
         place.id = "pin:${p.lat},${p.lng}"

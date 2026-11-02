@@ -38,7 +38,7 @@ object DirectionsPb {
         var pb = template
         if (waypoints.isNotEmpty()) {
             val i = pb.indexOf("!1m4!3m2!3d{DLAT}!4d{DLNG}!6e2")
-            if (i >= 0) pb = pb.substring(0, i) + waypoints.joinToString("") { "!1m4!3m2!3d${it.lat}!4d${it.lng}!6e2" } + pb.substring(i)
+            if (i >= 0) pb = pb.substring(0, i) + waypoints.joinToString("") { "!1m4!3m2!3d${it.lat.plain()}!4d${it.lng.plain()}!6e2" } + pb.substring(i)
         }
         val all = listOf(origin, destination) + waypoints
         val re = Regex("!3m12!1m3!1d[0-9.]+!2d-?[0-9.]+!3d-?[0-9.]+")
@@ -50,7 +50,7 @@ object DirectionsPb {
             val lat = (s + n) / 2
             val lng = (w + e) / 2
             val span = max((n - s) * 111_320, (e - w) * 111_320 * cos(lat * PI / 180))
-            pb = pb.replaceRange(m.range, "!3m12!1m3!1d${max(span * 1.35, 1500.0)}!2d$lng!3d$lat")
+            pb = pb.replaceRange(m.range, "!3m12!1m3!1d${max(span * 1.35, 1500.0)}!2d${lng.plain()}!3d${lat.plain()}")
         }
         if (mode == TravelMode.DRIVE && (avoidHighways || avoidTolls)) {
             val key = "!6m56!1m5!18b1!30b1!31m1!1b1!34e1!2m4"

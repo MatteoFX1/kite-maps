@@ -49,7 +49,7 @@ enum class OtherApp(val label: String) {
     GOOGLE("Google Maps"), WAZE("Waze"), APPLE("Apple Maps");
 
     fun url(p: Place): String {
-        val ll = "${p.location.lat},${p.location.lng}"
+        val ll = "${p.location.lat.plain()},${p.location.lng.plain()}"
         return when (this) {
             GOOGLE -> p.shareUrl
             WAZE -> "https://waze.com/ul?ll=$ll&navigate=yes"

@@ -341,7 +341,7 @@ object StreetView {
 
     fun searchBody(p: LatLng, radius: Int): String =
         "[[\"apiv3\",null,null,null,\"US\",null,null,null,null,null,[[0]]]," +
-            "[[null,null,${p.lat},${p.lng}],$radius]," +
+            "[[null,null,${p.lat.plain()},${p.lng.plain()}],$radius]," +
             "[null,[\"en\",\"US\"],null,null,null,null,null,null,[2],null,[[[2,true,2]]]]," +
             "[[1,2,3,4,8,6]]]"
 

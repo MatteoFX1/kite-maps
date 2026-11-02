@@ -583,7 +583,7 @@ class WazeLive {
         if (s != null && s.id != handshaken) {
             cache.clear()
             val b = box(near, 1_800.0)
-            merge(command(listOf(seeMe(), "SetMood,1", "Location,${near.lng},${near.lat}", mapDisplayed(b)).joinToString("\n")))
+            merge(command(listOf(seeMe(), "SetMood,1", "Location,${near.lng.plain()},${near.lat.plain()}", mapDisplayed(b)).joinToString("\n")))
             handshaken = s.id
         }
         for (b in boxes) {

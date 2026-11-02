@@ -19,7 +19,7 @@ object OSRM {
     /** With [heading] (the way the car is moving), the route starts off that way: never a U-turn back down the road. */
     fun routeURL(a: LatLng, b: LatLng, mode: TravelMode, via: List<LatLng> = emptyList(), heading: Double? = null): String {
         val pts = listOf(a) + via + listOf(b)
-        val coords = pts.joinToString(";") { "${it.lng},${it.lat}" }
+        val coords = pts.joinToString(";") { "${it.lng.plain()},${it.lat.plain()}" }
         var s = "https://routing.openstreetmap.de/${mode.osrmBackend}/route/v1/${mode.osrmProfile}/$coords" +
             "?overview=full&geometries=polyline6&steps=true&alternatives=${mode == TravelMode.DRIVE && via.isEmpty()}"
         if (heading != null) s += "&bearings=${heading.roundToInt() % 360},60" + ";".repeat(pts.size - 1)

@@ -65,7 +65,7 @@ object Transitous {
     private val headers = mapOf("User-Agent" to "Kite-Maps-Android (https://github.com/matteofx1/kite-maps)")
 
     fun planURL(from: LatLng, to: LatLng, max: Int = 5, timeMillis: Long? = null, arriveBy: Boolean = false): String {
-        var s = "$base/api/v1/plan?fromPlace=${from.lat},${from.lng}&toPlace=${to.lat},${to.lng}&numItineraries=$max"
+        var s = "$base/api/v1/plan?fromPlace=${from.lat.plain()},${from.lng.plain()}&toPlace=${to.lat.plain()},${to.lng.plain()}&numItineraries=$max"
         if (timeMillis != null) {
             s += "&time=" + Instant.ofEpochMilli(timeMillis).toString().replace(Regex("\\.\\d+Z$"), "Z")
             if (arriveBy) s += "&arriveBy=true"
@@ -93,7 +93,7 @@ object Transitous {
     suspend fun departures(point: LatLng, radius: Double = 150.0): Board? {
         val dLat = radius / 111_320
         val dLng = radius / (111_320 * cos(point.lat * PI / 180))
-        val r = Http.getOrNull("$base/api/v1/map/stops?min=${point.lat - dLat},${point.lng - dLng}&max=${point.lat + dLat},${point.lng + dLng}", headers, client) ?: return null
+        val r = Http.getOrNull("$base/api/v1/map/stops?min=${(point.lat - dLat).plain()},${(point.lng - dLng).plain()}&max=${(point.lat + dLat).plain()},${(point.lng + dLng).plain()}", headers, client) ?: return null
         val stops = Json.parse(r.body).asMaps() ?: return null
         data class S(val name: String, val id: String, val d: Double)
         val nearest = stops.mapNotNull { s ->
@@ -138,10 +138,11 @@ object Transitous {
 
     suspend fun lines(south: Double, west: Double, north: Double, east: Double, zoom: Int): List<Line>? {
         val started = System.currentTimeMillis()
-        val r = try { Http.get("$base/api/experimental/map/routes?min=$south,$west&max=$north,$east&zoom=$zoom", headers, client) }
+        val r = try { Http.get("$base/api/experimental/map/routes?min=${south.plain()},${west.plain()}&max=${north.plain()},${east.plain()}&zoom=$zoom", headers, client) }
             catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) { linesNote = "${e.javaClass.simpleName}: ${e.message} after ${System.currentTimeMillis() - started} ms"; return null }
-        linesNote = "HTTP ${r.code}, ${r.body.size} bytes in ${System.currentTimeMillis() - started} ms"
+        linesNote = "HTTP ${r.code}, ${r.body.size} bytes in ${System.currentTimeMillis() - started} ms" +
+            if (r.code != 200) ": " + r.text.take(120) else ""
         if (r.code != 200) return null
         return parseLines(r.body)
     }

@@ -181,3 +181,9 @@ object Geo {
     /** How far apart two bearings are, 0 to 180, the way the Swift code writes it. */
     fun diff(a: Double, b: Double): Double = abs(((a - b + 540) % 360) - 180)
 }
+
+/**
+ * A coordinate written out in plain digits for a web address. Kotlin writes very small numbers
+ * like 0.0001 as "1.0E-4" (right by the Greenwich line, in London), which servers turn away.
+ */
+fun Double.plain(): String = java.math.BigDecimal.valueOf(this).stripTrailingZeros().toPlainString()
