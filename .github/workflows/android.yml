@@ -101,9 +101,9 @@ jobs:
           files: Kite.apk
 
       - name: Publish to Kite's F-Droid repo
-        # Only real releases (main), and only once the signing key secret is set: F-Droid needs
-        # every update signed with the same key.
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # Only real releases (main, or a manual run on main), and only once the signing key secret
+        # is set: F-Droid needs every update signed with the same key.
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         working-directory: .
         env:
           KITE_KEYSTORE_BASE64: ${{ secrets.KITE_KEYSTORE_BASE64 }}
@@ -111,7 +111,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -z "$KITE_KEYSTORE_BASE64" ]; then echo "No signing key secret yet: skipping F-Droid."; exit 0; fi
-          sudo apt-get update -qq && sudo apt-get install -y -qq fdroidserver >/dev/null
+          python3 -m venv "$RUNNER_TEMP/fdroid-env" && "$RUNNER_TEMP/fdroid-env/bin/pip" install --quiet fdroidserver==2.4.5
+          export PATH="$RUNNER_TEMP/fdroid-env/bin:$PATH"
           .github/fdroid/publish.sh "$PWD/Kite.apk" "${{ steps.version.outputs.version }}"
 
   shots:

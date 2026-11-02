@@ -34,12 +34,28 @@ keystorepass: "$KITE_KEYSTORE_PASSWORD"
 keypass: "$KITE_KEYSTORE_PASSWORD"
 keydname: CN=Kite Maps
 CFG
+# fdroid signs the index with apksigner from the Android SDK; name it so nothing is left to guessing.
+SIGNER=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+if [ -z "$SIGNER" ]; then echo "No apksigner in the Android SDK: can't sign the F-Droid index."; exit 1; fi
+echo "apksigner: $SIGNER" >> config.yml
 chmod 600 config.yml
 
 CODE=$(echo "$VERSION" | awk -F. '{print $1*10000 + $2*100 + $3}')
 cp "$APK" "repo/app.kite_${CODE}.apk"
-fdroid update --create-metadata --pretty --use-date-from-apk 2>&1 | grep -v "keystorepass\|keypass" || true
+set +e
+fdroid update --create-metadata --pretty --use-date-from-apk 2>&1 | grep -v "keystorepass\|keypass"
+STATUS=${PIPESTATUS[0]}
+set -e
 rm -f config.yml "$RUNNER_TEMP/repo.jks"
+# Without the signed index F-Droid can't read the repo ("checking repo" forever), so stop loudly.
+if [ "$STATUS" -ne 0 ] || [ ! -f repo/index-v1.jar ] || [ ! -f repo/entry.jar ]; then
+  echo "fdroid update failed (exit $STATUS): the repo index wasn't made, so nothing is published."
+  exit 1
+fi
+if [ ! -f "repo/app.kite_${CODE}.apk" ]; then
+  echo "fdroid moved the APK out of the repo (bad signature?): not publishing."
+  exit 1
+fi
 cp "$HERE/README.md" README.md 2>/dev/null || true
 
 git config user.name "Kite build"
