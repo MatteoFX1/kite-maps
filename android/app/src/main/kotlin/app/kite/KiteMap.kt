@@ -75,6 +75,9 @@ class KiteMap(private val model: AppModel, private val context: Context) {
     fun showDemoWaze(list: List<WazeAlert>) {
         fakeWaze = true
         wazeAlerts = list
+        wazeAt = now()
+        model.wazeLiveCount = list.size
+        model.updateAreaRisk(list)
         lastWazeKey = ""
         render()
     }
@@ -169,6 +172,9 @@ class KiteMap(private val model: AppModel, private val context: Context) {
         })
         moveToUserOnce(f)
     }
+
+    /** Screenshot runs: the demo has put the map somewhere, so the first fix mustn't move it back. */
+    fun keepCamera() { movedToUser = true }
 
     private fun moveToUserOnce(f: Fix) {
         val m = map ?: return
@@ -497,6 +503,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
             val live = if (askLive) runCatching { WazeLive.shared.alerts(listOf(liveBox), mid) }.getOrNull() else null
             val fromMap = closures.await()
             wazeFetch = null
+            if (fakeWaze) return@launch
             if (fromMap == null && live == null) { wazeFailedAt = now(); return@launch }
             val merged = linkedMapOf<String, WazeAlert>()
             for (a in (fromMap ?: emptyList()) + (live ?: emptyList())) merged[a.id] = a

@@ -27,10 +27,13 @@ object DemoScript {
         val st = AppSettings
         // Past the first-launch pages, unless that's what's being checked.
         if (s != "welcome" && s != "wazeintro") { st.welcomed = true; st.wazeAsked = true }
+        // Settings stay between runs: only the trains step has its layers on.
+        if (s != "rail") { st.terrain = false; st.transitLines = false }
         model.scope.launch { run(model, s) }
     }
 
     private fun center(model: AppModel, lat: Double, lng: Double, zoom: Double, bearing: Double = 0.0) {
+        kite?.keepCamera()
         model.map?.moveCamera(CameraUpdateFactory.newCameraPosition(org.maplibre.android.camera.CameraPosition.Builder()
             .target(org.maplibre.android.geometry.LatLng(lat, lng)).zoom(zoom).bearing(bearing).build()))
     }
@@ -100,6 +103,7 @@ object DemoScript {
                 // The car arrow alone on the map, to check it draws the same flat and tilted.
                 val m = model.map ?: return
                 val at = org.maplibre.android.geometry.LatLng(51.4543, -0.9731)
+                kite?.keepCamera()
                 m.moveCamera(CameraUpdateFactory.newCameraPosition(org.maplibre.android.camera.CameraPosition.Builder()
                     .target(at).zoom(17.0).tilt(if (step == "puckpitch") 50.0 else 0.0).bearing(30.0).build()))
                 val style = m.style ?: return
@@ -180,14 +184,22 @@ object DemoScript {
             "mine" -> {
                 // Home, work and a parked car around Reading, as icons on the map.
                 st.home = home
-                st.work = Place("demo-work", "University of Reading", LatLng(51.4414, -0.9418), "demo")
+                st.work = Place("demo-work", "The Oracle", LatLng(51.4515, -0.9655), "demo")
                 st.parking = Place("parking:demo", "Parked car", LatLng(51.4560, -0.9690), "osm", category = "Parked at 9:41 AM")
-                center(model, 51.452, -0.962, 13.8, bearing = 35.0); return
+                center(model, 51.4555, -0.9700, 14.2, bearing = 35.0); return
             }
             "board" -> { model.select(Place("demo-reading", "Reading Station", LatLng(51.4588, -0.9719), "demo", category = "Train station")); return }
             "streetview" -> {
                 // A fixed place in the town centre, so every run looks the same way.
-                model.select(Place("demo-townhall", "Reading Town Hall", LatLng(51.4566, -0.9694), "demo", category = "Concert hall")); return
+                val hall = Place("demo-townhall", "Reading Town Hall", LatLng(51.4566, -0.9694), "demo", category = "Concert hall")
+                model.select(hall)
+                // What Google sends back for the pictures, for the build's log.
+                val pano = StreetView.find(hall.location)
+                if (pano == null) { android.util.Log.i("KiteTrace", "street view: no panorama"); return }
+                val thumb = Http.getOrNull(StreetView.thumbnailUrl(pano, 0.0))
+                val tile = Http.getOrNull(StreetView.tileUrl(pano, 0, 0, 1))
+                android.util.Log.i("KiteTrace", "street view: pano ${pano.id} thumbnail ${thumb?.code} ${thumb?.body?.size} bytes ${thumb?.headers?.get("content-type")}; tile ${tile?.code} ${tile?.body?.size} bytes")
+                return
             }
             "wazemap" -> {
                 st.waze = true; st.wazeOnMap = true; st.wazeHeatmap = true
