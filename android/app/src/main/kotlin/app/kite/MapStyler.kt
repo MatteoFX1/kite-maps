@@ -108,13 +108,32 @@ object MapStyler {
                     savedShieldPadding[id] = layer.iconPadding
                 }
                 if (on) layer.setProperties(symbolSpacing(900f), iconPadding(30f))
-                else layer.setProperties(savedShieldSpacing[id]!!, savedShieldPadding[id]!!)
+                else { restore(layer, savedShieldSpacing[id]!!); restore(layer, savedShieldPadding[id]!!) }
                 continue
             }
             if (layer is SymbolLayer && (id == "highway-name-major" || id == "highway-name-minor")) {
                 if (savedLabelSizes[id] == null) savedLabelSizes[id] = layer.textSize
                 if (on) layer.setProperties(textSize(if (id == "highway-name-major") 17f else 15f))
-                else layer.setProperties(savedLabelSizes[id]!!)
+                else restore(layer, savedLabelSizes[id]!!)
+            }
+        }
+    }
+
+    /**
+     * Puts back a value read from the style. One the style gave as an expression (a size that grows
+     * with zoom, say) comes back as JSON, which the map only takes once turned into an expression again.
+     */
+    private fun restore(layer: Layer, v: PropertyValue<*>) {
+        val value = v.value
+        runCatching {
+            when (value) {
+                null -> layer.setProperties(PropertyValue<Any?>(v.name, null))
+                is Number, is String, is Boolean, is Array<*> -> layer.setProperties(v)
+                else -> {
+                    val json = value.toString()
+                    if (json.startsWith("[")) layer.setProperties(PropertyValue(v.name, org.maplibre.android.style.expressions.Expression.raw(json)))
+                    else json.toFloatOrNull()?.let { layer.setProperties(PropertyValue(v.name, it)) }
+                }
             }
         }
     }

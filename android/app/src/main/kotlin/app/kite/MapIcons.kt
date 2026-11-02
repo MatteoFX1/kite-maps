@@ -98,8 +98,11 @@ object MapIcons {
 
     fun turnHead() = image(44f, 40f) { cv ->
         val p = Path().apply { moveTo(22f, 6f); lineTo(38f, 32f); lineTo(6f, 32f); close() }
-        val edge = paint(c(0x0F766E), Paint.Style.STROKE, 8f).apply { setShadowLayer(3f, 0f, 2f, c(0x000000, 0.4f)) }
-        cv.drawPath(p, edge)
+        // A soft shadow drawn by hand (a paint's own shadow comes out wrong on some phones' maps).
+        cv.save(); cv.translate(0f, 2f)
+        cv.drawPath(p, paint(c(0x000000, 0.18f), Paint.Style.STROKE, 11f))
+        cv.restore()
+        cv.drawPath(p, paint(c(0x0F766E), Paint.Style.STROKE, 8f))
         cv.drawPath(p, paint(Color.WHITE))
         cv.drawPath(p, paint(Color.WHITE, Paint.Style.STROKE, 2.5f))
     }
@@ -187,7 +190,9 @@ object MapIcons {
         cv.drawOval(disc, paint(if (dark) c(0x0F172A, 0.6f) else c(0xFFFFFF, 0.75f)))
         cv.drawOval(disc, paint(c(0x2DD4BF, 0.75f), Paint.Style.STROKE, 2.5f))
         val outline = Path().apply { moveTo(38f, 13f); lineTo(58f, 60f); lineTo(38f, 50f); lineTo(18f, 60f); close() }
-        cv.drawPath(outline, paint(Color.WHITE, Paint.Style.STROKE, 5f).apply { setShadowLayer(4f, 0f, 2f, c(0x000000, 0.45f)) })
+        cv.save(); cv.translate(0f, 2f)
+        cv.drawPath(outline, paint(c(0x000000, 0.2f), Paint.Style.STROKE, 8f))
+        cv.restore()
         cv.drawPath(outline, paint(Color.WHITE, Paint.Style.STROKE, 5f))
         cv.drawPath(outline, Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(38f, 13f, 52f, 60f, c(0x99F6E4), c(0x0D9488), Shader.TileMode.CLAMP)

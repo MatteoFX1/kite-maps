@@ -140,7 +140,7 @@ jobs:
           arch: x86_64
           profile: pixel_7_pro
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
             mkdir -p shots
             adb install -r Kite.apk
