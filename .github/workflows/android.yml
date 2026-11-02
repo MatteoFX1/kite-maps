@@ -145,12 +145,11 @@ jobs:
             mkdir -p shots
             adb install -r Kite.apk
             adb shell settings put global hide_error_dialogs 1 || true
-            adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
             adb shell pm grant app.kite android.permission.ACCESS_FINE_LOCATION
             adb shell pm grant app.kite android.permission.ACCESS_COARSE_LOCATION
             adb shell pm grant app.kite android.permission.POST_NOTIFICATIONS || true
             adb emu geo fix -0.9731 51.4543
-            for step in icons welcome wazeintro browse search place directions nav camalert allalerts roundabout uk layers settings saved pickhome wazemap transit stops addstop endtrip wazesettings diagnostics puckflat puckpitch; do adb shell am force-stop app.kite; adb emu geo fix -0.9731 51.4543; adb shell am start -n app.kite/.MainActivity --es demo $step > /dev/null; t=15; case $step in nav|camalert|allalerts|roundabout|uk|endtrip) t=45;; search|place|directions|transit|stops|addstop) t=30;; welcome|wazeintro|layers) t=24;; esac; i=0; while [ $i -lt $t ]; do adb emu geo fix -0.9731 51.4543 > /dev/null; sleep 3; i=$((i+3)); done; adb exec-out screencap -p > shots/$step.png; done
+            for step in icons welcome wazeintro browse search place directions nav camalert allalerts roundabout uk layers settings saved pickhome wazemap transit stops addstop endtrip wazesettings diagnostics puckflat puckpitch; do adb shell am force-stop app.kite; adb emu geo fix -0.9731 51.4543; adb shell am start -n app.kite/.MainActivity --es demo $step > /dev/null; t=15; case $step in nav|camalert|allalerts|roundabout|uk|endtrip) t=45;; search|place|directions|transit) t=30;; stops|addstop) t=40;; welcome|wazeintro|layers) t=24;; esac; i=0; while [ $i -lt $t ]; do adb emu geo fix -0.9731 51.4543 > /dev/null; sleep 3; i=$((i+3)); done; adb exec-out screencap -p > shots/$step.png; done
             adb shell cmd uimode night yes
             for step in browse place nav allalerts; do adb shell am force-stop app.kite; adb shell am start -n app.kite/.MainActivity --es demo $step > /dev/null; t=15; case $step in nav|allalerts) t=45;; place) t=30;; esac; i=0; while [ $i -lt $t ]; do adb emu geo fix -0.9731 51.4543 > /dev/null; sleep 3; i=$((i+3)); done; adb exec-out screencap -p > shots/dark-$step.png; done
             adb logcat -d -s AndroidRuntime:E KiteApp:* > shots/crash-log.txt || true
