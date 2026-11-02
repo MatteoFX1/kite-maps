@@ -204,7 +204,10 @@ object DemoScript {
             "wazemap" -> {
                 st.waze = true; st.wazeOnMap = true; st.wazeHeatmap = true
                 st.wazeKinds = WazeAlert.Kind.entries.toSet()
-                center(model, 51.507, -0.12, 12.3); return
+                center(model, 51.507, -0.12, 12.3)
+                delay(22000)
+                android.util.Log.i("KiteTrace", "waze after 28 s: ${Waze.lastStatus?.summary ?: "no answer yet"}; ${WazeWeb.note}")
+                return
             }
             "saved" -> {
                 st.saved = listOf(

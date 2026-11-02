@@ -133,8 +133,15 @@ object Transitous {
     /** A stretch of metro or rail track with its lines' color, for the transit map layer. */
     data class Line(val points: List<LatLng>, val color: Long, val metro: Boolean, val names: List<String>)
 
+    /** How the last [lines] request went, for the build's log. */
+    @Volatile var linesNote = ""
+
     suspend fun lines(south: Double, west: Double, north: Double, east: Double, zoom: Int): List<Line>? {
-        val r = Http.getOrNull("$base/api/experimental/map/routes?min=$south,$west&max=$north,$east&zoom=$zoom", headers, client) ?: return null
+        val started = System.currentTimeMillis()
+        val r = try { Http.get("$base/api/experimental/map/routes?min=$south,$west&max=$north,$east&zoom=$zoom", headers, client) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { linesNote = "${e.javaClass.simpleName}: ${e.message} after ${System.currentTimeMillis() - started} ms"; return null }
+        linesNote = "HTTP ${r.code}, ${r.body.size} bytes in ${System.currentTimeMillis() - started} ms"
         if (r.code != 200) return null
         return parseLines(r.body)
     }

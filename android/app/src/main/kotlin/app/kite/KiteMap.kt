@@ -530,7 +530,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
         val box = RailBox(b.latitudeSouth - dLat, b.longitudeWest - dLng, b.latitudeNorth + dLat, b.longitudeEast + dLng, z)
         railFetch = scope.launch {
             val lines = runCatching { Transitous.lines(box.s, box.w, box.n, box.e, min(z, 14)) }.getOrNull()
-            Log.i("KiteTrace", "transit lines: ${lines?.size ?: "failed"} at zoom $z")
+            Log.i("KiteTrace", "transit lines: ${lines?.size ?: "failed"} at zoom $z (${Transitous.linesNote})")
             railFetch = null
             if (lines != null) {
                 railBox = box
