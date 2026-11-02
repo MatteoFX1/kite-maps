@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="home" android:enabled="true" android:icon="@drawable/ic_shortcut_home" android:shortcutShortLabel="@string/shortcut_home">
+        <intent android:action="app.kite.HOME" android:targetPackage="app.kite" android:targetClass="app.kite.MainActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="work" android:enabled="true" android:icon="@drawable/ic_shortcut_work" android:shortcutShortLabel="@string/shortcut_work">
+        <intent android:action="app.kite.WORK" android:targetPackage="app.kite" android:targetClass="app.kite.MainActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="car" android:enabled="true" android:icon="@drawable/ic_shortcut_car" android:shortcutShortLabel="@string/shortcut_car">
+        <intent android:action="app.kite.CAR" android:targetPackage="app.kite" android:targetClass="app.kite.MainActivity" />
+    </shortcut>
+</shortcuts>

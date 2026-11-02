@@ -3,6 +3,15 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## Android 0.7.6
+
+- **Kite for Android, first release:** the iPhone app, screen for screen, written fresh for
+  Android: the big driving screen with lanes and real roundabout pictures, speed cameras with
+  their direction, your speed and the limit, live Waze police and road reports, the Highway Radar
+  police heat map, Street View, transit, saved places and Home, Work and Car shortcuts.
+- **No Google Play Services needed:** works on GrapheneOS. Updates come from Kite's own F-Droid
+  repo (see the README).
+
 ## 0.7.6
 
 - **Quieter about cameras on the other side of the road:** when the map says a speed camera

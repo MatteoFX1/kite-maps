@@ -1,0 +1,170 @@
+name: Build Android app
+
+on:
+  push:
+    paths:
+      - 'android/**'
+      - 'project.yml'
+      - 'CHANGELOG.md'
+      - '.github/workflows/android.yml'
+      - '.github/fdroid/**'
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+      - '.github/fdroid/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build Kite.apk
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Version
+        id: version
+        # The same version number as the iPhone app (project.yml).
+        working-directory: .
+        run: |
+          VERSION=$(sed -n 's/.*MARKETING_VERSION: "\(.*\)"/\1/p' project.yml | head -1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Kite $VERSION"
+
+      - name: Decode the signing key
+        # One key for every release, so each new APK installs over the last. Without the secret
+        # the APK is signed with a throwaway key (fine for a look, can't update an installed copy).
+        env:
+          KEYSTORE_B64: ${{ secrets.KITE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/kite.jks"
+            echo "KITE_KEYSTORE_PATH=$RUNNER_TEMP/kite.jks" >> "$GITHUB_ENV"
+            echo "Signing with Kite's release key."
+          else
+            echo "No signing key secret: the APK gets a throwaway key."
+          fi
+
+      - name: Engine tests
+        run: ./gradlew :core:test --no-daemon --stacktrace
+
+      - name: Build the APK
+        env:
+          KITE_KEYSTORE_PASSWORD: ${{ secrets.KITE_KEYSTORE_PASSWORD }}
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleRelease --no-daemon -PappVersionName=${{ steps.version.outputs.version }} 2>&1 | tee "$RUNNER_TEMP/build.log"
+          cp app/build/outputs/apk/release/app-release.apk ../Kite.apk
+          ls -l ../Kite.apk
+
+      - name: Show compile errors
+        if: failure()
+        run: |
+          grep -E '^e: |error:|FAILED|What went wrong' -A2 "$RUNNER_TEMP/build.log" | head -150 || true
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kite-apk
+          path: Kite.apk
+
+      - name: Add the APK to the release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Kite Maps ${{ steps.version.outputs.version }}
+          files: Kite.apk
+
+      - name: Publish to Kite's F-Droid repo
+        # Only real releases (main), and only once the signing key secret is set: F-Droid needs
+        # every update signed with the same key.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: .
+        env:
+          KITE_KEYSTORE_BASE64: ${{ secrets.KITE_KEYSTORE_BASE64 }}
+          KITE_KEYSTORE_PASSWORD: ${{ secrets.KITE_KEYSTORE_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$KITE_KEYSTORE_BASE64" ]; then echo "No signing key secret yet: skipping F-Droid."; exit 0; fi
+          sudo apt-get update -qq && sudo apt-get install -y -qq fdroidserver >/dev/null
+          .github/fdroid/publish.sh "$PWD/Kite.apk" "${{ steps.version.outputs.version }}"
+
+  shots:
+    name: Screenshots on an Android emulator
+    # A look at every main screen after each change, saved to the android-screenshots branch.
+    needs: apk
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Kite-apk
+
+      - name: Let the emulator use the processor's virtualisation
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Take screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          disable-animations: true
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            mkdir -p shots
+            adb install -r Kite.apk
+            adb shell settings put global hide_error_dialogs 1 || true
+            adb shell pm grant app.kite android.permission.ACCESS_FINE_LOCATION
+            adb shell pm grant app.kite android.permission.ACCESS_COARSE_LOCATION
+            adb shell pm grant app.kite android.permission.POST_NOTIFICATIONS || true
+            adb emu geo fix -0.9731 51.4543
+            for step in icons welcome wazeintro browse search place directions nav camalert allalerts roundabout uk layers settings saved pickhome wazemap transit stops addstop endtrip wazesettings diagnostics puckflat puckpitch rail cameras wazedemo wazetap longname longdir searchfocus locationoff transituk wazelink googlelink mine board streetview listscroll wazeroute; do adb shell am force-stop app.kite; adb emu geo fix -0.9731 51.4543; adb shell am start -n app.kite/.MainActivity --es demo $step > /dev/null; t=15; case $step in nav|camalert|allalerts|roundabout|uk|endtrip) t=45;; search|place|directions|transit) t=30;; stops|addstop|wazeroute) t=40;; welcome|wazeintro|layers|wazetap|searchfocus|locationoff|mine) t=24;; cameras|wazemap|wazedemo|rail|longname|longdir|board|wazelink|googlelink|transituk|streetview|listscroll) t=30;; esac; i=0; while [ $i -lt $t ]; do adb emu geo fix -0.9731 51.4543 > /dev/null; sleep 3; i=$((i+3)); done; adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null 2>&1 || true; sleep 1; adb exec-out screencap -p > shots/$step.png; echo "=== $step" >> shots/steps-log.txt; adb logcat -d -s KiteTrace:* KiteApp:* AndroidRuntime:E >> shots/steps-log.txt || true; adb logcat -c || true; done
+            # Test drives: the app moves the car along its route itself; a picture every 30 seconds and what it said.
+            adb logcat -d -s AndroidRuntime:E KiteTrace:* KiteApp:* > shots/crash-log-screens.txt || true
+            for step in drive drivewrong; do adb logcat -c; adb shell am force-stop app.kite; adb emu geo fix -0.9731 51.4543; adb shell am start -n app.kite/.MainActivity --es demo $step > /dev/null; i=0; n=10; while [ $i -lt 480 ]; do adb emu geo fix -0.9731 51.4543 > /dev/null; sleep 3; i=$((i+3)); if [ $((i % 30)) -eq 0 ]; then adb exec-out screencap -p > shots/$step-$n.png; n=$((n+1)); fi; done; adb logcat -d -s KiteVoice:* KiteTrace:* AndroidRuntime:E > shots/$step-log.txt || true; done
+            adb shell cmd uimode night yes
+            for step in browse place nav allalerts; do adb shell am force-stop app.kite; adb shell am start -n app.kite/.MainActivity --es demo $step > /dev/null; t=15; case $step in nav|allalerts) t=45;; place) t=30;; esac; i=0; while [ $i -lt $t ]; do adb emu geo fix -0.9731 51.4543 > /dev/null; sleep 3; i=$((i+3)); done; adb exec-out screencap -p > shots/dark-$step.png; done
+            adb logcat -d -s AndroidRuntime:E KiteApp:* > shots/crash-log.txt || true
+            adb logcat -d -s Mbgl:* MapLibre:* > shots/map-log.txt || true
+            curl -s -o /dev/null -w 'glyphs from the runner: %{http_code} %{size_download} bytes' 'https://tiles.openfreemap.org/fonts/Noto%20Sans%20Bold/0-255.pbf' >> shots/map-log.txt || true
+
+      - name: Save screenshots to the android-screenshots branch
+        if: always()
+        run: |
+          cd shots || exit 0
+          git init -q -b android-screenshots
+          git config user.name "Kite build"
+          git config user.email "kite-build@users.noreply.github.com"
+          git add . && git commit -qm "Android screenshots for ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" android-screenshots

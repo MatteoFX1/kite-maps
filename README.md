@@ -53,6 +53,21 @@ Every change merged into `main` builds a new release automatically on a GitHub A
 named after its version (like `v0.7.1`) with a "What's new" list from [CHANGELOG.md](CHANGELOG.md).
 Pull requests build too: their `.ipa` is under the run's **Artifacts** in the Actions tab.
 
+### Android (F-Droid)
+
+Kite for Android works without Google Play Services (GrapheneOS and other de-Googled phones
+included). Add Kite's own F-Droid repo once and updates arrive like any other F-Droid app:
+
+```
+https://raw.githubusercontent.com/MatteoFX1/kite-maps/fdroid/repo
+```
+
+In F-Droid, open **Settings › Repositories**, tap **+**, paste the link above, then search for
+**Kite Maps** and install. You can also download **`Kite.apk`** from the
+[latest release](https://github.com/matteofx1/kite-maps/releases/latest). The Android app lives
+in the [`android/`](android) folder and is built on GitHub Actions with the same version numbers
+as the iPhone app.
+
 ## What you get
 
 - 🗺️ **A clean, calm map**: a Waze-like look at night, classic by day, on OpenFreeMap tiles.
