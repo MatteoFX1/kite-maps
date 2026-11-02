@@ -1,0 +1,118 @@
+{
+  "repo": {
+    "name": {
+      "en-US": "Kite Maps"
+    },
+    "description": {
+      "en-US": "Kite Maps for Android, straight from its own builds on GitHub."
+    },
+    "icon": {
+      "en-US": {
+        "name": "/icons/icon.png",
+        "sha256": "ed21b90c24b9a9ea217d439d24d46a0f813c1cfbe16a10e3283c6d47c846d4ef",
+        "size": 977
+      }
+    },
+    "address": "https://raw.githubusercontent.com/MatteoFX1/kite-maps/fdroid/repo",
+    "timestamp": 1793621858000,
+    "categories": {
+      "Navigation": {
+        "name": {
+          "en-US": "Navigation"
+        }
+      }
+    }
+  },
+  "packages": {
+    "app.kite": {
+      "metadata": {
+        "added": 1793621854000,
+        "categories": [
+          "Navigation"
+        ],
+        "issueTracker": "https://github.com/MatteoFX1/kite-maps/issues",
+        "lastUpdated": 1793621854000,
+        "license": "GPL-3.0-only",
+        "sourceCode": "https://github.com/MatteoFX1/kite-maps",
+        "authorName": "Kite Maps",
+        "name": {
+          "en-US": "Kite Maps"
+        },
+        "summary": {
+          "en-US": "Driving-first maps with speed cameras, lanes and live road alerts"
+        },
+        "description": {
+          "en-US": "Kite is a maps and sat nav app built for driving: a big, clear driving screen,\nlane guidance and real roundabout pictures, speed cameras with direction, the\nspeed limit and your speed, live road alerts and a police heat map.\n\nNo account and no tracking. Works without Google Play Services."
+        },
+        "preferredSigner": "22bb174caed240788374d18488c7c3e57d0f81ce070427293deee30073670cad"
+      },
+      "versions": {
+        "58f2fa44510fbf1a2ad913642cf97ba6f4ccf47d82684513789efe4d42e3fd2d": {
+          "added": 1793621854000,
+          "file": {
+            "name": "/app.kite_706.apk",
+            "sha256": "58f2fa44510fbf1a2ad913642cf97ba6f4ccf47d82684513789efe4d42e3fd2d",
+            "size": 43642000
+          },
+          "manifest": {
+            "nativecode": [
+              "arm64-v8a",
+              "armeabi-v7a",
+              "x86",
+              "x86_64"
+            ],
+            "versionName": "0.7.6",
+            "versionCode": 706,
+            "usesSdk": {
+              "minSdkVersion": 26,
+              "targetSdkVersion": 35
+            },
+            "signer": {
+              "sha256": [
+                "22bb174caed240788374d18488c7c3e57d0f81ce070427293deee30073670cad"
+              ]
+            },
+            "usesPermission": [
+              {
+                "name": "android.permission.INTERNET"
+              },
+              {
+                "name": "android.permission.ACCESS_NETWORK_STATE"
+              },
+              {
+                "name": "android.permission.ACCESS_FINE_LOCATION"
+              },
+              {
+                "name": "android.permission.ACCESS_COARSE_LOCATION"
+              },
+              {
+                "name": "android.permission.FOREGROUND_SERVICE"
+              },
+              {
+                "name": "android.permission.FOREGROUND_SERVICE_LOCATION"
+              },
+              {
+                "name": "android.permission.POST_NOTIFICATIONS"
+              },
+              {
+                "name": "android.permission.WAKE_LOCK"
+              },
+              {
+                "name": "android.permission.VIBRATE"
+              },
+              {
+                "name": "android.permission.RECORD_AUDIO"
+              },
+              {
+                "name": "android.permission.ACCESS_WIFI_STATE"
+              },
+              {
+                "name": "app.kite.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

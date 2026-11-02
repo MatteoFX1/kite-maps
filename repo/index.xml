@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<fdroid>
+	<repo icon="icon.png" name="Kite Maps" pubkey="308204eb308202d3a00302010202083ea33ad2efcfeed2300d06092a864886f70d01010c05003023310d300b060355040a13044b69746531123010060355040313094b697465204d6170733020170d3236313130313230323630355a180f32303534303331393230323630355a3023310d300b060355040a13044b69746531123010060355040313094b697465204d61707330820222300d06092a864886f70d01010105000382020f003082020a0282020100cd613aef519da9114acb035f0eb873a652915bc61a9ac7f3e64c48210ee2b5bd5a3d570d7610e7459e16a06297d87a64176bc4e8f30a8be016e8f1c07f2e5c347ba2a28df4068a0c147618408bc93b9db378bead1148c442947b395dc729823bfb0c8037446883a001bf4b2a0892ea24a7b247487b421a382f6203424347eaad5d5b01e65bde7055144c62819b3086638d66e69ffd8dee8bd11863b16f4d1f9b8f0ffd162869ff8fc2c7485337163b6af207b4195ee09c9259a23541e6e4a39dc032131f166385537684b9c5fd0f349f5bd2fdbff35141be3ee74de13472a434f8557b34f4d81df7264ad57c748514f35d68c25eed6c36b9748a8613baf604552eb2876354119034ca32ecb50f2efacc591bb1a2c7bf69c1d8910c58d4d25759d23d8fa3b8e1534f63cfe0c0ef39ff2d47901efd211364805a36de1c3a2a9d5669aebc2557c6a39d09e2228e895adb1f8073aaf0fd7d4df08576b3669fc29798e43eaaee61ee35809ec0512da1cc14bbfa5c4e7b3777e2161f411650501362c7cee6eb104f70fafe3a0da4d6770bfc644b8a2dc715823115b68acd241dc3860b22634fabbe782268a8e3da24822e3731c1356f9a27706f6247f4ce90a6b48bd69a0015c88778341ab57de817832f789ea6f6235ab607b7bb48ec8faa2ab82ce2a21494d5f3f7efac3d182d21de65eea9c7969c7a14f11f0b8b22cd747d2a26590203010001a321301f301d0603551d0e041604146cce3f59cc34d13c9d338e5f9533dbb7db30e6e6300d06092a864886f70d01010c050003820201004f7d05e1d3f00e0ee1ff7f56052132d28f526bdbfc7a0644e844383a637bea2d171278b6065571512c0c34488881fb0da197928edd2f3597bcd01af3ab0038e4da1fe5f24367cad08745b53b5c37ce8b17a1450d4a862d1ef5af17bdd8da9bd5ec5bcf55f983b598c878428b0af0d36cf63fd6a893a0b5a1ccf6cdc1f82e8e4704b2d2fa9d6b998734150a2cdc950d8c74328c82e6ee85514024c4468d6ff58b524411b5a6d1bbf25db618864697142a855950b7ffb143612edc6361352a471f1ab6f159ddf38130b83b26adb1c7e29b40b1781915bc15709314fbeadba7204d15e7fc36b4ed33c44b0ea62b1f5e3b3ecadaebe959f332e7620930df5f6d8289f123f247e6dbe5f527954676889aaab944d7864a056238d3a60a36a139f788af4a0beb3f921c9e5c5c551466adae61eef7419862bcca9cd1bb93ebf7aace0728600f5be917c3b9d14e1a2b2bc1b8b5c2f2cae8a36d272bf1657332eefe350e8b0a51c0613e9f6d0b65856701e9ca6cb55d14f2bd0a12992b59840eac125db3167271654916059eed83da6c30580faa898806c644eb0d2fdd5e376bfae1bcf56c9a8ba7e9d1983af55600a860c776984fa03d0c10fa03127d9ebc9c640e8ff892828f8747c1af7c4c22d22d79a61e76560ca930f600d9f0e8d6e1275eb2334582dedd45003f6001299c3b036e5523c6e95a1e50195c714476490176ef5b04d7a1" timestamp="1793621858" url="https://raw.githubusercontent.com/MatteoFX1/kite-maps/fdroid/repo" version="20002">
+		<description>Kite Maps for Android, straight from its own builds on GitHub.</description>
+	</repo>
+	<application id="app.kite">
+		<id>app.kite</id>
+		<added>2026-11-02</added>
+		<lastupdated>2026-11-02</lastupdated>
+		<name>Kite Maps</name>
+		<summary>Driving-first maps with speed cameras, lanes and live road alerts</summary>
+		<desc>Kite is a maps and sat nav app built for driving: a big, clear driving screen,
+lane guidance and real roundabout pictures, speed cameras with direction, the
+speed limit and your speed, live road alerts and a police heat map.
+
+No account and no tracking. Works without Google Play Services.</desc>
+		<license>GPL-3.0-only</license>
+		<categories>Navigation</categories>
+		<category>Navigation</category>
+		<web></web>
+		<source>https://github.com/MatteoFX1/kite-maps</source>
+		<tracker>https://github.com/MatteoFX1/kite-maps/issues</tracker>
+		<author>Kite Maps</author>
+		<marketversion></marketversion>
+		<marketvercode>706</marketvercode>
+		<package>
+			<version>0.7.6</version>
+			<versioncode>706</versioncode>
+			<apkname>app.kite_706.apk</apkname>
+			<hash type="sha256">58f2fa44510fbf1a2ad913642cf97ba6f4ccf47d82684513789efe4d42e3fd2d</hash>
+			<size>43642000</size>
+			<sdkver>26</sdkver>
+			<targetSdkVersion>35</targetSdkVersion>
+			<added>2026-11-02</added>
+			<sig>6796aa3882d44801a10abfd660409649</sig>
+			<permissions>ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE,FOREGROUND_SERVICE,FOREGROUND_SERVICE_LOCATION,INTERNET,POST_NOTIFICATIONS,RECORD_AUDIO,VIBRATE,WAKE_LOCK,app.kite.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION</permissions>
+			<nativecode>arm64-v8a,armeabi-v7a,x86,x86_64</nativecode>
+		</package>
+	</application>
+</fdroid>
