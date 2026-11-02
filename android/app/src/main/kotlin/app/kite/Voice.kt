@@ -74,9 +74,10 @@ object Voice {
 
     /** Says [text]; [urgent] cuts off whatever is being said first. */
     fun say(text: String, urgent: Boolean = false) {
-        if (silent) return
         val said = SpokenText.forVoice(text)
+        // Logged even when silent, so a test drive can be checked afterwards.
         Log.i("KiteVoice", "say: $said")
+        if (silent) return
         val t = tts
         if (t == null || !ready) { warmUp(); pending.add(said); return }
         am.requestAudioFocus(focus)

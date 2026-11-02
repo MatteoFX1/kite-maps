@@ -48,7 +48,13 @@ object LocationService {
 
     private val listener = LocationListener { loc -> handle(loc) }
 
+    /** Test drives on the build's emulator: fixes come from a made-up drive, not the GPS. */
+    var simulating = false
+
+    fun inject(f: Fix) { last = f; onUpdate?.invoke(f) }
+
     private fun handle(loc: Location) {
+        if (simulating) return
         if (!loc.hasAccuracy() && loc.provider != LocationManager.GPS_PROVIDER) return
         if (System.currentTimeMillis() - loc.time > 120_000) return
         // A network fix is only taken while GPS hasn't given anything for a while.

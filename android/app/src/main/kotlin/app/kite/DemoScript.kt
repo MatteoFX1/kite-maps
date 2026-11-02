@@ -39,6 +39,39 @@ object DemoScript {
     private val pub get() = Place("demo-pub", "The Old Bell Traditional Pub, Restaurant and Rooms by the River", LatLng(51.4545, -0.9690), "demo",
         address = "123 Long Address Road, Somewhere Quite Far Away, Reading")
 
+    /** Moves the car along the drive's current route (a new one after a reroute) at town speed. */
+    private suspend fun drive(model: AppModel, leaveAt: Double?) {
+        var pos = LocationService.last?.coord ?: return
+        LocationService.simulating = true
+        val speed = 14.0
+        var off = 0
+        var offBearing = 0.0
+        for (t in 0 until 900) {
+            val nav = model.nav ?: break
+            if (nav.arrived) break
+            val line = nav.route.polyline
+            if (line.size < 2) break
+            val cum = Geo.cumulative(line)
+            val total = cum.last()
+            val along = Geo.project(pos, line, cum).along
+            if (leaveAt != null && off == 0 && along / total > leaveAt) {
+                off = 1
+                val ahead = Geo.point(line, kotlin.math.min(along + 30, total), cum)
+                offBearing = (Geo.bearing(pos, ahead) + 90) % 360
+            }
+            val next = if (off in 1..20) {
+                off++
+                val r = Math.toRadians(offBearing)
+                LatLng(pos.lat + speed * kotlin.math.cos(r) / 110_540, pos.lng + speed * kotlin.math.sin(r) / (111_320 * kotlin.math.cos(Math.toRadians(pos.lat))))
+            } else Geo.point(line, kotlin.math.min(along + speed, total), cum)
+            val course = Geo.bearing(pos, next)
+            pos = next
+            LocationService.inject(Fix(pos.lat, pos.lng, 5.0, speed, course, 0.0, System.currentTimeMillis()))
+            delay(1000)
+        }
+        android.util.Log.i("KiteTrace", "test drive over: ${if (model.nav == null) "arrived" else "still driving"}")
+    }
+
     /** Made-up Waze reports around Reading, so the badges and the heat map show even if Waze turns the build away. */
     private fun demoWaze(): List<WazeAlert> {
         val c = LatLng(51.4543, -0.9731)
@@ -120,6 +153,16 @@ object DemoScript {
                 st.waze = true; st.wazeHeatmap = true; st.home = home; return
             }
             "locationoff" -> return
+            "drive", "drivewrong" -> {
+                // A test drive: Reading town centre to the stadium, the car moved along the route
+                // second by second; "drivewrong" leaves the route halfway to check it finds a new one.
+                val to = Place("demo-stadium", "Select Car Leasing Stadium", LatLng(51.4222, -0.9827), "demo")
+                model.select(to); delay(2000)
+                model.openDirections(to); delay(10000)
+                model.startNavigation(); delay(3000)
+                drive(model, if (step == "drivewrong") 0.45 else null)
+                return
+            }
             "transituk" -> {
                 // A long trip with many changes: a real plan to central London.
                 val to = Place("demo-london", "London", LatLng(51.5072, -0.1276), "demo")
