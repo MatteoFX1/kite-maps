@@ -504,11 +504,12 @@ class KiteMap(private val model: AppModel, private val context: Context) {
             val fromMap = closures.await()
             wazeFetch = null
             if (fakeWaze) return@launch
-            if (fromMap == null && live == null) { wazeFailedAt = now(); return@launch }
+            if (fromMap == null && live == null) { Log.i("KiteTrace", "waze browse: both failed (Waze: ${Waze.lastStatus?.summary ?: "no answer"}; ${WazeWeb.note})"); wazeFailedAt = now(); return@launch }
             val merged = linkedMapOf<String, WazeAlert>()
             for (a in (fromMap ?: emptyList()) + (live ?: emptyList())) merged[a.id] = a
             val found = merged.values.toList()
-            Log.i("KiteTrace", "waze browse: live map ${fromMap?.size ?: "failed"}, drivers' reports ${if (askLive) live?.size ?: "failed" else "not asked"}")
+            Log.i("KiteTrace", "waze browse: live map ${fromMap?.size ?: "failed"}, drivers' reports ${if (askLive) live?.size ?: "failed" else "not asked"}" +
+                if (fromMap == null) " (Waze: ${Waze.lastStatus?.summary ?: "no answer"}; ${WazeWeb.note})" else "")
             wazeAlerts = found
             wazeBox = if (live != null) liveBox else box
             wazeAt = now()
