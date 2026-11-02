@@ -24,6 +24,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import app.kite.core.Place
+import app.kite.core.plain
 
 /** Opens a link in whatever app handles it (browser, dialer, another maps app). */
 fun Context.open(url: String) {
