@@ -291,7 +291,7 @@ fun largePhoto(u: String): String = u.replace(Regex("=w\\d+-h\\d+"), "=w1600-h12
 /** Photos full screen, swiped through. */
 @Composable
 fun PhotoViewer(urls: List<String>, start: Int, close: () -> Unit) {
-    Dialog(close, DialogProperties(usePlatformDefaultWidth = false)) {
+    FullScreenDialog(close) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             val pager = rememberPagerState(start) { urls.size }
             HorizontalPager(pager, Modifier.fillMaxSize()) { i ->

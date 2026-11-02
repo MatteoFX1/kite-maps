@@ -3,6 +3,14 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## Android 0.7.7
+
+- **Welcome screen fixed on Pixel phones:** the "Get started" button was pushed off the bottom
+  of the screen, so you couldn't get into the app. The full-screen pages (trip steps, pickers,
+  photos) are fixed the same way.
+- **F-Droid repo fixed:** it was stuck on "checking repo" because the repo's index was never
+  made. Adding the repo now works, and new versions show up as updates.
+
 ## Android 0.7.6
 
 - **Kite for Android, first release:** the iPhone app, screen for screen, written fresh for

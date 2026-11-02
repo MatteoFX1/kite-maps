@@ -428,7 +428,7 @@ fun TransitSteps(trip: TransitTrip) {
 /** A full-screen page with a title bar and Cancel, used for the pickers. */
 @Composable
 fun PickerPage(title: String, close: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    FullScreenDialog(close) {
         val dark = LocalDark.current
         Column(Modifier.fillMaxSize().background(Vela.ground(dark)).systemBarsPadding().imePadding()) {
             Box(Modifier.fillMaxWidth().height(56.dp)) {

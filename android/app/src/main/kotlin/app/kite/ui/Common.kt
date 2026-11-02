@@ -352,3 +352,25 @@ fun IconRow(icon: ImageVector, text: String, sub: String? = null, trailing: Stri
         if (trailing != null) Text(trailing, fontSize = KType.caption, color = secondaryText)
     }
 }
+
+/**
+ * A Dialog that really covers the whole screen. Without this, on phones with a camera hole (Pixel),
+ * Android starts the dialog's window below the hole, so its bottom (and any button there) ends up
+ * off the screen.
+ */
+@Composable
+fun FullScreenDialog(onDismiss: () -> Unit, dismissOnBack: Boolean = true, content: @Composable () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismiss, androidx.compose.ui.window.DialogProperties(
+        usePlatformDefaultWidth = false, decorFitsSystemWindows = false, dismissOnBackPress = dismissOnBack)) {
+        val window = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        SideEffect {
+            window?.let { w ->
+                w.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
+                if (android.os.Build.VERSION.SDK_INT >= 28) w.attributes = w.attributes.apply {
+                    layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+            }
+        }
+        content()
+    }
+}
