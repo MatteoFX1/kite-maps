@@ -76,17 +76,27 @@ fun FilterChipLabel(title: String, on: Boolean, menu: Boolean, onClick: () -> Un
 
 @Composable
 fun ResultsList(model: AppModel, modifier: Modifier = Modifier) {
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 60.dp)) {
-        item { HorizontalDivider() }
-        if (model.visibleResults.isEmpty() && model.results.isNotEmpty()) {
-            item {
-                Text("Nothing here matches these filters. Turn one off to see more.", fontSize = KType.body, color = secondaryText,
-                    textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp, horizontal = 20.dp))
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    Box(modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(bottom = 60.dp)) {
+            item { HorizontalDivider() }
+            if (model.visibleResults.isEmpty() && model.results.isNotEmpty()) {
+                item {
+                    Text("Nothing here matches these filters. Turn one off to see more.", fontSize = KType.body, color = secondaryText,
+                        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp, horizontal = 20.dp))
+                }
+            }
+            items(model.visibleResults, key = { it.id }) { p ->
+                ResultRow(model, p)
+                HorizontalDivider()
             }
         }
-        items(model.visibleResults, key = { it.id }) { p ->
-            ResultRow(model, p)
-            HorizontalDivider()
+        // Screenshot run only: the list scrolled with the sheet full height, and a label saying which.
+        if (DemoScript.step == "listscroll") {
+            LaunchedEffect(Unit) { kotlinx.coroutines.delay(6000); list.scrollToItem(4) }
+            val atTop = list.firstVisibleItemIndex == 0 && list.firstVisibleItemScrollOffset == 0
+            Text(if (atTop) "list at top" else "list scrolled", fontSize = KType.caption, fontWeight = FontWeight.Bold, color = Color.White,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 80.dp).clip(CircleShape).background(Color.Red).padding(6.dp))
         }
     }
 }

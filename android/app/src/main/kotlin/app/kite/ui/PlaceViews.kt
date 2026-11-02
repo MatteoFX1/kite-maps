@@ -313,6 +313,9 @@ fun StreetViewTile(model: AppModel, place: Place, height: Dp) {
     LaunchedEffect(place.id) {
         if (!AppSettings.noGoogle) pano = runCatching { StreetView.find(place.location) }.getOrNull()
         loaded = true
+        // Screenshot run only: open the viewer straight away.
+        val p = pano
+        if (p != null && DemoScript.step == "streetview") model.streetView = StreetViewRequest(place.name, p, Geo.bearing(p.location, place.location))
     }
     val p = pano
     if (p != null) {

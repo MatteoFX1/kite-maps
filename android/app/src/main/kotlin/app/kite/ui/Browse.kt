@@ -125,6 +125,8 @@ fun BrowseOverlay(model: AppModel) {
         }
     }
     // The back button closes things one at a time, like the iPhone's back arrows.
+    // Screenshot run only: the search box open, to check nothing sits on its panel.
+    if (DemoScript.step == "searchfocus") LaunchedEffect(Unit) { kotlinx.coroutines.delay(8000); focused = true }
     androidx.activity.compose.BackHandler(enabled = focused || hasSheet) {
         if (focused) { focus.clearFocus(); focused = false } else model.clearSearch()
     }
@@ -161,6 +163,7 @@ fun SearchBar(model: AppModel, focused: Boolean, onFocus: (Boolean) -> Unit, unf
     val dark = LocalDark.current
     val ctx = LocalContext.current
     val requester = remember { FocusRequester() }
+    LaunchedEffect(focused) { if (focused) runCatching { requester.requestFocus() } }
     val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         val text = r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
         if (!text.isNullOrBlank()) { model.query = text; model.search(text) }

@@ -527,6 +527,8 @@ fun RouteWazeSummary(route: Route) {
     val s = AppSettings
     var counts by remember(route.id) { mutableStateOf<List<Pair<WazeAlert.Kind, Int>>?>(null) }
     LaunchedEffect(route.id) {
+        // For the build's screenshots, since Waze turns away the build's computers.
+        if (DemoScript.step == "wazeroute") { counts = listOf(WazeAlert.Kind.POLICE to 2, WazeAlert.Kind.ACCIDENT to 1, WazeAlert.Kind.HAZARD to 3); return@LaunchedEffect }
         counts = null
         if (!s.wazeOn || route.mode != TravelMode.DRIVE) return@LaunchedEffect
         val found = withContext(Dispatchers.IO) { Waze.alongRoute(route.polyline) } ?: return@LaunchedEffect

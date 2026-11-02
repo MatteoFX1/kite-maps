@@ -69,6 +69,15 @@ class KiteMap(private val model: AppModel, private val context: Context) {
     private val surveillance = mutableMapOf<Long, SurveillanceCamera>()
     private var railFetch: Job? = null
     private var wazeAlerts: List<WazeAlert> = emptyList()
+    /** Screenshot runs only: made-up reports stay put instead of being replaced by live ones. */
+    private var fakeWaze = false
+
+    fun showDemoWaze(list: List<WazeAlert>) {
+        fakeWaze = true
+        wazeAlerts = list
+        lastWazeKey = ""
+        render()
+    }
     private var wazeBox: Box? = null
     private var wazeAt = 0L
     private var wazeFetch: Job? = null
@@ -462,7 +471,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
             val places = listOfNotNull(LocationService.last?.coord, s.home?.location, s.work?.location)
             WazeHistory.sweepIfDue(places, scope)
         }
-        if (!s.wazeOn || !(s.wazeOnMap || s.wazeHeatmap) || m.cameraPosition.zoom < 10 || wazeFetch != null || now() - wazeFailedAt <= 60_000) return
+        if (fakeWaze || !s.wazeOn || !(s.wazeOnMap || s.wazeHeatmap) || m.cameraPosition.zoom < 10 || wazeFetch != null || now() - wazeFailedAt <= 60_000) return
         val waitMs = (if (model.nav != null) 90_000 else 5_000) - (now() - wazeAskedAt)
         if (waitMs > 0) {
             if (!wazeRetryQueued) {

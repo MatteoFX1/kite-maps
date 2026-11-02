@@ -77,7 +77,7 @@ fun KiteScreen(model: AppModel, activity: MainActivity) {
     val ctx = activity
     val s = AppSettings
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val kiteMap = remember { KiteMap(model, ctx.applicationContext) }
+    val kiteMap = remember { KiteMap(model, ctx.applicationContext).also { DemoScript.kite = it } }
     val dark = LocalDark.current
 
     // The map's own location dot follows the same fixes the drive uses.

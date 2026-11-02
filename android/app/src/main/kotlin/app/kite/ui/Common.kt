@@ -251,7 +251,7 @@ fun StatusCards() {
     val loc = LocationService
     val fix = loc.last
     when {
-        loc.denied -> StatusCard(Icons.Filled.LocationOff, Vela.closed, "Location is off",
+        loc.denied || DemoScript.step == "locationoff" -> StatusCard(Icons.Filled.LocationOff, Vela.closed, "Location is off",
             "Kite needs it to show where you are and to guide you.", "Turn on") { LocationService.openSettings(ctx) }
         loc.authorized && loc.reducedAccuracy -> StatusCard(Icons.Filled.MyLocation, Color(0xFFF59E0B), "Precise location is off",
             "Allow precise location for Kite in Settings to improve your position.", "Settings") { LocationService.openSettings(ctx) }
