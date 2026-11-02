@@ -171,7 +171,7 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
 /** A full-screen sheet with a title and one button on the right (Done or Close). */
 @Composable
 fun TripSheet(title: String, button: String, close: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    FullScreenDialog(close) {
         val dark = LocalDark.current
         Column(Modifier.fillMaxSize().background(Vela.ground(dark)).systemBarsPadding()) {
             Box(Modifier.fillMaxWidth().height(56.dp)) {

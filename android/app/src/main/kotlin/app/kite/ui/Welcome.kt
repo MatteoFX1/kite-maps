@@ -20,12 +20,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.kite.*
 import app.kite.R
 import app.kite.core.*
@@ -33,18 +32,18 @@ import app.kite.core.*
 /** A full-screen first-launch page: scrolls with very big text, with the button always in reach at the bottom. */
 @Composable
 private fun IntroPage(button: String, onButton: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Dialog(onDismissRequest = {}, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false,
-        dismissOnBackPress = false, dismissOnClickOutside = false)) {
-        val dark = LocalDark.current
-        Column(Modifier.fillMaxSize().background(Vela.ground(dark)).systemBarsPadding()) {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-                Spacer(Modifier.height(20.dp))
-                content()
-            }
-            Box(Modifier.padding(horizontal = 24.dp, vertical = 12.dp).fillMaxWidth().height(54.dp).clip(CircleShape).background(Vela.accent(dark)).tap(onButton),
-                contentAlignment = Alignment.Center) {
-                Text(button, fontSize = KType.headline, fontWeight = FontWeight.SemiBold, color = Vela.onAccent(dark))
-            }
+    // Drawn straight over the app (not in a Dialog): a Dialog's window didn't reach the bottom of
+    // the screen on a Pixel, which hid the button. Back does nothing here; the choice comes first.
+    androidx.activity.compose.BackHandler {}
+    val dark = LocalDark.current
+    Column(Modifier.fillMaxSize().background(Vela.ground(dark)).pointerInput(Unit) { }.systemBarsPadding()) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            Spacer(Modifier.height(20.dp))
+            content()
+        }
+        Box(Modifier.padding(horizontal = 24.dp, vertical = 12.dp).fillMaxWidth().height(54.dp).clip(CircleShape).background(Vela.accent(dark)).tap(onButton),
+            contentAlignment = Alignment.Center) {
+            Text(button, fontSize = KType.headline, fontWeight = FontWeight.SemiBold, color = Vela.onAccent(dark))
         }
     }
 }
