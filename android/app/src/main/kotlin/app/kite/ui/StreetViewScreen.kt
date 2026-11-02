@@ -29,8 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.kite.*
 import app.kite.core.*
 import kotlinx.coroutines.*
@@ -44,9 +42,11 @@ import kotlin.math.ceil
 @Composable
 fun StreetViewScreen(req: StreetViewRequest, close: () -> Unit) {
     val ctx = LocalContext.current
-    Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    // Drawn over the whole app (not a separate window), so it fills the screen edge to edge, under the status bar too.
+    androidx.activity.compose.BackHandler(onBack = close)
+    run {
         val renderer = remember(req.pano.id) { PanoRenderer(req.pano, req.heading) }
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Box(Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) { }) {
             AndroidView(modifier = Modifier.fillMaxSize(), factory = { c ->
                 GLSurfaceView(c).apply {
                     setEGLContextClientVersion(2)
