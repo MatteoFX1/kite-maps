@@ -47,6 +47,12 @@ class MainActivity : ComponentActivity() {
         LocationService.refreshPermission()
     }
 
+    /** Out of sight and not driving: GPS off to save the battery (back on at onResume). */
+    override fun onStop() {
+        super.onStop()
+        LocationService.stop()
+    }
+
     /** Links shared from other apps, map links opened in Kite, and the Home, Work and Car shortcuts. */
     private fun handle(i: Intent?) {
         i ?: return

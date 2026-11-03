@@ -90,7 +90,8 @@ object LocationService {
         val best = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
             .mapNotNull { p -> runCatching { lm.getLastKnownLocation(p) }.getOrNull() }
             .maxByOrNull { it.time }
-        if (best != null && last == null && System.currentTimeMillis() - best.time < 30 * 60_000) {
+        // At most 2 minutes old, like the iPhone: an older one is somewhere already left.
+        if (best != null && last == null && System.currentTimeMillis() - best.time < 2 * 60_000) {
             last = Fix(best.latitude, best.longitude, best.accuracy.toDouble(), -1.0, -1.0, best.altitude, best.time)
         }
     }
