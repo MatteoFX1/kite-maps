@@ -69,7 +69,7 @@ final class WazeHistory {
 
     /**
      * While Kite is open, every 10 minutes, also asks Waze about the areas around [places] (where
-     * you are, home, work), so the heat map and risk fill in faster than from what's on screen.
+     * you are), so the heat map and risk fill in faster than from what's on screen.
      */
     func sweepIfDue(_ places: [LatLng]) {
         guard !sweeping, Date().timeIntervalSince(sweptAt) > 600, !places.isEmpty else { return }
