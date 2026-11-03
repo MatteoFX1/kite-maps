@@ -201,7 +201,8 @@ final class Navigator: ObservableObject {
         let toPin = latLng(loc).distance(to: destination.location)
         // Near the pin only counts near the end of the route too: a route can pass right by the
         // place (or by it on the way to a stop) before looping round to its way in.
-        let nearPin = p.remainingMeters < 400
+        // And only once every stop is done: a round trip starts right by its own destination.
+        let nearPin = p.remainingMeters < 400 && stops.isEmpty
         if loc.speed >= 0 && loc.speed < 1, p.remainingMeters < 150 || toPin < 150 {
             if stoppedNearEnd == nil { stoppedNearEnd = loc.timestamp }
         } else {
@@ -256,7 +257,7 @@ final class Navigator: ObservableObject {
     func addStop(_ p: Place) {
         stops.insert(p, at: 0)
         speak("Adding a stop at \(p.name).")
-        if let fix = lastFix { reroute(from: fix, quiet: true) }
+        if let fix = lastFix { reroute(from: fix, quiet: true, adding: p) }
     }
 
     /** Says when a stop is reached (within 40 m of it along the route) and drops it. */
@@ -764,7 +765,7 @@ final class Navigator: ObservableObject {
 
     private func latLng(_ loc: CLLocation) -> LatLng { LatLng(loc.coordinate.latitude, loc.coordinate.longitude) }
 
-    private func reroute(from loc: CLLocation, quiet: Bool = false) {
+    private func reroute(from loc: CLLocation, quiet: Bool = false, adding: Place? = nil) {
         Self.trace.info("reroute from \(String(format: "%.5f,%.5f", loc.coordinate.latitude, loc.coordinate.longitude), privacy: .public) heading \(self.heading(loc).map { Int($0) } ?? -1)")
         rerouting = true
         lastReroute = Date()
@@ -795,7 +796,14 @@ final class Navigator: ObservableObject {
                                             heading: course)
             guard !self.stopped, req == self.rerouteRequest else { return }
             self.rerouting = false
-            guard let fresh = r.routes.first else { return }
+            guard let fresh = r.routes.first else {
+                // The stop just added couldn't be routed to: say so, and don't keep it as if it were on the way.
+                if let adding, let i = self.stops.firstIndex(where: { $0.id == adding.id }) {
+                    self.stops.remove(at: i)
+                    self.speak("Couldn't add a stop at \(adding.name). Carrying on to \(self.stops.first?.name ?? self.destination.name).")
+                }
+                return
+            }
             self.toldNoSignal = false
             self.adopt(fresh)
             if !quiet { self.sayNewRoute() }

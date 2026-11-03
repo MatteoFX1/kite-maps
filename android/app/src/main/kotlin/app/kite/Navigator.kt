@@ -172,7 +172,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         val toPin = loc.coord.distanceTo(destination.location)
         // Near the pin only counts near the end of the route too: a route can pass right by the
         // place (or by it on the way to a stop) before looping round to its way in.
-        val nearPin = p.remainingMeters < 400
+        // And only once every stop is done: a round trip starts right by its own destination.
+        val nearPin = p.remainingMeters < 400 && stops.isEmpty()
         if (loc.speedKnown && loc.speed < 1 && (p.remainingMeters < 150 || toPin < 150)) {
             if (stoppedNearEnd == null) stoppedNearEnd = loc.timeMillis
         } else stoppedNearEnd = null
@@ -218,7 +219,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     fun addStop(p: Place) {
         stops = listOf(p) + stops
         speak("Adding a stop at ${p.name}.")
-        lastFix?.let { reroute(it, quiet = true) }
+        lastFix?.let { reroute(it, quiet = true, adding = p) }
     }
 
     private fun checkStops(p: RouteTracker.Progress) {
@@ -649,7 +650,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         recentFixes.removeAll { loc.timeMillis - it.timeMillis > 20_000 }
     }
 
-    private fun reroute(loc: Fix, quiet: Boolean = false) {
+    private fun reroute(loc: Fix, quiet: Boolean = false, adding: Place? = null) {
         Log.i("KiteTrace", "reroute from ${loc.lat},${loc.lng}")
         rerouting = true
         lastReroute = now()
@@ -674,7 +675,17 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             }.getOrNull()
             if (stopped || req != rerouteRequest) return@launch
             rerouting = false
-            val fresh = r?.routes?.firstOrNull() ?: return@launch
+            val fresh = r?.routes?.firstOrNull()
+            if (fresh == null) {
+                // The stop just added couldn't be routed to: say so, and don't keep it as if it were on the way.
+                val i = if (adding != null) stops.indexOfFirst { it.id == adding.id } else -1
+                if (adding != null && i >= 0) {
+                    // Only the one just added (at the front), not the same place planned earlier.
+                    stops = stops.toMutableList().also { it.removeAt(i) }
+                    speak("Couldn't add a stop at ${adding.name}. Carrying on to ${stops.firstOrNull()?.name ?: destination.name}.")
+                }
+                return@launch
+            }
             toldNoSignal = false
             adopt(fresh)
             if (!quiet) sayNewRoute()

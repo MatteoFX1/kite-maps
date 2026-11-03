@@ -136,6 +136,7 @@ class AppModel {
     val glide = NavGlide()
     private var routesRequest = 0
     private var transitRequest = 0
+    private var transitLoadedAt = 0L
     private var searchTask: Job? = null
 
     init {
@@ -452,7 +453,12 @@ class AppModel {
         loadTransit()
     }
 
-    fun showTransit() { edit { it.copy(transit = true) }; frameRoute() }
+    fun showTransit() {
+        edit { it.copy(transit = true) }
+        // "Leave now" times found a while ago may have left already: look again.
+        if (directions?.transitTime == null && System.currentTimeMillis() - transitLoadedAt > 120_000) loadTransit()
+        frameRoute()
+    }
 
     fun selectTrip(i: Int) { edit { it.copy(trip = i) }; frameRoute() }
 
@@ -516,9 +522,16 @@ class AppModel {
     fun loadTransit() {
         val d = directions ?: return
         val me = userLatLng ?: return
+        transitLoadedAt = System.currentTimeMillis()
+        // A new request either way, so one still loading can't put back trips without the stops.
+        transitRequest++
+        // The planner can't go via stops: rather say so than show trains for a different trip.
+        if (d.stops.isNotEmpty()) {
+            edit { it.copy(trips = emptyList(), tripsError = "Public transport can't go via stops. Remove the stops to see trains and buses.") }
+            return
+        }
         val (from, to) = if (d.reversed) d.destination.location to me else me to d.destination.location
         val destId = d.destination.id
-        transitRequest++
         val req = transitRequest
         edit { it.copy(trips = null, tripsError = null, trip = 0) }
         scope.launch {

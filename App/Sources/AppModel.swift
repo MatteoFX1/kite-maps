@@ -141,6 +141,7 @@ final class AppModel: ObservableObject {
      *  reverse, a new stop or another time) are dropped instead of replacing the new ones. */
     private var routesRequest = 0
     private var transitRequest = 0
+    private var transitLoadedAt = Date.distantPast
     private var searchTask: Task<Void, Never>?
     private var navSub: AnyCancellable?
 
@@ -493,6 +494,8 @@ final class AppModel: ObservableObject {
 
     func showTransit() {
         directions?.transit = true
+        // "Leave now" times found a while ago may have left already: look again.
+        if directions?.transitTime == nil, Date().timeIntervalSince(transitLoadedAt) > 120 { loadTransit() }
         frameRoute()
     }
 
@@ -566,10 +569,18 @@ final class AppModel: ObservableObject {
     /** Transit trips for the current trip, leaving now or at the picked time. */
     func loadTransit() {
         guard let d = directions, let me = userLatLng else { return }
+        transitLoadedAt = Date()
+        // A new request either way, so one still loading can't put back trips without the stops.
+        transitRequest += 1
+        // The planner can't go via stops: rather say so than show trains for a different trip.
+        if !d.stops.isEmpty {
+            directions?.trips = []
+            directions?.tripsError = "Public transport can't go via stops. Remove the stops to see trains and buses."
+            return
+        }
         let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
         let destId = d.destination.id
         let time = d.transitTime, arriveBy = d.arriveBy
-        transitRequest += 1
         let req = transitRequest
         directions?.trips = nil
         directions?.tripsError = nil
