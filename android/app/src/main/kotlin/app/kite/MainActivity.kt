@@ -44,12 +44,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        LocationService.visible = true
         LocationService.refreshPermission()
     }
 
     /** Out of sight and not driving: GPS off to save the battery (back on at onResume). */
     override fun onStop() {
         super.onStop()
+        LocationService.visible = false
         LocationService.stop()
     }
 

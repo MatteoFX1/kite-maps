@@ -88,8 +88,13 @@ object LocationService {
         // Switched back on while Kite was away: ask every provider again, the network one too.
         if (wasOff && !systemOff && started) request(if (navigating) 0 else 1000)
         if (authorized) denied = false
-        if (authorized) start()
+        // Only while Kite is on screen or driving: the Location switch flipped with Kite in the
+        // background mustn't turn GPS back on.
+        if (authorized && (visible || navigating)) start()
     }
+
+    /** Kite is on screen (set by the activity). */
+    var visible = false
 
     private var watching = false
 
