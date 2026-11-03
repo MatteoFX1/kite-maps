@@ -118,6 +118,9 @@ final class Navigator: ObservableObject {
     private var riskPast: [PoliceRisk.Report]?
     private var riskSpokenAt = Date.distantPast
     private var aircraftAt = Date.distantPast
+    /** When the aircraft service last answered: an old sighting isn't "nearby" for long. */
+    private var aircraftSeenAt = Date.distantPast
+    private static let majorWaze: Set<WazeAlert.Kind> = [.police, .accident]
     private var aircraftLoading = false
     private var spokenAircraft: Set<String> = []
 
@@ -395,7 +398,10 @@ final class Navigator: ObservableObject {
         if cam.quiet {
             spokenCameras.insert(cam.id)
         } else {
-            for (j, m) in meters.enumerated() where m >= meters[i] && m - meters[i] < 200 { spokenCameras.insert(routeCameras[j].camera.id) }
+            // Only the same kind, though: a number plate camera just before a speed camera mustn't use up its warning.
+            for (j, m) in meters.enumerated() where m >= meters[i] && m - meters[i] < 200 && routeCameras[j].camera.kind == cam.kind {
+                spokenCameras.insert(routeCameras[j].camera.id)
+            }
         }
         let ahead = meters[i] - p.alongMeters
         let limit = cam.kind == .speed ? (cam.maxspeedKmh ?? route.speedLimit(at: meters[i])) : nil
@@ -476,7 +482,8 @@ final class Navigator: ObservableObject {
         // Reports a few meters apart are one warning.
         // So are two of the same kind close together: the live map and Waze's app servers can list one
         // police car under two ids, and London got "Police reported ahead" twice in 7 seconds.
-        for w in routeWaze where abs(w.along - next.along) < 60
+        // A police car or a crash is never folded into a lesser report next to it, though.
+        for w in routeWaze where (abs(w.along - next.along) < 60 && (w.alert.kind == next.alert.kind || !Self.majorWaze.contains(w.alert.kind)))
             || (w.alert.kind == next.alert.kind && abs(w.along - next.along) < 400) { spokenWaze.insert(w.alert.id) }
         let ahead = next.along - p.alongMeters
         wazeAhead = WazeAhead(alert: next.alert, meters: ahead, startMeters: max(ahead, 1))
@@ -519,7 +526,11 @@ final class Navigator: ObservableObject {
         guard !demoAlerts else { return }
         guard route.mode == .drive, AppSettings.shared.policeAircraft else { aircraftNear = nil; return }
         let here = LatLng(loc.coordinate.latitude, loc.coordinate.longitude)
-        if let near = aircraftNear { aircraftNear = (near.aircraft, near.aircraft.location.distance(to: here)) }
+        if let near = aircraftNear {
+            let d = near.aircraft.location.distance(to: here)
+            // No answer for two minutes (no signal), or 10 km past where it was: it's no longer nearby.
+            aircraftNear = d < 10_000 && Date().timeIntervalSince(aircraftSeenAt) < 120 ? (near.aircraft, d) : nil
+        }
         guard !aircraftLoading, Date().timeIntervalSince(aircraftAt) > 30 else { return }
         aircraftLoading = true
         aircraftAt = Date()
@@ -527,6 +538,7 @@ final class Navigator: ObservableObject {
             let found = await Aircraft.police(near: here, nauticalMiles: 10)
             self.aircraftLoading = false
             guard let found, !self.stopped else { return }
+            self.aircraftSeenAt = Date()
             let me = self.lastFix.map { LatLng($0.coordinate.latitude, $0.coordinate.longitude) } ?? here
             let nearest = found.map { ($0, $0.location.distance(to: me)) }.filter { $0.1 < 10_000 }.min { $0.1 < $1.1 }
             self.aircraftNear = nearest.map { (aircraft: $0.0, meters: $0.1) }
