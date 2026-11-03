@@ -253,6 +253,10 @@ fun StatusCards() {
     when {
         loc.denied || DemoScript.step == "locationoff" -> StatusCard(Icons.Filled.LocationOff, Vela.closed, "Location is off",
             "Kite needs it to show where you are and to guide you.", "Turn on") { LocationService.openSettings(ctx) }
+        loc.authorized && loc.systemOff -> StatusCard(Icons.Filled.LocationOff, Vela.closed, "Location is off",
+            "Turn on Location on this phone to see where you are and get directions.", "Turn on") {
+            ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+        }
         loc.authorized && loc.reducedAccuracy -> StatusCard(Icons.Filled.MyLocation, Color(0xFFF59E0B), "Precise location is off",
             "Allow precise location for Kite in Settings to improve your position.", "Settings") { LocationService.openSettings(ctx) }
         loc.authorized && fix != null && fix.accuracy > 200 -> StatusCard(Icons.Filled.MyLocation, Color(0xFFF59E0B), "Location is uncertain",

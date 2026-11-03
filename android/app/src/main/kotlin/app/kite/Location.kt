@@ -39,6 +39,8 @@ object LocationService {
     var last by mutableStateOf<Fix?>(null); private set
     var authorized by mutableStateOf(false); private set
     var denied by mutableStateOf(false)
+    /** The phone's own Location switch is off (Kite's permission can still be on). */
+    var systemOff by mutableStateOf(false); private set
     var reducedAccuracy by mutableStateOf(false); private set
     var onUpdate: ((Fix) -> Unit)? = null
 
@@ -64,7 +66,10 @@ object LocationService {
         val f = Fix(
             loc.latitude, loc.longitude, loc.accuracy.toDouble(),
             if (loc.hasSpeed()) loc.speed.toDouble() else -1.0,
-            if (loc.hasBearing() && loc.hasSpeed() && loc.speed > 0.5) loc.bearing.toDouble() else -1.0,
+            // A bearing the phone itself rates as rough (45° or worse, e.g. between tall buildings) isn't
+            // used, like the iPhone app: it can look like driving the wrong way.
+            if (loc.hasBearing() && loc.hasSpeed() && loc.speed > 0.5 &&
+                (!loc.hasBearingAccuracy() || loc.bearingAccuracyDegrees < 45)) loc.bearing.toDouble() else -1.0,
             loc.altitude, loc.time,
         )
         last = f
@@ -77,8 +82,26 @@ object LocationService {
         val coarse = ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         authorized = fine || coarse
         reducedAccuracy = coarse && !fine
+        watchSwitch()
+        val wasOff = systemOff
+        systemOff = !androidx.core.location.LocationManagerCompat.isLocationEnabled(lm)
+        // Switched back on while Kite was away: ask every provider again, the network one too.
+        if (wasOff && !systemOff && started) request(if (navigating) 0 else 1000)
         if (authorized) denied = false
         if (authorized) start()
+    }
+
+    private var watching = false
+
+    /** The Location switch flipped from the quick settings while Kite stays open: notice it straight away. */
+    private fun watchSwitch() {
+        if (watching) return
+        watching = true
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) { refreshPermission() }
+        }
+        androidx.core.content.ContextCompat.registerReceiver(KiteApp.app, receiver,
+            android.content.IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     @SuppressLint("MissingPermission")

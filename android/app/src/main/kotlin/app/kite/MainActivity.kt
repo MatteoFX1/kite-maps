@@ -62,8 +62,13 @@ class MainActivity : ComponentActivity() {
             "app.kite.WORK" -> model.perform(LaunchKind.WORK)
             "app.kite.CAR" -> model.perform(LaunchKind.CAR)
         }
-        i.getStringExtra("demo")?.let { DemoScript.start(model, it) }
+        // The screenshot scripts, for the build's emulator only: on a real phone another app could
+        // otherwise start Kite in a demo that mutes the voice.
+        if (onEmulator) i.getStringExtra("demo")?.let { DemoScript.start(model, it) }
     }
+
+    private val onEmulator: Boolean
+        get() = android.os.Build.HARDWARE in setOf("ranchu", "goldfish") || android.os.Build.PRODUCT.startsWith("sdk_")
 
     /** The screen stays on while driving, like every sat nav. */
     fun keepScreenOn(on: Boolean) {
