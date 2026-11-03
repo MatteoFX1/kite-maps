@@ -36,7 +36,8 @@ final class LiveCamStore: ObservableObject {
     /** Windy's webcams seen so far, by id, and when each was asked (its photo link lasts ~15 minutes). */
     private var windy: [String: (cam: LiveCam, at: Date)] = [:]
     /** The circles already asked Windy about (center, radius in km), and when: a view inside one asks nothing. */
-    private var windyAsked: [(center: LatLng, km: Double, at: Date)] = []
+    /** What Windy was asked about: [minReach] > 0 when its answer hit the 50-camera limit, so only views as wide as that count as covered. */
+    private var windyAsked: [(center: LatLng, km: Double, at: Date, minReach: Double)] = []
     /** The latest view asked for while another ask was still out: asked as soon as that one ends. */
     private var windyPending: (center: LatLng, spanKm: Double)?
     private var windyFetch: Task<Void, Never>?
@@ -116,7 +117,7 @@ final class LiveCamStore: ObservableObject {
         windyAsked.removeAll { now.timeIntervalSince($0.at) >= 600 }
         // Windy answers at most 250 km out; a wider view only needs its middle covered.
         let reach = min(spanKm / 2, 250)
-        if windyAsked.contains(where: { $0.center.distance(to: center) / 1000 + reach <= $0.km }) { return }
+        if windyAsked.contains(where: { $0.center.distance(to: center) / 1000 + reach <= $0.km && reach >= $0.minReach }) { return }
         guard windyFetch == nil else { windyPending = (center, spanKm); return }
         // A margin around the view, so small pans ask nothing.
         let radius = min(max(reach * 1.4, 15), 250)
@@ -126,11 +127,22 @@ final class LiveCamStore: ObservableObject {
             self.windyFetch = nil
             if let data, let cams = LiveCams.parseWindy(data) {
                 let t = Date()
-                self.windyAsked.append((center, Double(Int(radius)), t))
+                // A full answer (the 50 limit) may have left cameras out: zooming in asks again.
+                self.windyAsked.append((center, Double(Int(radius)), t, cams.count >= 50 ? reach * 0.8 : 0))
                 for c in cams { self.windy[c.id] = (c, t) }
                 self.version += 1
             } else {
                 self.windyFailedAt = Date()
+                // The view asked for meanwhile is tried again after the minute's pause, not dropped.
+                if self.windyPending != nil {
+                    Task { [weak self] in
+                        try? await Task.sleep(nanoseconds: 61_000_000_000)
+                        guard let self, let p = self.windyPending else { return }
+                        self.windyPending = nil
+                        self.loadWindy(center: p.center, spanKm: p.spanKm)
+                    }
+                }
+                return
             }
             if let p = self.windyPending {
                 self.windyPending = nil

@@ -38,7 +38,8 @@ object LiveCamStore {
     var road: List<LiveCam> = emptyList(); private set
     private val windy = HashMap<String, Pair<LiveCam, Long>>()
     /** The circles already asked Windy about, and when: a view inside one asks nothing. */
-    private class Asked(val center: LatLng, val km: Double, val at: Long)
+    /** What Windy was asked about: [minReach] > 0 when its answer hit the 50-camera limit, so only views as wide as that count as covered. */
+    private class Asked(val center: LatLng, val km: Double, val at: Long, val minReach: Double)
     private val windyAsked = ArrayList<Asked>()
     /** The latest view asked for while another ask was still out: asked as soon as that one ends. */
     private var windyPending: Pair<LatLng, Double>? = null
@@ -112,7 +113,7 @@ object LiveCamStore {
         windyAsked.removeAll { now - it.at >= 600_000 }
         // Windy answers at most 250 km out; a wider view only needs its middle covered.
         val reach = minOf(spanKm / 2, 250.0)
-        if (windyAsked.any { it.center.distanceTo(center) / 1000 + reach <= it.km }) return
+        if (windyAsked.any { it.center.distanceTo(center) / 1000 + reach <= it.km && reach >= it.minReach }) return
         if (windyFetch != null) { windyPending = center to spanKm; return }
         // A margin around the view, so small pans ask nothing.
         val radius = (reach * 1.4).coerceIn(15.0, 250.0).toInt()
@@ -122,10 +123,19 @@ object LiveCamStore {
             val cams = data?.let { LiveCams.parseWindy(it) }
             if (cams != null) {
                 val t = System.currentTimeMillis()
-                windyAsked += Asked(center, radius.toDouble(), t)
+                // A full answer (the 50 limit) may have left cameras out: zooming in asks again.
+                windyAsked += Asked(center, radius.toDouble(), t, if (cams.size >= 50) reach * 0.8 else 0.0)
                 cams.forEach { windy[it.id] = it to t }
                 bump()
-            } else windyFailedAt = System.currentTimeMillis()
+            } else {
+                windyFailedAt = System.currentTimeMillis()
+                // The view asked for meanwhile is tried again after the minute's pause, not dropped.
+                if (windyPending != null) {
+                    delay(61_000)
+                    windyPending?.let { (c, sp) -> windyPending = null; loadWindy(c, sp) }
+                }
+                return@launch
+            }
             windyPending?.let { (c, sp) -> windyPending = null; loadWindy(c, sp) }
         }
     }
