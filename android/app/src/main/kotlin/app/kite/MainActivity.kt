@@ -150,6 +150,10 @@ fun KiteScreen(model: AppModel, activity: MainActivity) {
         if (info != null && nav == null && model.tab == AppTab.MAP) {
             WazeInfoToast(model, info)
         }
+        val cam = model.liveCam
+        if (cam != null && nav == null && model.tab == AppTab.MAP) {
+            LiveCamCard(model, cam)
+        }
     }
 
     model.surveillanceInfo?.let { cam ->

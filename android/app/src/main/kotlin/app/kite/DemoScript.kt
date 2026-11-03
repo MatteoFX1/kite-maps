@@ -126,6 +126,33 @@ object DemoScript {
                 return
             }
             "cameras" -> { center(model, 48.137, 11.575, 12.5); return }
+            "livecams", "livecamcard" -> {
+                // Central London's traffic cameras; then one opened, as if tapped.
+                center(model, 51.5045, -0.1260, 13.2)
+                LiveCamStore.ensureLoaded()
+                if (step == "livecams") return
+                repeat(40) { if (LiveCamStore.road.isEmpty()) delay(1000) }
+                val here = LatLng(51.5045, -0.1260)
+                LiveCamStore.road.minByOrNull { it.location.distanceTo(here) }?.let { model.liveCamRoute = emptyList(); model.liveCam = it }
+                return
+            }
+            "livecamroute", "livecamroutecard" -> {
+                // Reading along the M4 to Heathrow: the cameras on the way, before pressing Go.
+                st.units = UnitsMode.YARDS
+                LiveCamStore.ensureLoaded()
+                val to = Place("demo-heathrow", "Heathrow Airport", LatLng(51.4700, -0.4543), "demo")
+                model.select(to); delay(2000)
+                model.openDirections(to)
+                model.detent = SheetDetent.FULL
+                if (step == "livecamroute") return
+                delay(25_000)
+                model.directions?.route?.polyline?.let { line ->
+                    val cams = LiveCams.along(LiveCamStore.road, line).map { it.cam }
+                    model.liveCamRoute = cams
+                    model.liveCam = cams.getOrNull(1) ?: cams.firstOrNull()
+                }
+                return
+            }
             "rail" -> {
                 // Central London with the train and tube lines and hill shading on.
                 st.transitLines = true; st.terrain = true

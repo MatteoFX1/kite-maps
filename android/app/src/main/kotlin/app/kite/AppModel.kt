@@ -114,6 +114,10 @@ class AppModel {
     /** A Waze report tapped on the map, shown in a small card. */
     var wazeInfo by mutableStateOf<WazeAlert?>(null)
     var surveillanceInfo by mutableStateOf<SurveillanceCamera?>(null)
+    /** The live camera whose photo is open (tapped on the map or in a route's camera row). */
+    var liveCam by mutableStateOf<LiveCam?>(null)
+    /** The route's cameras in order, when the open one was picked from the route's row (for next/previous). */
+    var liveCamRoute by mutableStateOf<List<LiveCam>>(emptyList())
     /** The "Add stop" search sheet. */
     var addingStop by mutableStateOf(false)
     var picking by mutableStateOf<PickKind?>(null)

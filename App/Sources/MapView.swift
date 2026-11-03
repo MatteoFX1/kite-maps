@@ -44,6 +44,8 @@ struct VelaMapView: UIViewRepresentable {
         model.map = map
         // Reports found by the background sweep show on the heat map straight away.
         WazeHistory.shared.onChange = { [weak c, weak map] in if let c, let map { c.render(map) } }
+        // The camera list arrives in the background: draw it as soon as it's here.
+        LiveCamStore.shared.onChange = { [weak c, weak map] in if let c, let map { c.render(map) } }
         // On a first launch, location is asked for after the welcome, not on top of it.
         if (settings.welcomed && !settings.needsWazeChoice) || DemoScript.active { model.location.start() }
         return map
@@ -59,6 +61,7 @@ struct VelaMapView: UIViewRepresentable {
         c.loadCameras(map)
         c.loadSurveillance(map)
         c.loadWaze(map)
+        c.loadLiveCams(map)
     }
 
     @MainActor
@@ -79,6 +82,9 @@ struct VelaMapView: UIViewRepresentable {
         private var styledDriving: Bool?
         private var lastCameraKey = ""
         private var lastSignalsKey = ""
+        private var lastLiveKey = ""
+        /** The box the drawn live camera dots cover, so panning inside it redraws nothing. */
+        private var liveBox: (s: Double, w: Double, n: Double, e: Double)?
         /** Cameras fetched so far, and the 0.1° cells already asked for (cameras don't move). */
         private var cameras: [Int64: RoadCamera] = [:]
         private var cameraCells: Set<String> = []
@@ -120,7 +126,7 @@ struct VelaMapView: UIViewRepresentable {
             heatTiles.styleReloaded()
             styledDriving = nil
             repaint(mapView)
-            lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""; lastSignalsKey = ""; lastWazeKey = ""
+            lastResultsKey = ""; lastRouteKey = ""; lastMineKey = ""; lastPuckKey = ""; lastCameraKey = ""; lastSignalsKey = ""; lastWazeKey = ""; lastLiveKey = ""
             render(mapView)
         }
 
@@ -279,6 +285,18 @@ struct VelaMapView: UIViewRepresentable {
             sigs.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 14, 0.75, 17, 1.0])
             sigs.minimumZoomLevel = 14
             style.addLayer(sigs)
+
+            // Live camera photos (road cameras and Windy webcams), from zoom 9 in, under the speed cameras.
+            // Overlapping dots hide each other, so a city full of cameras stays readable when zoomed out.
+            let liveSrc = MLNShapeSource(identifier: "vela-livecams", shape: nil, options: nil)
+            style.addSource(liveSrc)
+            let live = MLNSymbolStyleLayer(identifier: "vela-livecams", source: liveSrc)
+            live.iconImageName = NSExpression(forKeyPath: "icon")
+            live.iconAllowsOverlap = NSExpression(forConstantValue: false)
+            live.iconPadding = NSExpression(forConstantValue: 2)
+            live.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 9, 0.7, 13, 0.9, 16, 1.05])
+            live.minimumZoomLevel = 9
+            style.addLayer(live)
 
             // Speed cameras and plate readers, from zoom 12 in.
             let camSrc = MLNShapeSource(identifier: "vela-cameras", shape: nil, options: nil)
@@ -455,6 +473,7 @@ struct VelaMapView: UIViewRepresentable {
             renderRoutes(style)
             renderPuck(style)
             renderCameras(style)
+            renderLiveCams(map, style)
             renderSignals(style)
             renderWaze(style)
             updateHeat(map)
@@ -511,6 +530,44 @@ struct VelaMapView: UIViewRepresentable {
                 }
             }
             (style.source(withIdentifier: "vela-cameras") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
+        }
+
+        /** Live camera dots for what's on screen (plus a margin), never while driving. */
+        private func renderLiveCams(_ map: MLNMapView, _ style: MLNStyle) {
+            let s = model.settings
+            let store = LiveCamStore.shared
+            let on = model.nav == nil && map.zoomLevel >= 9 && (s.showsRoadCams || s.showsWebcams)
+            let b = map.visibleCoordinateBounds
+            let dLat = (b.ne.latitude - b.sw.latitude) * 0.25, dLng = (b.ne.longitude - b.sw.longitude) * 0.25
+            // Redrawn when the list changes, or the map leaves the box drawn last time.
+            let box = (s: b.sw.latitude - dLat, w: b.sw.longitude - dLng, n: b.ne.latitude + dLat, e: b.ne.longitude + dLng)
+            let inside = liveBox.map { b.sw.latitude >= $0.s && b.ne.latitude <= $0.n && b.sw.longitude >= $0.w && b.ne.longitude <= $0.e } ?? false
+            let key = "\(on)\(s.showsRoadCams)\(s.showsWebcams)\(store.version)"
+            guard key != lastLiveKey || (on && !inside) else { return }
+            lastLiveKey = key
+            liveBox = on ? (box.s - dLat, box.w - dLng, box.n + dLat, box.e + dLng) : nil
+            var features: [MLNPointFeature] = []
+            if on, let lb = liveBox {
+                for c in store.cams(south: lb.s, west: lb.w, north: lb.n, east: lb.e, road: s.showsRoadCams, webcams: s.showsWebcams) {
+                    let f = MLNPointFeature()
+                    f.coordinate = CLLocationCoordinate2D(latitude: c.location.lat, longitude: c.location.lng)
+                    f.attributes = ["id": c.id, "icon": c.source.isRoad ? "livecam-road" : "livecam-web"]
+                    features.append(f)
+                }
+            }
+            (style.source(withIdentifier: "vela-livecams") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
+        }
+
+        /** The road camera list (once a day) and Windy's webcams around what's on screen. */
+        func loadLiveCams(_ map: MLNMapView) {
+            let s = model.settings
+            guard model.nav == nil, s.liveCams else { return }
+            if s.showsRoadCams || s.liveCamsOnRoute { LiveCamStore.shared.ensureLoaded() }
+            guard s.showsWebcams, map.zoomLevel >= 8 else { return }
+            let b = map.visibleCoordinateBounds
+            let c = LatLng((b.sw.latitude + b.ne.latitude) / 2, (b.sw.longitude + b.ne.longitude) / 2)
+            let span = LatLng(b.sw.latitude, b.sw.longitude).distance(to: LatLng(b.ne.latitude, b.ne.longitude)) / 1000
+            LiveCamStore.shared.loadWindy(center: c, spanKm: span)
         }
 
         private func renderSignals(_ style: MLNStyle) {
@@ -907,6 +964,13 @@ struct VelaMapView: UIViewRepresentable {
                     self.model.wazeInfo = a
                     return
                 }
+                let live = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-livecams"])
+                if let id = live.first?.attribute(forKey: "id") as? String, let cam = LiveCamStore.shared.cam(id) {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    self.model.liveCamRoute = []
+                    self.model.liveCam = cam
+                    return
+                }
                 let cameraHits = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-cameras"])
                 if let id = cameraHits.first?.attribute(forKey: "surveillanceId") as? String,
                    let numericID = Int64(id), let camera = self.surveillance[numericID] {
@@ -965,6 +1029,8 @@ struct VelaMapView: UIViewRepresentable {
                 loadCameras(mapView)
                 loadSurveillance(mapView)
                 loadWaze(mapView)
+                loadLiveCams(mapView)
+                render(mapView)
                 updateHeat(mapView)
                 loadRail(mapView)
                 noteHeading(mapView)

@@ -3,6 +3,20 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## Next update (iPhone and Android)
+
+- **Live cameras (GitHub #15):** see the latest photo from traffic cameras and webcams, like the
+  weather app Windy. Tap a blue camera dot on the map for a big photo with how old it is,
+  refresh it, open it full screen or watch the short video or timelapse. All of the UK's public
+  road cameras are there: National Highways (England's motorways and A roads), Transport for
+  London, Traffic Scotland, Traffic Wales and TrafficWatch NI, plus Windy's scenic webcams
+  worldwide (violet dots).
+- **Cameras on your route:** before you press Go, a row of photos from the cameras you'll pass,
+  in order, so you can see jams, rain or snow ahead. Tap one to look closer and step through them.
+- **Easy to switch off:** Settings › Live cameras turns it all off, or just road cameras,
+  webcams or the route row. There's a "Live cameras" button in Layers too. Never shown while
+  driving.
+
 ## Android 0.7.7
 
 - **Welcome screen fixed on Pixel phones:** the "Get started" button was pushed off the bottom
