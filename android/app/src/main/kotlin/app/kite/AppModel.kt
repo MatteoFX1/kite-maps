@@ -523,6 +523,8 @@ class AppModel {
         val d = directions ?: return
         val me = userLatLng ?: return
         transitLoadedAt = System.currentTimeMillis()
+        // A new request either way, so one still loading can't put back trips without the stops.
+        transitRequest++
         // The planner can't go via stops: rather say so than show trains for a different trip.
         if (d.stops.isNotEmpty()) {
             edit { it.copy(trips = emptyList(), tripsError = "Public transport can't go via stops. Remove the stops to see trains and buses.") }
@@ -530,7 +532,6 @@ class AppModel {
         }
         val (from, to) = if (d.reversed) d.destination.location to me else me to d.destination.location
         val destId = d.destination.id
-        transitRequest++
         val req = transitRequest
         edit { it.copy(trips = null, tripsError = null, trip = 0) }
         scope.launch {

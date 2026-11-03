@@ -678,8 +678,10 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             val fresh = r?.routes?.firstOrNull()
             if (fresh == null) {
                 // The stop just added couldn't be routed to: say so, and don't keep it as if it were on the way.
-                if (adding != null && stops.any { it.id == adding.id }) {
-                    stops = stops.filter { it.id != adding.id }
+                val i = if (adding != null) stops.indexOfFirst { it.id == adding.id } else -1
+                if (adding != null && i >= 0) {
+                    // Only the one just added (at the front), not the same place planned earlier.
+                    stops = stops.toMutableList().also { it.removeAt(i) }
                     speak("Couldn't add a stop at ${adding.name}. Carrying on to ${stops.firstOrNull()?.name ?: destination.name}.")
                 }
                 return@launch

@@ -570,6 +570,8 @@ final class AppModel: ObservableObject {
     func loadTransit() {
         guard let d = directions, let me = userLatLng else { return }
         transitLoadedAt = Date()
+        // A new request either way, so one still loading can't put back trips without the stops.
+        transitRequest += 1
         // The planner can't go via stops: rather say so than show trains for a different trip.
         if !d.stops.isEmpty {
             directions?.trips = []
@@ -579,7 +581,6 @@ final class AppModel: ObservableObject {
         let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
         let destId = d.destination.id
         let time = d.transitTime, arriveBy = d.arriveBy
-        transitRequest += 1
         let req = transitRequest
         directions?.trips = nil
         directions?.tripsError = nil
