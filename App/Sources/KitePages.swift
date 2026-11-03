@@ -229,7 +229,7 @@ struct SavedPage: View {
 
     private func show(_ p: Place) {
         model.tab = .map
-        model.select(p)
+        model.openSaved(p)
     }
 }
 

@@ -94,7 +94,7 @@ object PlaceSearch {
                     places = nearFirst(places, center)
                     val top = places.first()
                     if (top.location.distanceTo(center) > farMeters) {
-                        val osm = runCatching { Photon.search(q, center) }.getOrDefault(emptyList())
+                        val osm = photonOrNothing(q, center)
                         val near = osm.filter { it.location.distanceTo(center) < nearMeters }
                         if (near.isNotEmpty()) return Result(near + places)
                     }
@@ -107,8 +107,17 @@ object PlaceSearch {
             }
         }
         Postcodes.lookup(q)?.let { return Result(listOf(it), googleError) }
-        val osm = runCatching { Photon.search(q, center) }.getOrDefault(emptyList())
+        val osm = photonOrNothing(q, center)
         return Result(osm, googleError)
+    }
+
+    /** OpenStreetMap's answer, or nothing if it fails; being cancelled still cancels. */
+    private suspend fun photonOrNothing(q: String, center: LatLng): List<Place> = try {
+        Photon.search(q, center)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        emptyList()
     }
 
     /** Results within 100 km keep Google's order but go ahead of any more than 300 km away. */

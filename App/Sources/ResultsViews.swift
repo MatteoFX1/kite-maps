@@ -160,6 +160,19 @@ struct PhotoStrip: View {
     var streetView: Place?
     @State private var viewing: Int?
 
+    init(urls: [String], height: CGFloat = 130, opensViewer: Bool = false, streetView: Place? = nil) {
+        // "Use Kite without Google": a place saved earlier still has Google's photo links; don't load them.
+        self.urls = AppSettings.shared.noGoogle ? urls.filter { !PhotoStrip.isGoogle($0) } : urls
+        self.height = height
+        self.opensViewer = opensViewer
+        self.streetView = streetView
+    }
+
+    static func isGoogle(_ u: String) -> Bool {
+        let host = URL(string: u)?.host?.lowercased() ?? ""
+        return host.contains("google") || host.contains("gstatic") || host.contains("ggpht")
+    }
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {

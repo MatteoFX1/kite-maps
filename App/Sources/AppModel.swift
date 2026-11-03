@@ -170,7 +170,7 @@ final class AppModel: ObservableObject {
     }
 
     var viewport: (center: LatLng, span: Double?) {
-        guard let map, map.bounds.width > 0 else { return (userLatLng ?? LatLng(40.7484, -73.9857), nil) }
+        guard let map, map.bounds.width > 0 else { return (userLatLng ?? LatLng(51.5074, -0.1278), nil) }
         let c = map.centerCoordinate
         let b = map.visibleCoordinateBounds
         let span = LatLng(b.sw.latitude, b.sw.longitude).distance(to: LatLng(b.ne.latitude, b.ne.longitude)) / 1.4
@@ -350,7 +350,8 @@ final class AppModel: ObservableObject {
         Task {
             let found = (try? await GoogleClient.shared.search(q, center: point, spanMeters: 1_000, pages: 1)) ?? []
             guard selected?.id == pid else { return }
-            if let best = found.filter({ $0.location.distance(to: point) < 150 })
+            // The same place by name too, not just the nearest: a café next door mustn't take its place.
+            if let best = found.filter({ $0.location.distance(to: point) < 150 && Self.similarNames($0.name, name) })
                 .min(by: { $0.location.distance(to: point) < $1.location.distance(to: point) }) {
                 var b = best
                 // Enrich a tapped map feature without moving its pin to a nearby search result.
@@ -360,6 +361,41 @@ final class AppModel: ObservableObject {
                 if !DemoScript.active { settings.addRecentPlace(b) }
             }
         }
+    }
+
+    /**
+     * A saved place: its "Open · Closes 10 pm" was true the day it was saved, not now. Show it
+     * without that, then fill in today's from Google (left out with no internet).
+     */
+    func openSaved(_ saved: Place) {
+        var p = saved
+        p.statusText = nil
+        p.openNow = nil
+        select(p)
+        guard !settings.noGoogle else { return }
+        let q = [p.name, p.address].compactMap { $0 }.joined(separator: " ")
+        Task {
+            let found = (try? await GoogleClient.shared.search(q, center: p.location, spanMeters: 1_000, pages: 1)) ?? []
+            guard selected?.id == p.id, let fresh = found.first(where: {
+                $0.location.distance(to: p.location) < 150 && Self.similarNames($0.name, p.name)
+            }) else { return }
+            selected?.statusText = fresh.statusText
+            selected?.openNow = fresh.openNow
+            selected?.hours = fresh.hours
+            selected?.permanentlyClosed = fresh.permanentlyClosed
+        }
+    }
+
+    /** "Costa" and "Costa Coffee", "St Mary's Church" and "St. Mary's": every word of one name is in the other. */
+    static func similarNames(_ a: String, _ b: String) -> Bool {
+        func words(_ s: String) -> [String] {
+            s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+                .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+        }
+        let x = words(a), y = words(b)
+        guard !x.isEmpty, !y.isEmpty else { return false }
+        // Whole words, so "Costa" isn't "Costas" and "Royal Hotel" isn't "Royal Cafe".
+        return Set(x).isSubset(of: y) || Set(y).isSubset(of: x)
     }
 
     static let locationOffText = "Location is off for Kite. Turn it on in Settings to get directions from where you are."

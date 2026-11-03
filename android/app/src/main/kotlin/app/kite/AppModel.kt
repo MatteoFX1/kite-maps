@@ -189,6 +189,8 @@ class AppModel {
         val user = userLatLng
         searchTask = scope.launch {
             val r = PlaceSearch.search(q, vp.first, vp.second, useGoogle)
+            // Cleared or replaced while it was loading: leave the screen to the newer one.
+            ensureActive()
             var places = r.places
             if (user != null) places = places.map { it.copy(distanceMeters = user.distanceTo(it.location)) }
             searching = false
@@ -326,13 +328,42 @@ class AppModel {
         scope.launch {
             val found = runCatching { GoogleClient.shared.search(q, point, 1_000.0, pages = 1) }.getOrDefault(emptyList())
             if (selected?.id != pid) return@launch
-            val best = found.filter { it.location.distanceTo(point) < 150 }.minByOrNull { it.location.distanceTo(point) } ?: return@launch
+            // The same place by name too, not just the nearest: a café next door mustn't take its place.
+            val best = found.filter { it.location.distanceTo(point) < 150 && similarNames(it.name, placeholder.name) }
+                .minByOrNull { it.location.distanceTo(point) } ?: return@launch
             var b = best
             if (pid.startsWith("tap:")) b = b.copy(location = point)
             b = b.copy(distanceMeters = userLatLng?.distanceTo(b.location))
             selected = b
             settings.addRecentPlace(b)
         }
+    }
+
+    /**
+     * A saved place: its "Open · Closes 10 pm" was true the day it was saved, not now. Show it
+     * without that, then fill in today's from Google (left out with no internet).
+     */
+    fun openSaved(saved: Place) {
+        val p = saved.copy(statusText = null, openNow = null)
+        select(p)
+        if (settings.noGoogle) return
+        val q = listOfNotNull(p.name, p.address).joinToString(" ")
+        scope.launch {
+            val found = runCatching { GoogleClient.shared.search(q, p.location, 1_000.0, pages = 1) }.getOrDefault(emptyList())
+            val fresh = found.firstOrNull { it.location.distanceTo(p.location) < 150 && similarNames(it.name, p.name) } ?: return@launch
+            if (selected?.id == p.id) selected = selected?.copy(statusText = fresh.statusText, openNow = fresh.openNow,
+                hours = fresh.hours, permanentlyClosed = fresh.permanentlyClosed)
+        }
+    }
+
+    /** "Costa" and "Costa Coffee", "St Mary's Church" and "St. Mary's": every word of one name is in the other. */
+    private fun similarNames(a: String, b: String): Boolean {
+        fun words(s: String) = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}"), "").split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+        val x = words(a); val y = words(b)
+        if (x.isEmpty() || y.isEmpty()) return false
+        // Whole words, so "Costa" isn't "Costas" and "Royal Hotel" isn't "Royal Cafe".
+        return y.containsAll(x) || x.containsAll(y)
     }
 
     // My places
