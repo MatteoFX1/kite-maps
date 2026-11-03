@@ -82,12 +82,26 @@ object LocationService {
         val coarse = ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         authorized = fine || coarse
         reducedAccuracy = coarse && !fine
+        watchSwitch()
         val wasOff = systemOff
         systemOff = !androidx.core.location.LocationManagerCompat.isLocationEnabled(lm)
         // Switched back on while Kite was away: ask every provider again, the network one too.
         if (wasOff && !systemOff && started) request(if (navigating) 0 else 1000)
         if (authorized) denied = false
         if (authorized) start()
+    }
+
+    private var watching = false
+
+    /** The Location switch flipped from the quick settings while Kite stays open: notice it straight away. */
+    private fun watchSwitch() {
+        if (watching) return
+        watching = true
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) { refreshPermission() }
+        }
+        androidx.core.content.ContextCompat.registerReceiver(KiteApp.app, receiver,
+            android.content.IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     @SuppressLint("MissingPermission")
