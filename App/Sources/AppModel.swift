@@ -376,9 +376,11 @@ final class AppModel: ObservableObject {
         case .car: target = settings.parking
         }
         guard let target else {
-            if kind == .car { notice = "No parking spot saved yet. Tap P on the map when you park." }
+            if kind == .car {
+                if let nav { nav.say("No parking spot saved yet.") } else { notice = "No parking spot saved yet. Tap P on the map when you park." }
+            }
             // Mid-drive, keep the trip going: a picker on top of it, cancelled, would lose it.
-            else if nav != nil { notice = "No \(kind == .home ? "home" : "work") address saved yet. Set it in Saved after this drive." }
+            else if let nav { nav.say("No \(kind == .home ? "home" : "work") address saved yet. Set it in Saved after this drive.") }
             else { picking = kind == .home ? .home : .work }
             return
         }

@@ -116,6 +116,8 @@ object LocationService {
         if (navigating) return
         started = false
         runCatching { lm.removeUpdates(listener) }
+        // Back later, perhaps somewhere else: the last fix isn't where the phone is any more.
+        last = null
     }
 
     /** Kite's page in the phone's Settings, where location can be turned back on. */

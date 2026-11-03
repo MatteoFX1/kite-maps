@@ -346,9 +346,9 @@ class AppModel {
                 LaunchKind.CAR -> settings.parking
             }
             if (target == null) {
-                if (kind == LaunchKind.CAR) notice = "No parking spot saved yet. Tap P on the map when you park."
+                if (kind == LaunchKind.CAR) { nav?.say("No parking spot saved yet.") ?: run { notice = "No parking spot saved yet. Tap P on the map when you park." } }
                 // Mid-drive, keep the trip going: a picker on top of it, cancelled, would lose it.
-                else if (nav != null) notice = "No ${if (kind == LaunchKind.HOME) "home" else "work"} address saved yet. Set it in Saved after this drive."
+                else if (nav != null) nav?.say("No ${if (kind == LaunchKind.HOME) "home" else "work"} address saved yet. Set it in Saved after this drive.")
                 else picking = if (kind == LaunchKind.HOME) PickKind.HOME else PickKind.WORK
                 return@launch
             }
