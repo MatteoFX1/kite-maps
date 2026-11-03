@@ -66,6 +66,16 @@
                 <data android:host="www.waze.com" />
                 <data android:host="maps.apple.com" />
             </intent-filter>
+            <!-- Google's full map links, including the ones Kite shares itself (www.google.com/maps/...). -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="www.google.com" />
+                <data android:host="google.com" />
+                <data android:pathPrefix="/maps" />
+            </intent-filter>
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
 

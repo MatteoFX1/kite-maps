@@ -80,7 +80,8 @@ object MapLinks {
         if (parts.size != 2) return null
         val lat = parts[0].toDoubleOrNull() ?: return null
         val lng = parts[1].toDoubleOrNull() ?: return null
-        if (!parts.all { it.contains('.') }) return null
+        // "52, -1.5" is fine with its comma; without one both need a decimal point, so "M27 5" isn't a place.
+        if (!text.contains(',') && !parts.all { it.contains('.') }) return null
         return valid(lat, lng)
     }
 
@@ -116,7 +117,8 @@ object MapLinks {
         var name: String? = null
         val pi = segments.indexOf("place")
         if (pi >= 0 && pi + 1 < segments.size && !segments[pi + 1].startsWith("@")) name = segments[pi + 1].replace("+", " ")
-        match(full, "!3d(-?\\d+(?:\\.\\d+)?)!4d(-?\\d+(?:\\.\\d+)?)")?.let { m ->
+        // A directions link has a pin for each end: the destination is the last.
+        match(full, "!3d(-?\\d+(?:\\.\\d+)?)!4d(-?\\d+(?:\\.\\d+)?)", last = "dir" in segments)?.let { m ->
             valid(m.first, m.second)?.let { return Target.Spot(it, name?.let { n -> nameIfNotCoordinates(n) }) }
         }
         val at = match(path, "@(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)")?.let { valid(it.first, it.second) }
@@ -159,13 +161,21 @@ object MapLinks {
     }
 
     fun parseApple(q: Map<String, String>): Target? {
-        val near = q["ll"]?.let { latLngPair(it) } ?: q["sll"]?.let { latLngPair(it) }
-        (q["coordinate"]?.let { latLngPair(it) } ?: near)?.let { return Target.Spot(it, q["q"] ?: q["name"]) }
-        val v = q["q"] ?: q["address"] ?: q["daddr"]
+        // ll is the pin; sll is only where a search was made.
+        val ll = q["ll"]?.let { latLngPair(it) }
+        val sll = q["sll"]?.let { latLngPair(it) }
+        // Directions: the destination, not wherever the map was.
+        q["daddr"]?.takeIf { it.isNotEmpty() }?.let { d ->
+            latLngPair(d)?.let { return Target.Spot(it, null) }
+            return Target.Search(d, ll ?: sll)
+        }
+        (q["coordinate"]?.let { latLngPair(it) } ?: ll)?.let { return Target.Spot(it, q["q"] ?: q["name"]) }
+        val v = q["q"] ?: q["address"]
         if (!v.isNullOrEmpty()) {
             latLngPair(v)?.let { return Target.Spot(it, null) }
-            return Target.Search(v, null)
+            return Target.Search(v, sll)
         }
+        sll?.let { return Target.Spot(it, null) }
         return null
     }
 
@@ -224,8 +234,8 @@ object MapLinks {
         return valid(lat, lng)
     }
 
-    fun match(s: String, pattern: String): Pair<Double, Double>? {
-        val m = Regex(pattern).find(s) ?: return null
+    fun match(s: String, pattern: String, last: Boolean = false): Pair<Double, Double>? {
+        val m = (if (last) Regex(pattern).findAll(s).lastOrNull() else Regex(pattern).find(s)) ?: return null
         val x = m.groupValues[1].toDoubleOrNull() ?: return null
         val y = m.groupValues[2].toDoubleOrNull() ?: return null
         return x to y
