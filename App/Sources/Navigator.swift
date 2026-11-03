@@ -202,7 +202,7 @@ final class Navigator: ObservableObject {
         // Near the pin only counts near the end of the route too: a route can pass right by the
         // place (or by it on the way to a stop) before looping round to its way in.
         let nearPin = p.remainingMeters < 400
-        if loc.speed >= 0 && loc.speed < 1, p.remainingMeters < 150 || (toPin < 150 && nearPin) {
+        if loc.speed >= 0 && loc.speed < 1, p.remainingMeters < 150 || toPin < 150 {
             if stoppedNearEnd == nil { stoppedNearEnd = loc.timestamp }
         } else {
             stoppedNearEnd = nil
@@ -210,7 +210,8 @@ final class Navigator: ObservableObject {
         // Off the road into a car park (or right at the end): 20 seconds stopped. Still on the road
         // short of it, it could be a red light or a queue, so a minute and a half.
         let offRoad = p.offsetMeters > 20 || p.remainingMeters < 40 || (toPin < 60 && nearPin)
-        let parked = stoppedNearEnd.map { loc.timestamp.timeIntervalSince($0) > (offRoad ? 20 : 90) } ?? false
+        // Parked by the pin with the route still going round (a way in the map doesn't have): three minutes.
+        let parked = stoppedNearEnd.map { loc.timestamp.timeIntervalSince($0) > (p.remainingMeters >= 150 && !nearPin ? 180 : offRoad ? 20 : 90) } ?? false
         if p.arrived || parked || (route.mode == .drive && toPin < 40 && nearPin) {
             arrived = true
             speak("You have arrived at \(destination.name)" + (destinationSide.map { ", on the \($0)." } ?? "."))
@@ -227,8 +228,9 @@ final class Navigator: ObservableObject {
         // wrong turn, so no "Rerouting" every few seconds until the car has reached the route once
         // (or has clearly gone another way).
         if p.offsetMeters < 40 { joinedRoute = true }
-        // Right by the pin, a new route is only a U-turn round the block: let the car park instead.
-        if p.offRoute && !rerouting && toPin > 150 && (joinedRoute || p.offsetMeters > 400) && Date().timeIntervalSince(lastReroute) > 8 {
+        // Right by the pin at the end of the route, a new route is only a U-turn round the block: let
+        // the car park instead. Still a long way round to go, though, the driver found another way in.
+        if p.offRoute && !rerouting && (toPin > 150 || !nearPin) && (joinedRoute || p.offsetMeters > 400) && Date().timeIntervalSince(lastReroute) > 8 {
             reroute(from: loc)
             return
         }

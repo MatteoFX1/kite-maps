@@ -451,7 +451,7 @@ object Directions {
                             }
                             g[i].maneuvers = steps
                             g[i].stepsComplete = true
-                        } else if (!g[i].stepsComplete && spare.isNotEmpty() && !avoidHighways && !avoidTolls) {
+                        } else if (!g[i].stepsComplete && spare.isNotEmpty()) {
                             val o = spare.removeAt(0).deep()
                             val t = g[i].trafficSeconds
                             if (t != null && g[i].typicalSeconds > 0) o.trafficSeconds = o.typicalSeconds * t / g[i].typicalSeconds

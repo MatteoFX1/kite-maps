@@ -173,11 +173,14 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         // Near the pin only counts near the end of the route too: a route can pass right by the
         // place (or by it on the way to a stop) before looping round to its way in.
         val nearPin = p.remainingMeters < 400
-        if (loc.speedKnown && loc.speed < 1 && (p.remainingMeters < 150 || (toPin < 150 && nearPin))) {
+        if (loc.speedKnown && loc.speed < 1 && (p.remainingMeters < 150 || toPin < 150)) {
             if (stoppedNearEnd == null) stoppedNearEnd = loc.timeMillis
         } else stoppedNearEnd = null
         val offRoad = p.offsetMeters > 20 || p.remainingMeters < 40 || (toPin < 60 && nearPin)
-        val parked = stoppedNearEnd?.let { (loc.timeMillis - it) / 1000.0 > (if (offRoad) 20 else 90) } ?: false
+        // Parked by the pin with the route still going round (a way in the map doesn't have): three minutes.
+        val parked = stoppedNearEnd?.let {
+            (loc.timeMillis - it) / 1000.0 > (if (p.remainingMeters >= 150 && !nearPin) 180 else if (offRoad) 20 else 90)
+        } ?: false
         if (p.arrived || parked || (route.mode == TravelMode.DRIVE && toPin < 40 && nearPin)) {
             arrived = true
             speak("You have arrived at ${destination.name}" + (destinationSide?.let { ", on the $it." } ?: "."))
@@ -188,7 +191,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             return
         }
         if (p.offsetMeters < 40) joinedRoute = true
-        if (p.offRoute && !rerouting && toPin > 150 && (joinedRoute || p.offsetMeters > 400) && since(lastReroute) > 8) {
+        if (p.offRoute && !rerouting && (toPin > 150 || !nearPin) && (joinedRoute || p.offsetMeters > 400) && since(lastReroute) > 8) {
             reroute(loc)
             return
         }

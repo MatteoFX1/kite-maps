@@ -524,7 +524,7 @@ public enum Directions {
                         }
                         g[i].maneuvers = steps
                         g[i].stepsComplete = true
-                    } else if !g[i].stepsComplete, !spare.isEmpty, !avoidHighways, !avoidTolls {
+                    } else if !g[i].stepsComplete, !spare.isEmpty {
                         // Google's own steps have a gap, so its turns would be called in the wrong places:
                         // drive the open router's route instead, keeping Google's traffic estimate.
                         var o = spare.removeFirst()
