@@ -35,8 +35,10 @@ final class LiveCamStore: ObservableObject {
     private(set) var road: [LiveCam] = []
     /** Windy's webcams seen so far, by id, and when each was asked (its photo link lasts ~15 minutes). */
     private var windy: [String: (cam: LiveCam, at: Date)] = [:]
-    /** 0.5° cells already asked Windy about, and when. */
-    private var windyCells: [String: Date] = [:]
+    /** The circles already asked Windy about (center, radius in km), and when: a view inside one asks nothing. */
+    private var windyAsked: [(center: LatLng, km: Double, at: Date)] = []
+    /** The latest view asked for while another ask was still out: asked as soon as that one ends. */
+    private var windyPending: (center: LatLng, spanKm: Double)?
     private var windyFetch: Task<Void, Never>?
     private var windyFailedAt = Date.distantPast
     @Published private(set) var version = 0 { didSet { onChange?() } }
@@ -103,21 +105,37 @@ final class LiveCamStore: ObservableObject {
         return data
     }
 
-    /** Ask Windy about the webcams around [center], each 0.5° cell at most once every 10 minutes. */
+    /**
+     * Ask Windy about the webcams around [center] (a view [spanKm] corner to corner), unless an ask in
+     * the last 10 minutes already covered all of it. A view asked for while another ask is out is
+     * kept and asked next, so a quick pan never leaves the new place empty.
+     */
     func loadWindy(center: LatLng, spanKm: Double) {
-        guard WindyKey.present, windyFetch == nil, Date().timeIntervalSince(windyFailedAt) > 60 else { return }
-        let cell = "\(Int(floor(center.lat * 2))),\(Int(floor(center.lng * 2)))"
-        if let at = windyCells[cell], Date().timeIntervalSince(at) < 600 { return }
-        let radius = Int(min(max(spanKm / 2, 15), 120))
+        guard WindyKey.present, Date().timeIntervalSince(windyFailedAt) > 60 else { return }
+        let now = Date()
+        windyAsked.removeAll { now.timeIntervalSince($0.at) >= 600 }
+        // Windy answers at most 250 km out; a wider view only needs its middle covered.
+        let reach = min(spanKm / 2, 250)
+        if windyAsked.contains(where: { $0.center.distance(to: center) / 1000 + reach <= $0.km }) { return }
+        guard windyFetch == nil else { windyPending = (center, spanKm); return }
+        // A margin around the view, so small pans ask nothing.
+        let radius = min(max(reach * 1.4, 15), 250)
         windyFetch = Task { [weak self] in
-            let data = await Self.get(LiveCams.windyNearbyURL(center, radiusKm: radius), headers: ["x-windy-api-key": WindyKey.value])
+            let data = await Self.get(LiveCams.windyNearbyURL(center, radiusKm: Int(radius)), headers: ["x-windy-api-key": WindyKey.value])
             guard let self else { return }
             self.windyFetch = nil
-            guard let data, let cams = LiveCams.parseWindy(data) else { self.windyFailedAt = Date(); return }
-            self.windyCells[cell] = Date()
-            let now = Date()
-            for c in cams { self.windy[c.id] = (c, now) }
-            self.version += 1
+            if let data, let cams = LiveCams.parseWindy(data) {
+                let t = Date()
+                self.windyAsked.append((center, Double(Int(radius)), t))
+                for c in cams { self.windy[c.id] = (c, t) }
+                self.version += 1
+            } else {
+                self.windyFailedAt = Date()
+            }
+            if let p = self.windyPending {
+                self.windyPending = nil
+                self.loadWindy(center: p.center, spanKm: p.spanKm)
+            }
         }
     }
 

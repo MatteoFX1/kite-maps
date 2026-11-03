@@ -13,7 +13,6 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import kotlin.math.floor
 
 /**
  * The free Windy Webcams API key (api.windy.com/keys, "Webcams API", Free plan). Empty means no
@@ -38,7 +37,11 @@ object LiveCamStore {
     /** Every road camera Kite knows of; [version] goes up when it changes. */
     var road: List<LiveCam> = emptyList(); private set
     private val windy = HashMap<String, Pair<LiveCam, Long>>()
-    private val windyCells = HashMap<String, Long>()
+    /** The circles already asked Windy about, and when: a view inside one asks nothing. */
+    private class Asked(val center: LatLng, val km: Double, val at: Long)
+    private val windyAsked = ArrayList<Asked>()
+    /** The latest view asked for while another ask was still out: asked as soon as that one ends. */
+    private var windyPending: Pair<LatLng, Double>? = null
     private var windyFetch: Job? = null
     private var windyFailedAt = 0L
     var version by mutableIntStateOf(0); private set
@@ -98,22 +101,32 @@ object LiveCamStore {
     private suspend fun get(url: String, headers: Map<String, String> = emptyMap()): ByteArray? =
         Http.getOrNull(url, mapOf("User-Agent" to USER_AGENT) + headers, client)?.takeIf { it.code == 200 }?.body
 
-    /** Ask Windy about the webcams around [center], each 0.5° cell at most once every 10 minutes. */
+    /**
+     * Ask Windy about the webcams around [center] (a view [spanKm] corner to corner), unless an ask in
+     * the last 10 minutes already covered all of it. A view asked for while another ask is out is
+     * kept and asked next, so a quick pan never leaves the new place empty.
+     */
     fun loadWindy(center: LatLng, spanKm: Double) {
         val now = System.currentTimeMillis()
-        if (!WindyKey.present || windyFetch != null || now - windyFailedAt < 60_000) return
-        val cell = "${floor(center.lat * 2).toInt()},${floor(center.lng * 2).toInt()}"
-        windyCells[cell]?.let { if (now - it < 600_000) return }
-        val radius = (spanKm / 2).coerceIn(15.0, 120.0).toInt()
+        if (!WindyKey.present || now - windyFailedAt < 60_000) return
+        windyAsked.removeAll { now - it.at >= 600_000 }
+        // Windy answers at most 250 km out; a wider view only needs its middle covered.
+        val reach = minOf(spanKm / 2, 250.0)
+        if (windyAsked.any { it.center.distanceTo(center) / 1000 + reach <= it.km }) return
+        if (windyFetch != null) { windyPending = center to spanKm; return }
+        // A margin around the view, so small pans ask nothing.
+        val radius = (reach * 1.4).coerceIn(15.0, 250.0).toInt()
         windyFetch = scope.launch {
             val data = withContext(Dispatchers.IO) { get(LiveCams.windyNearbyUrl(center, radius), mapOf("x-windy-api-key" to WindyKey.VALUE)) }
             windyFetch = null
             val cams = data?.let { LiveCams.parseWindy(it) }
-            if (cams == null) { windyFailedAt = System.currentTimeMillis(); return@launch }
-            windyCells[cell] = System.currentTimeMillis()
-            val t = System.currentTimeMillis()
-            cams.forEach { windy[it.id] = it to t }
-            bump()
+            if (cams != null) {
+                val t = System.currentTimeMillis()
+                windyAsked += Asked(center, radius.toDouble(), t)
+                cams.forEach { windy[it.id] = it to t }
+                bump()
+            } else windyFailedAt = System.currentTimeMillis()
+            windyPending?.let { (c, sp) -> windyPending = null; loadWindy(c, sp) }
         }
     }
 

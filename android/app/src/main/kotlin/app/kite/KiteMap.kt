@@ -718,6 +718,8 @@ class KiteMap(private val model: AppModel, private val context: Context) {
         val dLat = (b.latitudeNorth - b.latitudeSouth) * 0.5
         val dLng = (b.longitudeEast - b.longitudeWest) * 0.5
         val inside = liveCamBox?.let { b.latitudeSouth >= it.s && b.latitudeNorth <= it.n && b.longitudeWest >= it.w && b.longitudeEast <= it.e } ?: false
+        // Switched on from Layers or Settings: ask for the cameras now, not only after the next pan.
+        if (on) loadLiveCams(m)
         val key = "$on${s.showsRoadCams}${s.showsWebcams}${LiveCamStore.version}"
         if (key == lastLiveKey && (!on || inside)) return
         lastLiveKey = key
