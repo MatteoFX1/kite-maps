@@ -380,10 +380,12 @@ final class AppModel: ObservableObject {
             }) else { return }
             selected?.statusText = fresh.statusText
             selected?.openNow = fresh.openNow
+            selected?.hours = fresh.hours
+            selected?.permanentlyClosed = fresh.permanentlyClosed
         }
     }
 
-    /** "Costa" and "Costa Coffee", "St Mary's Church" and "St. Mary's": one name in the other, or a longer word shared. */
+    /** "Costa" and "Costa Coffee", "St Mary's Church" and "St. Mary's": every word of one name is in the other. */
     static func similarNames(_ a: String, _ b: String) -> Bool {
         func words(_ s: String) -> [String] {
             s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
@@ -391,9 +393,8 @@ final class AppModel: ObservableObject {
         }
         let x = words(a), y = words(b)
         guard !x.isEmpty, !y.isEmpty else { return false }
-        let jx = x.joined(separator: " "), jy = y.joined(separator: " ")
-        if jx.contains(jy) || jy.contains(jx) { return true }
-        return !Set(x.filter { $0.count >= 4 }).isDisjoint(with: y.filter { $0.count >= 4 })
+        // Whole words, so "Costa" isn't "Costas" and "Royal Hotel" isn't "Royal Cafe".
+        return Set(x).isSubset(of: y) || Set(y).isSubset(of: x)
     }
 
     static let locationOffText = "Location is off for Kite. Turn it on in Settings to get directions from where you are."

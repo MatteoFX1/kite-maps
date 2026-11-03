@@ -350,19 +350,19 @@ class AppModel {
         scope.launch {
             val found = runCatching { GoogleClient.shared.search(q, p.location, 1_000.0, pages = 1) }.getOrDefault(emptyList())
             val fresh = found.firstOrNull { it.location.distanceTo(p.location) < 150 && similarNames(it.name, p.name) } ?: return@launch
-            if (selected?.id == p.id) selected = selected?.copy(statusText = fresh.statusText, openNow = fresh.openNow)
+            if (selected?.id == p.id) selected = selected?.copy(statusText = fresh.statusText, openNow = fresh.openNow,
+                hours = fresh.hours, permanentlyClosed = fresh.permanentlyClosed)
         }
     }
 
-    /** "Costa" and "Costa Coffee", "St Mary's Church" and "St. Mary's": one name in the other, or a longer word shared. */
+    /** "Costa" and "Costa Coffee", "St Mary's Church" and "St. Mary's": every word of one name is in the other. */
     private fun similarNames(a: String, b: String): Boolean {
         fun words(s: String) = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD)
             .replace(Regex("\\p{M}"), "").split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
         val x = words(a); val y = words(b)
         if (x.isEmpty() || y.isEmpty()) return false
-        val jx = x.joinToString(" "); val jy = y.joinToString(" ")
-        if (jx in jy || jy in jx) return true
-        return x.filter { it.length >= 4 }.toSet().intersect(y.filter { it.length >= 4 }.toSet()).isNotEmpty()
+        // Whole words, so "Costa" isn't "Costas" and "Royal Hotel" isn't "Royal Cafe".
+        return y.containsAll(x) || x.containsAll(y)
     }
 
     // My places
