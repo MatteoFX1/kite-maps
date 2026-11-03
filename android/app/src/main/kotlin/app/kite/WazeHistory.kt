@@ -42,10 +42,11 @@ object WazeHistory {
         if (fresh.isEmpty()) return false
         var list = sightings + fresh.map { Sighting(it.id, it.location.lat, it.location.lng, it.reportedAtMillis) }
         fresh.forEach { ids.add(it.id) }
-        if (list.size > LIMIT) {
-            list = list.takeLast(LIMIT)
-            ids.clear(); ids.addAll(list.map { it.id })
-        }
+        // Kept 90 days while Kite runs too, not only when it starts.
+        val cutoff = System.currentTimeMillis() - 90L * 86_400_000
+        list = list.filter { it.t > cutoff }
+        if (list.size > LIMIT) list = list.takeLast(LIMIT)
+        ids.clear(); ids.addAll(list.map { it.id })
         sightings = list
         save()
         onChange?.invoke()

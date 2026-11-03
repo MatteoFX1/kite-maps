@@ -161,6 +161,12 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
         return cookies.contains { $0.name.hasPrefix("recaptcha-ca") && $0.domain.contains("waze.com") }
     }
 
+    /** Road alerts off, or "Use Kite without Google": close the hidden page so its scripts stop too. */
+    func shutDown() {
+        reset()
+        finish(ok: false)
+    }
+
     private func reset() {
         web?.removeFromSuperview()
         web = nil

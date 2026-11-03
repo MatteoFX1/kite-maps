@@ -48,10 +48,11 @@ final class WazeHistory {
             sightings.append(Sighting(id: a.id, lat: a.location.lat, lng: a.location.lng, t: a.reportedAt))
             ids.insert(a.id)
         }
-        if sightings.count > limit {
-            sightings.removeFirst(sightings.count - limit)
-            ids = Set(sightings.map(\.id))
-        }
+        // Kept 90 days while Kite runs too, not only when it starts.
+        let cutoff = Date().addingTimeInterval(-90 * 86_400)
+        sightings.removeAll { $0.t <= cutoff }
+        if sightings.count > limit { sightings.removeFirst(sightings.count - limit) }
+        ids = Set(sightings.map(\.id))
         save()
         onChange?()
         return true

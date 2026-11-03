@@ -37,7 +37,7 @@ final class AppSettings: ObservableObject {
     @Published var avoidTolls: Bool { didSet { d.set(avoidTolls, forKey: "avoidTolls") } }
     @Published var avoidHighways: Bool { didSet { d.set(avoidHighways, forKey: "avoidHighways") } }
     /** "Use Kite without Google": search and routes from open data only. */
-    @Published var noGoogle: Bool { didSet { d.set(noGoogle, forKey: "noGoogle") } }
+    @Published var noGoogle: Bool { didSet { d.set(noGoogle, forKey: "noGoogle"); if noGoogle { Task { @MainActor in WazeWeb.shared.shutDown() } } } }
     /** Fixed speed cameras on the map, and plate readers (DeFlock), from OpenStreetMap. */
     @Published var speedCameras: Bool { didSet { d.set(speedCameras, forKey: "speedCameras") } }
     @Published var surveillanceCameras: Bool { didSet { d.set(surveillanceCameras, forKey: "surveillanceCameras") } }
@@ -47,7 +47,7 @@ final class AppSettings: ObservableObject {
     /** Say so when driving over the posted limit. Off by default, like Vela. */
     @Published var speedingAlert: Bool { didSet { d.set(speedingAlert, forKey: "speedingAlert") } }
     /** Live reports from Waze drivers (police, crashes, hazards…): on the map, and warned about while driving. */
-    @Published var waze: Bool { didSet { d.set(waze, forKey: "waze") } }
+    @Published var waze: Bool { didSet { d.set(waze, forKey: "waze"); if !waze { Task { @MainActor in WazeWeb.shared.shutDown() } } } }
     /** The "Waze alerts (beta)" question has been answered, on first launch or after updating. */
     @Published var wazeAsked: Bool { didSet { d.set(wazeAsked, forKey: "wazeAsked") } }
     /** Which kinds of Waze report to show; the basics are on at first. */

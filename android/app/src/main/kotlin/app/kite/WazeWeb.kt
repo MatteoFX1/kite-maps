@@ -176,6 +176,12 @@ object WazeWeb {
     private fun hasPass(): Boolean =
         CookieManager.getInstance().getCookie("https://www.waze.com")?.split(";")?.any { it.trim().startsWith("recaptcha-ca") } == true
 
+    /** Road alerts off, or "Use Kite without Google": close the hidden page so its scripts stop too. */
+    fun shutDown() {
+        reset()
+        finish(ok = false)
+    }
+
     private fun reset() {
         web?.let { w -> (w.parent as? ViewGroup)?.removeView(w); w.destroy() }
         web = null
