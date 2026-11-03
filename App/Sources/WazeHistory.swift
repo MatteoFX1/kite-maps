@@ -36,22 +36,31 @@ final class WazeHistory {
 
     /** For the risk score. */
     var reports: [PoliceRisk.Report] {
-        sightings.map { PoliceRisk.Report(LatLng($0.lat, $0.lng), $0.t) }
+        prune()
+        return sightings.map { PoliceRisk.Report(LatLng($0.lat, $0.lng), $0.t) }
+    }
+
+    /** Kept 90 days while Kite runs too, not only when it starts (and the file follows). */
+    private func prune() {
+        let cutoff = Date().addingTimeInterval(-90 * 86_400)
+        guard sightings.contains(where: { $0.t <= cutoff }) else { return }
+        sightings.removeAll { $0.t <= cutoff }
+        ids = Set(sightings.map(\.id))
+        save()
     }
 
     /** Adds the police reports not seen before. True when anything was added. */
     @discardableResult
     func record(_ alerts: [WazeAlert]) -> Bool {
+        prune()
         let fresh = alerts.filter { $0.kind == .police && !ids.contains($0.id) }
         guard !fresh.isEmpty else { return false }
         for a in fresh {
             sightings.append(Sighting(id: a.id, lat: a.location.lat, lng: a.location.lng, t: a.reportedAt))
             ids.insert(a.id)
         }
-        if sightings.count > limit {
-            sightings.removeFirst(sightings.count - limit)
-            ids = Set(sightings.map(\.id))
-        }
+        if sightings.count > limit { sightings.removeFirst(sightings.count - limit) }
+        ids = Set(sightings.map(\.id))
         save()
         onChange?()
         return true

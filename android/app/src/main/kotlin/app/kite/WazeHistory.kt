@@ -31,21 +31,29 @@ object WazeHistory {
     }
 
     /** For the risk score. */
-    val reports: List<PoliceRisk.Report> get() { load(); return sightings.map { PoliceRisk.Report(LatLng(it.lat, it.lng), it.t) } }
+    val reports: List<PoliceRisk.Report> get() { load(); prune(); return sightings.map { PoliceRisk.Report(LatLng(it.lat, it.lng), it.t) } }
 
     val all: List<Sighting> get() { load(); return sightings }
+
+    /** Kept 90 days while Kite runs too, not only when it starts (and the file follows). */
+    private fun prune() {
+        val cutoff = System.currentTimeMillis() - 90L * 86_400_000
+        if (sightings.none { it.t <= cutoff }) return
+        sightings = sightings.filter { it.t > cutoff }
+        ids.clear(); ids.addAll(sightings.map { it.id })
+        save()
+    }
 
     /** Adds the police reports not seen before. True when anything was added. */
     fun record(alerts: List<WazeAlert>): Boolean {
         load()
+        prune()
         val fresh = alerts.filter { it.kind == WazeAlert.Kind.POLICE && !ids.contains(it.id) }
         if (fresh.isEmpty()) return false
         var list = sightings + fresh.map { Sighting(it.id, it.location.lat, it.location.lng, it.reportedAtMillis) }
         fresh.forEach { ids.add(it.id) }
-        if (list.size > LIMIT) {
-            list = list.takeLast(LIMIT)
-            ids.clear(); ids.addAll(list.map { it.id })
-        }
+        if (list.size > LIMIT) list = list.takeLast(LIMIT)
+        ids.clear(); ids.addAll(list.map { it.id })
         sightings = list
         save()
         onChange?.invoke()

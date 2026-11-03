@@ -22,6 +22,9 @@ final class Navigator: ObservableObject {
     @Published var following = true
     @Published private(set) var speedMps: Double = 0
     @Published private(set) var lastFix: CLLocation?
+    /** No GPS fix for a while (a tunnel, a car park): the screen says so instead of looking live. */
+    @Published private(set) var gpsLost = false
+    private var gpsWatch: Timer?
     /** A camera coming up within about twelve seconds, for the warning card. */
     @Published private(set) var cameraAhead: CameraAlert?
     /** How far along the route the card's camera is. */
@@ -141,6 +144,13 @@ final class Navigator: ObservableObject {
         loadCameras()
         loadWaze()
         loadRoundabouts()
+        gpsWatch = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.demoAlerts, let fix = self.lastFix else { return }
+                let lost = Date().timeIntervalSince(fix.timestamp) > 8
+                if lost != self.gpsLost { self.gpsLost = lost }
+            }
+        }
         // The first step with how far it is ("In 300 yards, turn left"), so a turn a little way off
         // doesn't sound like it's right here.
         let firstWords = first.map { f in f.alongMeters < 40 || f.type == .arrive ? "\(f.instruction)."
@@ -153,6 +163,7 @@ final class Navigator: ObservableObject {
 
     func stop() {
         stopped = true
+        gpsWatch?.invalidate()
         speech.stopSpeaking(at: .immediate)
         UIApplication.shared.isIdleTimerDisabled = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)

@@ -114,6 +114,7 @@ fun KiteScreen(model: AppModel, activity: MainActivity) {
         }.collect { kiteMap.render() }
     }
     LaunchedEffect(model.nav != null) { activity.keepScreenOn(model.nav != null) }
+    LaunchedEffect(s.wazeOn) { if (!s.wazeOn) WazeWeb.shutDown() }
 
     val ready = s.welcomed && !s.needsWazeChoice
     val perms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->

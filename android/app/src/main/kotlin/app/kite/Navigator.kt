@@ -35,6 +35,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     var following by mutableStateOf(true)
     var speedMps by mutableStateOf(0.0); private set
     var lastFix by mutableStateOf<Fix?>(null); private set
+    /** No GPS fix for a while (a tunnel, a car park): the screen says so instead of looking live. */
+    var gpsLost by mutableStateOf(false); private set
     var cameraAhead by mutableStateOf<CameraAlert?>(null); private set
     /** How far along the route the card's camera is. */
     private var cameraAheadAt = 0.0
@@ -104,6 +106,16 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         return cams.filter { c -> matchedWays.any { w -> w.line.size >= 2 && Geo.project(c.camera.location, w.line).offset < 15 } }
     }
 
+    private val gpsWatch = scope.launch {
+        while (true) {
+            delay(2_000)
+            val fix = lastFix ?: continue
+            if (demoAlerts) continue
+            val lost = System.currentTimeMillis() - fix.timeMillis > 8_000
+            if (lost != gpsLost) gpsLost = lost
+        }
+    }
+
     init {
         Voice.warmUp()
         val first = route0.maneuvers.firstOrNull { it.type != ManeuverType.DEPART } ?: route0.maneuvers.firstOrNull()
@@ -126,6 +138,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
 
     fun stop() {
         stopped = true
+        gpsWatch.cancel()
         Voice.stop()
     }
 
