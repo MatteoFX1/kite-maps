@@ -49,6 +49,8 @@ final class LiveCamStore: ObservableObject {
     @Published private(set) var status: String?
     private var loading: Task<Void, Never>?
     private var listedAt: Date?
+    /** After a failed list, not again before this, even with no list at all yet. */
+    private var roadRetryAt = Date.distantPast
 
     private var cacheURL: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("livecams.json")
@@ -66,6 +68,7 @@ final class LiveCamStore: ObservableObject {
             version += 1
         }
         if let listedAt, Date().timeIntervalSince(listedAt) < 86_400, !road.isEmpty { return }
+        guard Date() >= roadRetryAt else { return }
         loading = Task { [weak self] in
             let fresh = await Self.fetchRoadList()
             guard let self else { return }
@@ -82,6 +85,7 @@ final class LiveCamStore: ObservableObject {
                 self.status = self.road.isEmpty ? "Couldn't load the camera list" : "\(self.road.count) road cameras (saved list)"
                 // Try again in ten minutes rather than on every pan.
                 self.listedAt = Date().addingTimeInterval(-86_400 + 600)
+                self.roadRetryAt = Date().addingTimeInterval(600)
             }
         }
     }

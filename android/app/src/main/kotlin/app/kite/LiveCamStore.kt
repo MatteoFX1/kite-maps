@@ -52,6 +52,8 @@ object LiveCamStore {
     var onChange: (() -> Unit)? = null
     private var loading: Job? = null
     private var listedAt: Long? = null
+    /** After a failed list, not again before this, even with no list at all yet. */
+    private var roadRetryAt = 0L
 
     private val cacheFile get() = File(KiteApp.app.cacheDir, "livecams.json")
 
@@ -70,6 +72,7 @@ object LiveCamStore {
         }
         val at = listedAt
         if (at != null && now - at < 86_400_000L && road.isNotEmpty()) return
+        if (now < roadRetryAt) return
         loading = scope.launch {
             val fresh = withContext(Dispatchers.IO) { fetchRoadList() }
             loading = null
@@ -85,6 +88,7 @@ object LiveCamStore {
                 status = if (road.isEmpty()) "Couldn't load the camera list" else "${road.size} road cameras (saved list)"
                 // Try again in ten minutes rather than on every pan.
                 listedAt = System.currentTimeMillis() - 86_400_000L + 600_000L
+                roadRetryAt = System.currentTimeMillis() + 600_000L
             }
         }
     }
