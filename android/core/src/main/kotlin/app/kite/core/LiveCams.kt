@@ -114,6 +114,9 @@ object LiveCams {
     }
 
     /** Windy's webcams (Webcams API v3), from a "nearby" or single-webcam answer. */
+    /** How many webcams Windy's answer listed before any were left out (inactive, no photo): 50 means the limit was hit. */
+    fun windyListed(data: ByteArray): Int = Json.parse(data).asMap()?.get("webcams")?.asMaps()?.size ?: 0
+
     fun parseWindy(data: ByteArray): List<LiveCam>? {
         val root = Json.parse(data).asMap() ?: return null
         val list = root["webcams"].asMaps() ?: if (root["webcamId"] != null) listOf(root) else return null

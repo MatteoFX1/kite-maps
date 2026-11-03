@@ -109,7 +109,9 @@ object LiveCamStore {
      */
     fun loadWindy(center: LatLng, spanKm: Double) {
         val now = System.currentTimeMillis()
-        if (!WindyKey.present || now - windyFailedAt < 60_000) return
+        if (!WindyKey.present) return
+        // In the minute's pause after a failure: remember the newest view and ask once the pause is over.
+        if (now - windyFailedAt < 60_000) { windyPending = center to spanKm; retryWindyLater(); return }
         windyAsked.removeAll { now - it.at >= 600_000 }
         // Windy answers at most 250 km out; a wider view only needs its middle covered.
         val reach = minOf(spanKm / 2, 250.0)
@@ -124,18 +126,28 @@ object LiveCamStore {
             if (cams != null) {
                 val t = System.currentTimeMillis()
                 // A full answer (the 50 limit) may have left cameras out: zooming in asks again.
-                windyAsked += Asked(center, radius.toDouble(), t, if (cams.size >= 50) reach * 0.8 else 0.0)
+                windyAsked += Asked(center, radius.toDouble(), t, if (data != null && LiveCams.windyListed(data) >= 50) reach * 0.8 else 0.0)
                 cams.forEach { windy[it.id] = it to t }
                 bump()
             } else {
                 windyFailedAt = System.currentTimeMillis()
                 // The view asked for meanwhile is tried again after the minute's pause, not dropped.
-                if (windyPending != null) {
-                    delay(61_000)
-                    windyPending?.let { (c, sp) -> windyPending = null; loadWindy(c, sp) }
-                }
+                if (windyPending != null) retryWindyLater()
                 return@launch
             }
+            windyPending?.let { (c, sp) -> windyPending = null; loadWindy(c, sp) }
+        }
+    }
+
+    private var windyRetry: Job? = null
+
+    /** One retry at the end of the pause, with the newest view asked for in it. */
+    private fun retryWindyLater() {
+        if (windyRetry != null) return
+        val wait = (61_000 - (System.currentTimeMillis() - windyFailedAt)).coerceAtLeast(1_000)
+        windyRetry = scope.launch {
+            delay(wait)
+            windyRetry = null
             windyPending?.let { (c, sp) -> windyPending = null; loadWindy(c, sp) }
         }
     }

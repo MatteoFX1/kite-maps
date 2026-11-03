@@ -114,6 +114,11 @@ public enum LiveCams {
      * Windy's webcams (api.windy.com, Webcams API v3), from a "nearby" or single-webcam answer.
      * The free plan's photo links stop working after about 15 minutes, so they're asked again then.
      */
+    /** How many webcams Windy's answer listed before any were left out (inactive, no photo): 50 means the limit was hit. */
+    public static func windyListed(_ data: Data) -> Int {
+        ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["webcams"].flatMap { $0 as? [Any] }?.count ?? 0
+    }
+
     public static func parseWindy(_ data: Data) -> [LiveCam]? {
         guard let root = try? JSONSerialization.jsonObject(with: data) else { return nil }
         let list: [[String: Any]]

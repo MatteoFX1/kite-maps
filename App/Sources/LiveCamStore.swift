@@ -112,7 +112,9 @@ final class LiveCamStore: ObservableObject {
      * kept and asked next, so a quick pan never leaves the new place empty.
      */
     func loadWindy(center: LatLng, spanKm: Double) {
-        guard WindyKey.present, Date().timeIntervalSince(windyFailedAt) > 60 else { return }
+        guard WindyKey.present else { return }
+        // In the minute's pause after a failure: remember the newest view and ask once the pause is over.
+        guard Date().timeIntervalSince(windyFailedAt) > 60 else { windyPending = (center, spanKm); retryWindyLater(); return }
         let now = Date()
         windyAsked.removeAll { now.timeIntervalSince($0.at) >= 600 }
         // Windy answers at most 250 km out; a wider view only needs its middle covered.
@@ -128,22 +130,32 @@ final class LiveCamStore: ObservableObject {
             if let data, let cams = LiveCams.parseWindy(data) {
                 let t = Date()
                 // A full answer (the 50 limit) may have left cameras out: zooming in asks again.
-                self.windyAsked.append((center, Double(Int(radius)), t, cams.count >= 50 ? reach * 0.8 : 0))
+                self.windyAsked.append((center, Double(Int(radius)), t, LiveCams.windyListed(data) >= 50 ? reach * 0.8 : 0))
                 for c in cams { self.windy[c.id] = (c, t) }
                 self.version += 1
             } else {
                 self.windyFailedAt = Date()
                 // The view asked for meanwhile is tried again after the minute's pause, not dropped.
-                if self.windyPending != nil {
-                    Task { [weak self] in
-                        try? await Task.sleep(nanoseconds: 61_000_000_000)
-                        guard let self, let p = self.windyPending else { return }
-                        self.windyPending = nil
-                        self.loadWindy(center: p.center, spanKm: p.spanKm)
-                    }
-                }
+                if self.windyPending != nil { self.retryWindyLater() }
                 return
             }
+            if let p = self.windyPending {
+                self.windyPending = nil
+                self.loadWindy(center: p.center, spanKm: p.spanKm)
+            }
+        }
+    }
+
+    private var windyRetry: Task<Void, Never>?
+
+    /** One retry at the end of the pause, with the newest view asked for in it. */
+    private func retryWindyLater() {
+        guard windyRetry == nil else { return }
+        let wait = max(1, 61 - Date().timeIntervalSince(windyFailedAt))
+        windyRetry = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1e9))
+            guard let self else { return }
+            self.windyRetry = nil
             if let p = self.windyPending {
                 self.windyPending = nil
                 self.loadWindy(center: p.center, spanKm: p.spanKm)
