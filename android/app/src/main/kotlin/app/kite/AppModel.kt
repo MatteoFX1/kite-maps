@@ -468,7 +468,9 @@ class AppModel {
         val d = directions ?: return
         val me = userLatLng
         if (me == null) {
-            val why = if (location.denied) LOCATION_OFF_TEXT else "Waiting for your location…"
+            val why = if (location.denied) LOCATION_OFF_TEXT
+                else if (location.systemOff) "Location is off on this phone. Turn it on in Settings to get directions from where you are."
+                else "Waiting for your location…"
             edit { it.copy(errors = TravelMode.entries.associateWith { why }, tripsError = why, trips = emptyList()) }
             if (!location.denied) {
                 location.start()
