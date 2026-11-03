@@ -106,10 +106,17 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         loadCameras()
         loadWaze()
         loadRoundabouts()
-        speak("Starting route to ${destination.name}. " + (first?.let { "${it.instruction}." } ?: ""))
+        // The first step with how far it is ("In 300 yards, turn left"), so a turn a little way off
+        // doesn't sound like it's right here.
+        val firstWords = first?.let { f ->
+            if (f.alongMeters < 40 || f.type == ManeuverType.ARRIVE) "${f.instruction}."
+            else "In ${Fmt.spokenDistance(f.alongMeters)}, ${f.instruction.lowercasedFirst()}."
+        } ?: ""
+        speak("Starting route to ${destination.name}. $firstWords")
+        // That was the heads-up for the first step: not again a moment later, but still the turn itself.
         if (first != null && first.alongMeters < 1500) {
             val i = route0.maneuvers.indexOf(first)
-            if (i >= 0) spokenStage[i] = if (first.alongMeters < 100) 3 else if (first.alongMeters < 300) 2 else 1
+            if (i >= 0) spokenStage[i] = if (first.alongMeters < 40) 3 else if (first.alongMeters < 300) 2 else 1
         }
     }
 
@@ -163,12 +170,15 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         val p = update(loc, course)
         progress = p
         val toPin = loc.coord.distanceTo(destination.location)
-        if (loc.speedKnown && loc.speed < 1 && (p.remainingMeters < 150 || toPin < 150)) {
+        // Near the pin only counts near the end of the route too: a route can pass right by the
+        // place (or by it on the way to a stop) before looping round to its way in.
+        val nearPin = p.remainingMeters < 400
+        if (loc.speedKnown && loc.speed < 1 && (p.remainingMeters < 150 || (toPin < 150 && nearPin))) {
             if (stoppedNearEnd == null) stoppedNearEnd = loc.timeMillis
         } else stoppedNearEnd = null
-        val offRoad = p.offsetMeters > 20 || p.remainingMeters < 40 || toPin < 60
+        val offRoad = p.offsetMeters > 20 || p.remainingMeters < 40 || (toPin < 60 && nearPin)
         val parked = stoppedNearEnd?.let { (loc.timeMillis - it) / 1000.0 > (if (offRoad) 20 else 90) } ?: false
-        if (p.arrived || parked || (route.mode == TravelMode.DRIVE && toPin < 40)) {
+        if (p.arrived || parked || (route.mode == TravelMode.DRIVE && toPin < 40 && nearPin)) {
             arrived = true
             speak("You have arrived at ${destination.name}" + (destinationSide?.let { ", on the $it." } ?: "."))
             scope.launch {

@@ -509,7 +509,11 @@ public enum Directions {
                     let line = g[i].polyline
                     if let r = (await deadline(wait, { try? await OSRM.routeVia(line, mode: mode) })).flatMap({ $0 }) { vias[i] = r }
                 }
-                let plain: [Route] = (await deadline(wait, { try? await osrmTask.value })).flatMap { $0 } ?? []
+                // Waiting on another task's value ignores cancelling, so cancel that task itself too:
+                // otherwise the deadline still sat out a stalled request.
+                let plain: [Route] = (await deadline(wait, {
+                    await withTaskCancellationHandler { try? await osrmTask.value } onCancel: { osrmTask.cancel() }
+                })).flatMap { $0 } ?? []
                 var spare = plain
                 for i in g.indices {
                     if var steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
@@ -520,7 +524,7 @@ public enum Directions {
                         }
                         g[i].maneuvers = steps
                         g[i].stepsComplete = true
-                    } else if !g[i].stepsComplete, !spare.isEmpty {
+                    } else if !g[i].stepsComplete, !spare.isEmpty, !avoidHighways, !avoidTolls {
                         // Google's own steps have a gap, so its turns would be called in the wrong places:
                         // drive the open router's route instead, keeping Google's traffic estimate.
                         var o = spare.removeFirst()
@@ -660,9 +664,16 @@ public enum StepMerge {
     }
 
     public static func addGoogleLaneHints(_ steps: inout [Maneuver], from google: [Maneuver]) {
-        for i in steps.indices where !steps[i].silent && steps[i].lanes.isEmpty && steps[i].laneHint == nil {
-            let near = google.filter { $0.laneHint != nil && abs($0.alongMeters - steps[i].alongMeters) < 150 }
-            steps[i].laneHint = near.min { abs($0.alongMeters - steps[i].alongMeters) < abs($1.alongMeters - steps[i].alongMeters) }?.laneHint
+        // Each of Google's hints goes to one step only, and only when they're each other's nearest:
+        // a left turn 80 m before a right one mustn't take the right turn's lanes.
+        let open = steps.indices.filter { !steps[$0].silent && steps[$0].lanes.isEmpty && steps[$0].laneHint == nil }
+        let hints = google.filter { $0.laneHint != nil }
+        for g in hints {
+            guard let i = open.min(by: { abs(steps[$0].alongMeters - g.alongMeters) < abs(steps[$1].alongMeters - g.alongMeters) }),
+                  abs(steps[i].alongMeters - g.alongMeters) < 150,
+                  let back = hints.min(by: { abs($0.alongMeters - steps[i].alongMeters) < abs($1.alongMeters - steps[i].alongMeters) }),
+                  back.alongMeters == g.alongMeters else { continue }
+            steps[i].laneHint = g.laneHint
         }
     }
 }

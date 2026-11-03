@@ -136,9 +136,14 @@ final class Navigator: ObservableObject {
         loadCameras()
         loadWaze()
         loadRoundabouts()
-        speak("Starting route to \(destination.name). " + (first.map { "\($0.instruction)." } ?? ""))
-        // That was the heads-up for the first step: don't say it again a moment later.
-        if let f = first, f.alongMeters < 1500, let i = route.maneuvers.firstIndex(of: f) { spokenStage[i] = f.alongMeters < 100 ? 3 : f.alongMeters < 300 ? 2 : 1 }
+        // The first step with how far it is ("In 300 yards, turn left"), so a turn a little way off
+        // doesn't sound like it's right here.
+        let firstWords = first.map { f in f.alongMeters < 40 || f.type == .arrive ? "\(f.instruction)."
+            : "In \(Fmt.spokenDistance(f.alongMeters)), \(f.instruction.lowercasedFirst)." } ?? ""
+        speak("Starting route to \(destination.name). " + firstWords)
+        // That was the heads-up for the first step: don't say it again a moment later, but still
+        // say the turn itself as it comes up.
+        if let f = first, f.alongMeters < 1500, let i = route.maneuvers.firstIndex(of: f) { spokenStage[i] = f.alongMeters < 40 ? 3 : f.alongMeters < 300 ? 2 : 1 }
     }
 
     func stop() {
@@ -194,16 +199,19 @@ final class Navigator: ObservableObject {
         // under a motorway has its route end on some road nearby, and simulated drives to Exeter
         // services and Spaghetti Junction went round in circles next to the pin.
         let toPin = latLng(loc).distance(to: destination.location)
-        if loc.speed >= 0 && loc.speed < 1, p.remainingMeters < 150 || toPin < 150 {
+        // Near the pin only counts near the end of the route too: a route can pass right by the
+        // place (or by it on the way to a stop) before looping round to its way in.
+        let nearPin = p.remainingMeters < 400
+        if loc.speed >= 0 && loc.speed < 1, p.remainingMeters < 150 || (toPin < 150 && nearPin) {
             if stoppedNearEnd == nil { stoppedNearEnd = loc.timestamp }
         } else {
             stoppedNearEnd = nil
         }
         // Off the road into a car park (or right at the end): 20 seconds stopped. Still on the road
         // short of it, it could be a red light or a queue, so a minute and a half.
-        let offRoad = p.offsetMeters > 20 || p.remainingMeters < 40 || toPin < 60
+        let offRoad = p.offsetMeters > 20 || p.remainingMeters < 40 || (toPin < 60 && nearPin)
         let parked = stoppedNearEnd.map { loc.timestamp.timeIntervalSince($0) > (offRoad ? 20 : 90) } ?? false
-        if p.arrived || parked || (route.mode == .drive && toPin < 40) {
+        if p.arrived || parked || (route.mode == .drive && toPin < 40 && nearPin) {
             arrived = true
             speak("You have arrived at \(destination.name)" + (destinationSide.map { ", on the \($0)." } ?? "."))
             // Parked, the phone goes in a pocket: let the screen sleep, and a few minutes on, end
