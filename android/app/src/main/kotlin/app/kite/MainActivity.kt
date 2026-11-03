@@ -93,7 +93,8 @@ fun KiteScreen(model: AppModel, activity: MainActivity) {
         snapshotFlow {
             listOf(model.mapTick, model.results, model.selected?.id, model.directions, model.nav, model.openNowOnly, model.rating4Only,
                 s.traffic, s.satellite, s.terrain, s.transitLines, s.speedCameras, s.plateCameras, s.wazeOnMap, s.wazeHeatmap,
-                s.home, s.work, s.parking, s.saved, LocationService.authorized, model.tab)
+                s.home, s.work, s.parking, s.saved, LocationService.authorized, model.tab,
+                s.welcomed, s.noGoogle, s.surveillanceCameras)
         }.collect { kiteMap.render() }
     }
     LaunchedEffect(model.nav != null) { activity.keepScreenOn(model.nav != null) }
