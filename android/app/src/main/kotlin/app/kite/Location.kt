@@ -133,7 +133,10 @@ object Connectivity {
         online = cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
         cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) { post(true) }
-            override fun onLost(network: Network) { post(false) }
+            // Wi-Fi to mobile data can report the old network lost after the new one is up.
+            override fun onLost(network: Network) {
+                post(cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true)
+            }
         })
     }
 

@@ -46,6 +46,13 @@ object WazeWeb {
         Waze.fallback = { url -> fetch(url) }
     }
 
+    /** The screen is going away: drop the hidden page so it doesn't keep the old screen in memory. */
+    fun uninstall(a: Activity) {
+        if (activity?.get() !== a) return
+        reset(); finish(ok = false)
+        activity = null
+    }
+
     /** Watches the page's own requests for the feed, and notes reCAPTCHA's key and action. */
     private val watcher = """
 (function () {

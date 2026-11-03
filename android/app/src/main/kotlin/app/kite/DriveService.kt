@@ -1,5 +1,6 @@
 package app.kite
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,11 +8,13 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 
 /**
  * Keeps Kite running with the screen off or another app on top while a drive is going, the way
@@ -39,22 +42,40 @@ class DriveService : Service() {
             .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
+        // Always go foreground first, even when this start is only to stop: Android ends the app if a
+        // service started with startForegroundService() stops before it calls startForeground().
         runCatching {
             ServiceCompat.startForeground(this, 1, n,
                 if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0)
-        }.onFailure { stopSelf() }
+        }
+        if (intent?.action == STOP) {
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
         return START_NOT_STICKY
     }
 
     companion object {
         private const val CHANNEL = "drive"
+        private const val STOP = "app.kite.STOP_DRIVE"
+        private var running = false
 
         fun start(c: Context) {
-            runCatching { c.startForegroundService(Intent(c, DriveService::class.java)) }
+            // Without location access Android refuses a location service, and that refusal ends the app.
+            if (ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
+            running = runCatching { c.startForegroundService(Intent(c, DriveService::class.java)) }.isSuccess
         }
 
+        /**
+         * Stops through the service itself rather than stopService(), so a drive ended straight after it
+         * began (already at the destination) still goes foreground first, in order.
+         */
         fun stop(c: Context) {
-            runCatching { c.stopService(Intent(c, DriveService::class.java)) }
+            if (!running) return
+            running = false
+            runCatching { c.startService(Intent(c, DriveService::class.java).setAction(STOP)) }
+                .onFailure { runCatching { c.stopService(Intent(c, DriveService::class.java)) } }
         }
     }
 }

@@ -33,8 +33,8 @@ enum SearchPb {
     static func build(query: String, center: LatLng, spanMeters: Double? = nil, offset: Int = 0) -> String {
         var pb = template
             .replacingOccurrences(of: "{QUERY}", with: query.replacingOccurrences(of: "!", with: " ").trimmingCharacters(in: .whitespaces))
-            .replacingOccurrences(of: "{LNG}", with: String(center.lng))
-            .replacingOccurrences(of: "{LAT}", with: String(center.lat))
+            .replacingOccurrences(of: "{LNG}", with: center.lng.plain)
+            .replacingOccurrences(of: "{LAT}", with: center.lat.plain)
         if let span = spanMeters, let r = pb.range(of: #"!1d[0-9.]+"#, options: .regularExpression) {
             let clamped = min(max(span, minSpanMeters), 500_000)
             pb.replaceSubrange(r, with: "!1d\(clamped)")

@@ -23,7 +23,7 @@ public enum OSRM {
     static func routeURL(from a: LatLng, to b: LatLng, mode: TravelMode, via: [LatLng] = [], heading: Double? = nil) -> URL {
         let profile = mode == .drive ? "driving" : (mode == .bike ? "bike" : "foot")
         let pts = [a] + via + [b]
-        let coords = pts.map { "\($0.lng),\($0.lat)" }.joined(separator: ";")
+        let coords = pts.map { "\($0.lng.plain),\($0.lat.plain)" }.joined(separator: ";")
         var s = "https://routing.openstreetmap.de/\(mode.osrmBackend)/route/v1/\(profile)/\(coords)" +
             "?overview=full&geometries=polyline6&steps=true&alternatives=\(mode == .drive && via.isEmpty)"
         if let heading {

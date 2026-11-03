@@ -391,4 +391,16 @@ final class DestinationSideTests: XCTestCase {
         XCTAssertNil(Geo.sideAtEnd(LatLng(50.901, -1.400), of: line), "on the road itself")
         XCTAssertNil(Geo.sideAtEnd(LatLng(50.910, -1.3996), of: line), "a kilometre past the end")
     }
+
+    func testCoordinatesByGreenwichStayPlain() {
+        // Swift writes 0.00005 as "5e-05"; Google, OSRM and Photon turn that away.
+        XCTAssertEqual(0.00005.plain, "0.00005")
+        XCTAssertEqual((-0.00002).plain, "-0.00002")
+        XCTAssertEqual(0.0.plain, "0.0")
+        XCTAssertEqual((-1.3996).plain, "-1.3996")
+        let pb = DirectionsPb.build(origin: LatLng(51.4779, 0.00005), destination: LatLng(51.5, -0.00002), mode: .drive)
+        XCTAssertFalse(pb.contains("e-"), pb)
+        XCTAssertTrue(pb.contains("!4d0.00005"), pb)
+        XCTAssertFalse(SearchPb.build(query: "cafe", center: LatLng(51.4779, 0.00003)).contains("e-"))
+    }
 }

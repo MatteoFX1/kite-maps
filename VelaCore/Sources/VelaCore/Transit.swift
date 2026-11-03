@@ -85,7 +85,7 @@ public enum Transitous {
     }()
 
     public static func planURL(from: LatLng, to: LatLng, max: Int = 5, time: Date? = nil, arriveBy: Bool = false) -> URL? {
-        var s = "\(base)/api/v1/plan?fromPlace=\(from.lat),\(from.lng)&toPlace=\(to.lat),\(to.lng)&numItineraries=\(max)"
+        var s = "\(base)/api/v1/plan?fromPlace=\(from.lat.plain),\(from.lng.plain)&toPlace=\(to.lat.plain),\(to.lng.plain)&numItineraries=\(max)"
         if let time {
             let f = ISO8601DateFormatter()
             s += "&time=" + f.string(from: time)

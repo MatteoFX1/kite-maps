@@ -47,6 +47,11 @@ class MainActivity : ComponentActivity() {
         LocationService.refreshPermission()
     }
 
+    override fun onDestroy() {
+        WazeWeb.uninstall(this)
+        super.onDestroy()
+    }
+
     /** Links shared from other apps, map links opened in Kite, and the Home, Work and Car shortcuts. */
     private fun handle(i: Intent?) {
         i ?: return

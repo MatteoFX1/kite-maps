@@ -61,8 +61,8 @@ object DirectionsPb {
                 pb = pb.substring(0, i) + "!6m${56 + added}!1m5!18b1!30b1!31m1!1b1!34e1!2m${4 + added}$flags" + pb.substring(i + key.length)
             }
         }
-        return pb.replace("{OLAT}", origin.lat.toString()).replace("{OLNG}", origin.lng.toString())
-            .replace("{DLAT}", destination.lat.toString()).replace("{DLNG}", destination.lng.toString())
+        return pb.replace("{OLAT}", origin.lat.plain()).replace("{OLNG}", origin.lng.plain())
+            .replace("{DLAT}", destination.lat.plain()).replace("{DLNG}", destination.lng.plain())
             .replace("{MODE}", mode.raw.toString())
     }
 }

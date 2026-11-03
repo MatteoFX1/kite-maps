@@ -77,9 +77,13 @@ object WazeHistory {
         }
     }
 
+    /** One write at a time, in order, so two quick saves never mix up the same file. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val writer = Dispatchers.IO.limitedParallelism(1)
+
     private fun save() {
         val data = Json.write(sightings.map { mapOf("id" to it.id, "lat" to it.lat, "lng" to it.lng, "t" to it.t) })
-        CoroutineScope(Dispatchers.IO).launch {
+        CoroutineScope(writer).launch {
             runCatching {
                 val tmp = File(file.parentFile, "waze-police.tmp")
                 tmp.writeText(data)
