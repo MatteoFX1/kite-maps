@@ -68,7 +68,13 @@ struct NavigationOverlay: View {
                 if let check = nav.averageCheck, !nav.arrived, showAverage {
                     AverageCheckCard(check: check)
                 }
-                if nav.rerouting {
+                if nav.gpsLost, !nav.arrived {
+                    // In a tunnel the speed and the next turn stop moving: say why, so it doesn't look live.
+                    Label("GPS signal lost", systemImage: "location.slash.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .padding(.horizontal, 18).frame(height: 44)
+                        .glass(Capsule())
+                } else if nav.rerouting {
                     Label("Rerouting…", systemImage: "arrow.triangle.2.circlepath")
                         .font(.system(size: 18, weight: .bold))
                         .padding(.horizontal, 18).frame(height: 44)

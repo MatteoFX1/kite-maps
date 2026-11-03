@@ -29,6 +29,9 @@ struct LayersSheet: View {
                 tile("Road alerts", waze: Waze.shares.contains(.police) ? .police : .closure, on: settings.wazeOn && settings.wazeOnMap) {
                     if settings.waze && settings.wazeOnMap { settings.wazeOnMap = false } else { settings.waze = true; settings.wazeOnMap = true }
                 }
+                tile("Live cameras", icon: "web.camera.fill", on: settings.liveCams && (settings.liveRoadCams || settings.showsWebcams)) {
+                    if settings.liveCams { settings.liveCams = false } else { settings.liveCams = true; settings.liveRoadCams = true }
+                }
                 if Waze.shares.contains(.police) {
                     tile("Police heat map", icon: "flame.fill", on: settings.wazeOn && settings.wazeHeatmap) {
                         if settings.waze && settings.wazeHeatmap { settings.wazeHeatmap = false } else { settings.waze = true; settings.wazeHeatmap = true }
@@ -94,6 +97,8 @@ struct SettingsView: View {
                             value: settings.wazeOn ? "On" : "Off", icon: "exclamationmark.triangle.fill", color: 0x7C3AED) {
                         WazeSettingsView(settings: settings)
                     }
+                    menuRow("Live cameras", detail: "Road camera photos and scenic webcams", value: settings.liveCams ? "On" : "Off",
+                            icon: "web.camera.fill", color: 0x0284C7) { liveCamsPage }
                     menuRow("Map & display", detail: "Theme, units, parking button", icon: "circle.lefthalf.filled", color: 0x334155) { mapPage }
                     menuRow("My places", detail: "Home and work", icon: "house.fill", color: 0x16A34A) { placesPage }
                     menuRow("Privacy", detail: "Use Kite without Google", value: settings.noGoogle ? "On" : nil,
@@ -184,6 +189,35 @@ struct SettingsView: View {
         .navigationTitle("Cameras & speed")
     }
 
+    private var liveCamsPage: some View {
+        Form {
+            Section {
+                Toggle(isOn: $settings.liveCams) { SettingLabel("Live cameras", icon: "web.camera.fill", color: 0x0284C7) }
+            } footer: {
+                Text("See the latest photo from traffic cameras and webcams: tap a camera on the map, or look at the ones on your route before you go. Never shown while you're driving.")
+            }
+            if settings.liveCams {
+                Section {
+                    Toggle(isOn: $settings.liveRoadCams) { SettingLabel("Road cameras (UK)", icon: "car.fill", color: 0x0284C7) }
+                    Toggle(isOn: $settings.liveWebcams) { SettingLabel("Scenic webcams", icon: "sun.horizon.fill", color: 0x7C3AED) }
+                        .disabled(!WindyKey.present)
+                    Toggle(isOn: $settings.liveCamsOnRoute) { SettingLabel("Cameras on your route", icon: "point.topleft.down.curvedto.point.bottomright.up.fill", color: 0x0F766E) }
+                } header: {
+                    Text("Show")
+                } footer: {
+                    Text(WindyKey.present
+                         ? "Road cameras: National Highways, Transport for London, Traffic Scotland, Traffic Wales and TrafficWatch NI, listed by OpenHighways. Webcams: Windy.com, worldwide."
+                         : "Road cameras: National Highways, Transport for London, Traffic Scotland, Traffic Wales and TrafficWatch NI, listed by OpenHighways. Scenic webcams aren't set up in this version of Kite yet.")
+                }
+                if let status = LiveCamStore.shared.status {
+                    Section { LabeledContent("Camera list", value: status) }
+                }
+            }
+        }
+        .kiteList()
+        .navigationTitle("Live cameras")
+    }
+
     private var mapPage: some View {
         Form {
             Section {
@@ -264,6 +298,8 @@ struct SettingsView: View {
             }
             Section {
                 Link("Surveillance cameras, saved-place matching, GPS warnings and diagnostics from Ausbloke's Kite fork", destination: URL(string: "https://github.com/NotDiscordOfficial/kite-maps")!)
+                Link("UK road camera list from OpenHighways (MIT)", destination: URL(string: "https://github.com/JamesDillonDev/openhighways")!)
+                Link("Webcams provided by Windy.com", destination: URL(string: "https://www.windy.com/webcams")!)
             } header: { Text("Thanks to") }
         }
         .kiteList()

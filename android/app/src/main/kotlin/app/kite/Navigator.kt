@@ -35,7 +35,11 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     var following by mutableStateOf(true)
     var speedMps by mutableStateOf(0.0); private set
     var lastFix by mutableStateOf<Fix?>(null); private set
+    /** No GPS fix for a while (a tunnel, a car park): the screen says so instead of looking live. */
+    var gpsLost by mutableStateOf(false); private set
     var cameraAhead by mutableStateOf<CameraAlert?>(null); private set
+    /** How far along the route the card's camera is. */
+    private var cameraAheadAt = 0.0
     var wazeAhead by mutableStateOf<WazeAhead?>(null); private set
     var wazeWarned by mutableIntStateOf(0); private set
     var policeRisk by mutableStateOf<Int?>(null); private set
@@ -87,6 +91,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     private var riskPast: List<PoliceRisk.Report>? = null
     private var riskSpokenAt = 0L
     private var aircraftAt = 0L
+    /** When the aircraft service last answered: an old sighting isn't "nearby" for long. */
+    private var aircraftSeenAt = 0L
     private var aircraftLoading = false
     private val spokenAircraft = mutableSetOf<String>()
     private var tracedAt = 0L
@@ -100,21 +106,39 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         return cams.filter { c -> matchedWays.any { w -> w.line.size >= 2 && Geo.project(c.camera.location, w.line).offset < 15 } }
     }
 
+    private val gpsWatch = scope.launch {
+        while (true) {
+            delay(2_000)
+            val fix = lastFix ?: continue
+            if (demoAlerts) continue
+            val lost = System.currentTimeMillis() - fix.timeMillis > 8_000
+            if (lost != gpsLost) gpsLost = lost
+        }
+    }
+
     init {
         Voice.warmUp()
         val first = route0.maneuvers.firstOrNull { it.type != ManeuverType.DEPART } ?: route0.maneuvers.firstOrNull()
         loadCameras()
         loadWaze()
         loadRoundabouts()
-        speak("Starting route to ${destination.name}. " + (first?.let { "${it.instruction}." } ?: ""))
+        // The first step with how far it is ("In 300 yards, turn left"), so a turn a little way off
+        // doesn't sound like it's right here.
+        val firstWords = first?.let { f ->
+            if (f.alongMeters < 40 || f.type == ManeuverType.ARRIVE) "${f.instruction}."
+            else "In ${Fmt.spokenDistance(f.alongMeters)}, ${f.instruction.lowercasedFirst()}."
+        } ?: ""
+        speak("Starting route to ${destination.name}. $firstWords")
+        // That was the heads-up for the first step: not again a moment later, but still the turn itself.
         if (first != null && first.alongMeters < 1500) {
             val i = route0.maneuvers.indexOf(first)
-            if (i >= 0) spokenStage[i] = if (first.alongMeters < 100) 3 else if (first.alongMeters < 300) 2 else 1
+            if (i >= 0) spokenStage[i] = if (first.alongMeters < 40) 3 else if (first.alongMeters < 300) 2 else 1
         }
     }
 
     fun stop() {
         stopped = true
+        gpsWatch.cancel()
         Voice.stop()
     }
 
@@ -163,12 +187,19 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         val p = update(loc, course)
         progress = p
         val toPin = loc.coord.distanceTo(destination.location)
+        // Near the pin only counts near the end of the route too: a route can pass right by the
+        // place (or by it on the way to a stop) before looping round to its way in.
+        // And only once every stop is done: a round trip starts right by its own destination.
+        val nearPin = p.remainingMeters < 400 && stops.isEmpty()
         if (loc.speedKnown && loc.speed < 1 && (p.remainingMeters < 150 || toPin < 150)) {
             if (stoppedNearEnd == null) stoppedNearEnd = loc.timeMillis
         } else stoppedNearEnd = null
-        val offRoad = p.offsetMeters > 20 || p.remainingMeters < 40 || toPin < 60
-        val parked = stoppedNearEnd?.let { (loc.timeMillis - it) / 1000.0 > (if (offRoad) 20 else 90) } ?: false
-        if (p.arrived || parked || (route.mode == TravelMode.DRIVE && toPin < 40)) {
+        val offRoad = p.offsetMeters > 20 || p.remainingMeters < 40 || (toPin < 60 && nearPin)
+        // Parked by the pin with the route still going round (a way in the map doesn't have): three minutes.
+        val parked = stoppedNearEnd?.let {
+            (loc.timeMillis - it) / 1000.0 > (if (p.remainingMeters >= 150 && !nearPin) 180 else if (offRoad) 20 else 90)
+        } ?: false
+        if (p.arrived || parked || (route.mode == TravelMode.DRIVE && toPin < 40 && nearPin)) {
             arrived = true
             speak("You have arrived at ${destination.name}" + (destinationSide?.let { ", on the $it." } ?: "."))
             scope.launch {
@@ -178,7 +209,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             return
         }
         if (p.offsetMeters < 40) joinedRoute = true
-        if (p.offRoute && !rerouting && toPin > 150 && (joinedRoute || p.offsetMeters > 400) && since(lastReroute) > 8) {
+        if (p.offRoute && !rerouting && (toPin > 150 || !nearPin) && (joinedRoute || p.offsetMeters > 400) && since(lastReroute) > 8) {
             reroute(loc)
             return
         }
@@ -205,7 +236,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     fun addStop(p: Place) {
         stops = listOf(p) + stops
         speak("Adding a stop at ${p.name}.")
-        lastFix?.let { reroute(it, quiet = true) }
+        lastFix?.let { reroute(it, quiet = true, adding = p) }
     }
 
     private fun checkStops(p: RouteTracker.Progress) {
@@ -328,18 +359,25 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     private fun checkCameras(p: RouteTracker.Progress) {
         if (demoAlerts) return
         val meters = routeCameras.map { it.along }
+        // Keep the card up, counting down, until its own camera is passed.
         cameraAhead?.let { ahead ->
-            val next = meters.firstOrNull { it > p.alongMeters }
-            cameraAhead = if (next != null && next - p.alongMeters < CameraAlerts.maxLead) ahead.copy(meters = next - p.alongMeters) else null
+            val left = cameraAheadAt - p.alongMeters
+            cameraAhead = if (left > 0 && left < CameraAlerts.maxLead) ahead.copy(meters = left) else null
         }
         val spoken = routeCameras.indices.filter { spokenCameras.contains(routeCameras[it].camera.id) }.toSet()
         val i = CameraAlerts.due(meters, p.alongMeters, speedMps, spoken) ?: return
         val cam = routeCameras[i].camera
+        // A speed camera's card stays up until it's passed: a plate camera just after it waits its turn.
+        if (cam.kind != RoadCamera.Kind.SPEED && cameraAhead?.kind == RoadCamera.Kind.SPEED) return
         if (cam.quiet) spokenCameras.add(cam.id)
-        else meters.forEachIndexed { j, m -> if (m >= meters[i] && m - meters[i] < 200) spokenCameras.add(routeCameras[j].camera.id) }
+        // Only the same kind, though: a number plate camera just before a speed camera mustn't use up its warning.
+        else meters.forEachIndexed { j, m ->
+            if (m >= meters[i] && m - meters[i] < 200 && routeCameras[j].camera.kind == cam.kind) spokenCameras.add(routeCameras[j].camera.id)
+        }
         val ahead = meters[i] - p.alongMeters
         val limit = if (cam.kind == RoadCamera.Kind.SPEED) (cam.maxspeedKmh ?: route.speedLimit(meters[i])) else null
         cameraAhead = CameraAlert(cam.kind, ahead, max(ahead, 1.0), limit)
+        cameraAheadAt = meters[i]
         val repeatRun = since(cameraSpokenAt) < 150 && limit == cameraSpokenLimit
         if (AppSettings.cameraWarnings && cam.kind == RoadCamera.Kind.SPEED && !cam.quiet) {
             chime()
@@ -398,7 +436,10 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         val next = routeWaze.firstOrNull {
             !spokenWaze.contains(it.alert.id) && s.shows(it.alert) && it.along > p.alongMeters && it.along - p.alongMeters <= lead
         } ?: return
-        for (w in routeWaze) if (abs(w.along - next.along) < 60 || (w.alert.kind == next.alert.kind && abs(w.along - next.along) < 400)) spokenWaze.add(w.alert.id)
+        // A police car or a crash is never folded into a lesser report next to it, though.
+        val major = setOf(WazeAlert.Kind.POLICE, WazeAlert.Kind.ACCIDENT)
+        for (w in routeWaze) if ((abs(w.along - next.along) < 60 && (w.alert.kind == next.alert.kind || w.alert.kind !in major)) ||
+            (w.alert.kind == next.alert.kind && abs(w.along - next.along) < 400)) spokenWaze.add(w.alert.id)
         val ahead = next.along - p.alongMeters
         wazeAhead = WazeAhead(next.alert, ahead, max(ahead, 1.0))
         wazeWarned++
@@ -436,7 +477,11 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         if (demoAlerts) return
         if (route.mode != TravelMode.DRIVE || !AppSettings.policeAircraft) { aircraftNear = null; return }
         val here = loc.coord
-        aircraftNear?.let { aircraftNear = it.copy(meters = it.aircraft.location.distanceTo(here)) }
+        aircraftNear?.let {
+            val d = it.aircraft.location.distanceTo(here)
+            // No answer for two minutes (no signal), or 10 km past where it was: it's no longer nearby.
+            aircraftNear = if (d < 10_000 && since(aircraftSeenAt) < 120) it.copy(meters = d) else null
+        }
         if (aircraftLoading || since(aircraftAt) <= 30) return
         aircraftLoading = true
         aircraftAt = now()
@@ -444,6 +489,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             val found = runCatching { Aircraft.police(here, 10) }.getOrNull()
             aircraftLoading = false
             if (found == null || stopped) return@launch
+            aircraftSeenAt = now()
             val me = lastFix?.coord ?: here
             val nearest = found.map { it to it.location.distanceTo(me) }.filter { it.second < 10_000 }.minByOrNull { it.second }
             aircraftNear = nearest?.let { AircraftNear(it.first, it.second) }
@@ -636,7 +682,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         recentFixes.removeAll { loc.timeMillis - it.timeMillis > 20_000 }
     }
 
-    private fun reroute(loc: Fix, quiet: Boolean = false) {
+    private fun reroute(loc: Fix, quiet: Boolean = false, adding: Place? = null) {
         Log.i("KiteTrace", "reroute from ${loc.lat},${loc.lng}")
         rerouting = true
         lastReroute = now()
@@ -661,7 +707,17 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             }.getOrNull()
             if (stopped || req != rerouteRequest) return@launch
             rerouting = false
-            val fresh = r?.routes?.firstOrNull() ?: return@launch
+            val fresh = r?.routes?.firstOrNull()
+            if (fresh == null) {
+                // The stop just added couldn't be routed to: say so, and don't keep it as if it were on the way.
+                val i = if (adding != null) stops.indexOfFirst { it.id == adding.id } else -1
+                if (adding != null && i >= 0) {
+                    // Only the one just added (at the front), not the same place planned earlier.
+                    stops = stops.toMutableList().also { it.removeAt(i) }
+                    speak("Couldn't add a stop at ${adding.name}. Carrying on to ${stops.firstOrNull()?.name ?: destination.name}.")
+                }
+                return@launch
+            }
             toldNoSignal = false
             adopt(fresh)
             if (!quiet) sayNewRoute()
@@ -684,6 +740,9 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         loadWaze()
         lastFix?.let { handle(it) }
     }
+
+    /** Something the app needs to tell the driver mid-drive, where a notice wouldn't be seen. */
+    fun say(text: String) = speak(text)
 
     private fun speak(text: String, urgent: Boolean = false) {
         if (muted || stopped) return

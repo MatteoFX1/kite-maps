@@ -86,6 +86,9 @@ object MapIcons {
         style.addImage("cam-plate", plateCamera())
         style.addImage("cam-surveillance", badge(c(0x22863A)) { cv, _ -> drawIcon(cv, Icons.Filled.Videocam, RectF(12f, 12f, 34f, 34f), Color.WHITE) })
         style.addImage("traffic-light", trafficLight())
+        // Live camera photos: sky blue for road cameras, violet for Windy's scenic webcams.
+        style.addImage("livecam-road", dot(Icons.Filled.Videocam, c(0x0284C7)))
+        style.addImage("livecam-web", dot(Icons.Filled.Landscape, c(0x7C3AED)))
         for (k in WazeAlert.Kind.entries) style.addImage("waze-${k.key}", waze(k))
         style.addImage("turn-head", turnHead())
         style.addImage("route-chevron", routeChevron())

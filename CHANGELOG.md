@@ -3,6 +3,44 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.8 (iPhone and Android)
+
+Everything ChatGPT found when it went through both apps as a second reviewer, fixed and checked,
+plus live cameras.
+
+- **Live cameras (GitHub #15):** see the latest photo from traffic cameras and webcams, like the
+  weather app Windy. Tap a blue camera dot on the map for a big photo with how old it is,
+  refresh it, open it full screen or watch the short video or timelapse. All of the UK's public
+  road cameras are there: National Highways (England's motorways and A roads), Transport for
+  London, Traffic Scotland, Traffic Wales and TrafficWatch NI, plus Windy's scenic webcams
+  worldwide (violet dots).
+- **Cameras on your route:** before you press Go, a row of photos from the cameras you'll pass,
+  in order, so you can see jams, rain or snow ahead. Tap one to look closer and step through them.
+- **Easy to switch off:** Settings › Live cameras turns it all off, or just road cameras,
+  webcams or the route row. There's a "Live cameras" button in Layers too. Never shown while
+  driving.
+- **Broken cameras hidden:** when a road camera is off, Kite says "No photo right now" instead of
+  showing the "camera unavailable" picture.
+- **Driving:** a trip no longer ends early when the route passes your destination, or before its
+  stops are done. Lane advice is only shown for its own junction. The first turn is said with its
+  distance ("In 300 yards, turn left"). "GPS signal lost" shows in tunnels instead of a frozen
+  screen. Adding a stop that can't be reached is said, not silently ignored.
+- **Search and places:** tapping a place no longer swaps it for the business next door. Saved
+  places show today's opening times. Searching and routes right by the Greenwich line work again
+  (they failed within about 70 m of it). With no location yet, the iPhone starts in London.
+- **Road alerts:** a number plate camera no longer silences the speed camera right after it, and
+  a crash or police report is no longer hidden by a smaller report next to it. Police aircraft
+  stop showing once they're out of date.
+- **Privacy:** Kite no longer asks Waze about the areas around your saved Home and Work. "Use Kite
+  without Google" also stops Google photos and Waze's hidden page, and no Google traffic loads
+  before you've made your choice on the welcome screen.
+- **Links:** Google directions links open the destination, Apple Maps links open the right place,
+  and "52, -1.5" works as coordinates. Android opens www.google.com/maps links.
+- **Android:** fixed a crash when a drive ended straight after it started. Kite says when the
+  phone's Location switch is off. GPS turns off when Kite is closed and you're not driving. Shortcuts
+  no longer end the drive you're on. Wi-Fi to mobile data no longer looks like "No internet".
+  The microphone permission is gone.
+
 ## Android 0.7.7
 
 - **Welcome screen fixed on Pixel phones:** the "Get started" button was pushed off the bottom

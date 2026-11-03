@@ -28,7 +28,26 @@ import app.kite.core.plain
 
 /** Opens a link in whatever app handles it (browser, dialer, another maps app). */
 fun Context.open(url: String) {
-    runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    runCatching {
+        val i = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Kite opens map links itself now: a link meant for Google Maps or the browser mustn't come
+        // straight back to Kite ("Walk around in Google Maps" did).
+        val handlers = packageManager.queryIntentActivities(i, 0).map { it.activityInfo.packageName }
+        if (packageName in handlers) {
+            val others = handlers.filter { it != packageName }.distinct()
+            when {
+                "com.google.android.apps.maps" in others -> i.setPackage("com.google.android.apps.maps")
+                others.size == 1 -> i.setPackage(others[0])
+                others.isEmpty() -> return@runCatching
+                else -> {
+                    startActivity(Intent.createChooser(i, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        .putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(android.content.ComponentName(this, app.kite.MainActivity::class.java))))
+                    return@runCatching
+                }
+            }
+        }
+        startActivity(i)
+    }
 }
 
 fun Context.share(text: String) {

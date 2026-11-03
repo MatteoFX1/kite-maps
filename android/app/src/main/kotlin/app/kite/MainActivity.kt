@@ -44,7 +44,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        LocationService.visible = true
         LocationService.refreshPermission()
+    }
+
+    /** Out of sight and not driving: GPS off to save the battery (back on at onResume). */
+    override fun onStop() {
+        super.onStop()
+        LocationService.visible = false
+        LocationService.stop()
+    }
+
+    override fun onDestroy() {
+        WazeWeb.uninstall(this)
+        super.onDestroy()
     }
 
     /** Links shared from other apps, map links opened in Kite, and the Home, Work and Car shortcuts. */
@@ -57,8 +70,13 @@ class MainActivity : ComponentActivity() {
             "app.kite.WORK" -> model.perform(LaunchKind.WORK)
             "app.kite.CAR" -> model.perform(LaunchKind.CAR)
         }
-        i.getStringExtra("demo")?.let { DemoScript.start(model, it) }
+        // The screenshot scripts, for the build's emulator only: on a real phone another app could
+        // otherwise start Kite in a demo that mutes the voice.
+        if (onEmulator) i.getStringExtra("demo")?.let { DemoScript.start(model, it) }
     }
+
+    private val onEmulator: Boolean
+        get() = android.os.Build.HARDWARE in setOf("ranchu", "goldfish") || android.os.Build.PRODUCT.startsWith("sdk_")
 
     /** The screen stays on while driving, like every sat nav. */
     fun keepScreenOn(on: Boolean) {
@@ -93,10 +111,13 @@ fun KiteScreen(model: AppModel, activity: MainActivity) {
         snapshotFlow {
             listOf(model.mapTick, model.results, model.selected?.id, model.directions, model.nav, model.openNowOnly, model.rating4Only,
                 s.traffic, s.satellite, s.terrain, s.transitLines, s.speedCameras, s.plateCameras, s.wazeOnMap, s.wazeHeatmap,
-                s.home, s.work, s.parking, s.saved, LocationService.authorized, model.tab)
+                s.home, s.work, s.parking, s.saved, LocationService.authorized, model.tab,
+                s.welcomed, s.noGoogle, s.surveillanceCameras,
+                s.liveCams, s.liveRoadCams, s.liveWebcams, LiveCamStore.version)
         }.collect { kiteMap.render() }
     }
     LaunchedEffect(model.nav != null) { activity.keepScreenOn(model.nav != null) }
+    LaunchedEffect(s.wazeOn) { if (!s.wazeOn) WazeWeb.shutDown() }
 
     val ready = s.welcomed && !s.needsWazeChoice
     val perms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
@@ -149,6 +170,10 @@ fun KiteScreen(model: AppModel, activity: MainActivity) {
         val info = model.wazeInfo
         if (info != null && nav == null && model.tab == AppTab.MAP) {
             WazeInfoToast(model, info)
+        }
+        val cam = model.liveCam
+        if (cam != null && nav == null && model.tab == AppTab.MAP) {
+            LiveCamCard(model, cam)
         }
     }
 

@@ -89,6 +89,7 @@ private suspend fun runDiagnostics(ctx: Context, model: AppModel, includeMap: Bo
         "GPS accuracy now: ${model.location.last?.let { "${it.accuracy.toInt()} m" } ?: "no fix"}",
         "Road alerts: ${s.wazeOn}, on map: ${s.wazeOnMap}, heat map: ${s.wazeHeatmap}, no Google: ${s.noGoogle}",
         "Speed cameras: ${s.speedCameras}, plate cameras: ${s.plateCameras}, surveillance: ${s.surveillanceCameras}",
+        "Live cameras: ${s.liveCams} (road ${s.liveRoadCams}, webcams ${s.liveWebcams}, route ${s.liveCamsOnRoute}), list: ${LiveCamStore.status ?: "not loaded"}",
         "Navigating: ${model.nav != null}",
         "Map picture included: ${map != null} (it can show where you are).",
         "No GPS position, searches, saved places or accounts are in this file.",

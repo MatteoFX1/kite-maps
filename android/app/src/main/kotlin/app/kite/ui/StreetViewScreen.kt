@@ -104,7 +104,9 @@ class PanoRenderer(private val pano: StreetView.Panorama, startHeading: Double) 
     init {
         scope.launch {
             for (zoom in listOf(2, 3)) {
-                val img = stitch(zoom) ?: continue
+                // The sharper one only replaces the first if every tile came: a dropped signal
+                // mustn't turn a working view half black.
+                val img = stitch(zoom, complete = zoom > 2) ?: continue
                 pending = img
                 view?.requestRender()
             }
@@ -123,13 +125,13 @@ class PanoRenderer(private val pano: StreetView.Panorama, startHeading: Double) 
     }
 
     /** All of the panorama's tiles at [zoom], drawn into one picture. */
-    private suspend fun stitch(zoom: Int): Bitmap? = coroutineScope {
+    private suspend fun stitch(zoom: Int, complete: Boolean = false): Bitmap? = coroutineScope {
         val (w, h) = pano.size(zoom)
         val cols = ceil(w / 512.0).toInt(); val rows = ceil(h / 512.0).toInt()
         val tiles = (0 until rows).flatMap { y -> (0 until cols).map { x -> Triple(x, y, async {
             Http.getOrNull(StreetView.tileUrl(pano, x, y, zoom))?.takeIf { it.ok }?.body?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
         }) } }.mapNotNull { (x, y, d) -> d.await()?.let { Triple(x, y, it) } }
-        if (tiles.isEmpty()) return@coroutineScope null
+        if (tiles.isEmpty() || (complete && tiles.size < rows * cols)) return@coroutineScope null
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val cv = Canvas(out)
         cv.drawColor(android.graphics.Color.BLACK)

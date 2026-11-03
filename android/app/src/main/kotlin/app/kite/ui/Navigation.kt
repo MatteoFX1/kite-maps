@@ -116,7 +116,14 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
                 nav.wazeAhead?.takeIf { !nav.arrived }?.let { w -> Box(Modifier.tap { nav.dismissWaze() }) { WazeCard(w) } }
                 nav.aircraftNear?.takeIf { !nav.arrived && !aircraftAsChip }?.let { AircraftCard(it.aircraft, it.meters) }
                 nav.averageCheck?.takeIf { !nav.arrived && showAverage }?.let { AverageCheckCard(it) }
-                if (nav.rerouting) {
+                if (nav.gpsLost && !nav.arrived) {
+                    // In a tunnel the speed and the next turn stop moving: say why, so it doesn't look live.
+                    Row(Modifier.align(Alignment.CenterHorizontally).height(44.dp).glass(CircleShape).padding(horizontal = 18.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Filled.LocationOff, null, tint = primaryText)
+                        Text("GPS signal lost", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = primaryText)
+                    }
+                } else if (nav.rerouting) {
                     Row(Modifier.align(Alignment.CenterHorizontally).height(44.dp).glass(CircleShape).padding(horizontal = 18.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(Icons.Filled.Sync, null, tint = primaryText)

@@ -114,6 +114,10 @@ class AppModel {
     /** A Waze report tapped on the map, shown in a small card. */
     var wazeInfo by mutableStateOf<WazeAlert?>(null)
     var surveillanceInfo by mutableStateOf<SurveillanceCamera?>(null)
+    /** The live camera whose photo is open (tapped on the map or in a route's camera row). */
+    var liveCam by mutableStateOf<LiveCam?>(null)
+    /** The route's cameras in order, when the open one was picked from the route's row (for next/previous). */
+    var liveCamRoute by mutableStateOf<List<LiveCam>>(emptyList())
     /** The "Add stop" search sheet. */
     var addingStop by mutableStateOf(false)
     var picking by mutableStateOf<PickKind?>(null)
@@ -136,6 +140,7 @@ class AppModel {
     val glide = NavGlide()
     private var routesRequest = 0
     private var transitRequest = 0
+    private var transitLoadedAt = 0L
     private var searchTask: Job? = null
 
     init {
@@ -188,6 +193,8 @@ class AppModel {
         val user = userLatLng
         searchTask = scope.launch {
             val r = PlaceSearch.search(q, vp.first, vp.second, useGoogle)
+            // Cleared or replaced while it was loading: leave the screen to the newer one.
+            ensureActive()
             var places = r.places
             if (user != null) places = places.map { it.copy(distanceMeters = user.distanceTo(it.location)) }
             searching = false
@@ -325,7 +332,9 @@ class AppModel {
         scope.launch {
             val found = runCatching { GoogleClient.shared.search(q, point, 1_000.0, pages = 1) }.getOrDefault(emptyList())
             if (selected?.id != pid) return@launch
-            val best = found.filter { it.location.distanceTo(point) < 150 }.minByOrNull { it.location.distanceTo(point) } ?: return@launch
+            // The same place by name too, not just the nearest: a café next door mustn't take its place.
+            val best = found.filter { it.location.distanceTo(point) < 150 && similarNames(it.name, placeholder.name) }
+                .minByOrNull { it.location.distanceTo(point) } ?: return@launch
             var b = best
             if (pid.startsWith("tap:")) b = b.copy(location = point)
             b = b.copy(distanceMeters = userLatLng?.distanceTo(b.location))
@@ -334,23 +343,53 @@ class AppModel {
         }
     }
 
+    /**
+     * A saved place: its "Open · Closes 10 pm" was true the day it was saved, not now. Show it
+     * without that, then fill in today's from Google (left out with no internet).
+     */
+    fun openSaved(saved: Place) {
+        val p = saved.copy(statusText = null, openNow = null)
+        select(p)
+        if (settings.noGoogle) return
+        val q = listOfNotNull(p.name, p.address).joinToString(" ")
+        scope.launch {
+            val found = runCatching { GoogleClient.shared.search(q, p.location, 1_000.0, pages = 1) }.getOrDefault(emptyList())
+            val fresh = found.firstOrNull { it.location.distanceTo(p.location) < 150 && similarNames(it.name, p.name) } ?: return@launch
+            if (selected?.id == p.id) selected = selected?.copy(statusText = fresh.statusText, openNow = fresh.openNow,
+                hours = fresh.hours, permanentlyClosed = fresh.permanentlyClosed)
+        }
+    }
+
+    /** "Costa" and "Costa Coffee", "St Mary's Church" and "St. Mary's": every word of one name is in the other. */
+    private fun similarNames(a: String, b: String): Boolean {
+        fun words(s: String) = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}"), "").split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+        val x = words(a); val y = words(b)
+        if (x.isEmpty() || y.isEmpty()) return false
+        // Whole words, so "Costa" isn't "Costas" and "Royal Hotel" isn't "Royal Cafe".
+        return y.containsAll(x) || x.containsAll(y)
+    }
+
     // My places
 
     /** A home-screen shortcut: directions home or to work, or back to the car. */
     fun perform(kind: LaunchKind) {
         scope.launch {
             repeat(20) { if (userLatLng == null) delay(250) }
-            if (nav != null) endNavigation()
             val target = when (kind) {
                 LaunchKind.HOME -> settings.home
                 LaunchKind.WORK -> settings.work
                 LaunchKind.CAR -> settings.parking
             }
             if (target == null) {
-                if (kind == LaunchKind.CAR) notice = "No parking spot saved yet. Tap P on the map when you park."
+                if (kind == LaunchKind.CAR) { nav?.say("No parking spot saved yet.") ?: run { notice = "No parking spot saved yet. Tap P on the map when you park." } }
+                // Mid-drive, keep the trip going: a picker on top of it, cancelled, would lose it.
+                else if (nav != null) nav?.say("No ${if (kind == LaunchKind.HOME) "home" else "work"} address saved yet. Set it in Saved after this drive.")
                 else picking = if (kind == LaunchKind.HOME) PickKind.HOME else PickKind.WORK
                 return@launch
             }
+            // Only now that there's somewhere to go does the current drive end.
+            if (nav != null) endNavigation()
             openDirections(target)
             if (kind == LaunchKind.CAR) edit { it.copy(mode = TravelMode.WALK) }
         }
@@ -452,7 +491,12 @@ class AppModel {
         loadTransit()
     }
 
-    fun showTransit() { edit { it.copy(transit = true) }; frameRoute() }
+    fun showTransit() {
+        edit { it.copy(transit = true) }
+        // "Leave now" times found a while ago may have left already: look again.
+        if (directions?.transitTime == null && System.currentTimeMillis() - transitLoadedAt > 120_000) loadTransit()
+        frameRoute()
+    }
 
     fun selectTrip(i: Int) { edit { it.copy(trip = i) }; frameRoute() }
 
@@ -468,7 +512,9 @@ class AppModel {
         val d = directions ?: return
         val me = userLatLng
         if (me == null) {
-            val why = if (location.denied) LOCATION_OFF_TEXT else "Waiting for your location…"
+            val why = if (location.denied) LOCATION_OFF_TEXT
+                else if (location.systemOff) "Location is off on this phone. Turn it on in Settings to get directions from where you are."
+                else "Waiting for your location…"
             edit { it.copy(errors = TravelMode.entries.associateWith { why }, tripsError = why, trips = emptyList()) }
             if (!location.denied) {
                 location.start()
@@ -516,9 +562,16 @@ class AppModel {
     fun loadTransit() {
         val d = directions ?: return
         val me = userLatLng ?: return
+        transitLoadedAt = System.currentTimeMillis()
+        // A new request either way, so one still loading can't put back trips without the stops.
+        transitRequest++
+        // The planner can't go via stops: rather say so than show trains for a different trip.
+        if (d.stops.isNotEmpty()) {
+            edit { it.copy(trips = emptyList(), tripsError = "Public transport can't go via stops. Remove the stops to see trains and buses.") }
+            return
+        }
         val (from, to) = if (d.reversed) d.destination.location to me else me to d.destination.location
         val destId = d.destination.id
-        transitRequest++
         val req = transitRequest
         edit { it.copy(trips = null, tripsError = null, trip = 0) }
         scope.launch {

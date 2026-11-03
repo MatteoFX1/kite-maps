@@ -76,6 +76,14 @@ object AppSettings {
     var policeRisk by bool("policeRisk", true)
     var policeAircraft by bool("policeAircraft")
     var parkingButton by bool("parkingButton", true)
+    /** Live camera photos (GitHub #15): camera dots on the map, and the cameras along a route before you go. */
+    var liveCams by bool("liveCams", true)
+    /** UK road traffic cameras (National Highways, TfL, Traffic Scotland, Traffic Wales, TrafficWatch NI). */
+    var liveRoadCams by bool("liveRoadCams", true)
+    /** Windy's scenic webcams, worldwide. */
+    var liveWebcams by bool("liveWebcams", true)
+    /** The row of camera photos along the route, before pressing Go. */
+    var liveCamsOnRoute by bool("liveCamsOnRoute", true)
     var home: Place? by place("home")
     var work: Place? by place("work")
     /** Where the car is parked, with when in `statusText`. */
@@ -97,6 +105,10 @@ object AppSettings {
     /** Ask about Waze once: not to someone who chose no Google, since Waze is Google's. */
     val needsWazeChoice: Boolean get() = !wazeAsked && !noGoogle
     val wazePolice: Boolean get() = Waze.shares.contains(WazeAlert.Kind.POLICE)
+
+    /** Live camera dots on the map: road cameras, and Windy's webcams when Kite has a key. */
+    val showsRoadCams: Boolean get() = liveCams && liveRoadCams
+    val showsWebcams: Boolean get() = liveCams && liveWebcams && WindyKey.present
 
     fun wants(k: WazeAlert.Kind) = wazeOn && wazeKinds.contains(k)
 

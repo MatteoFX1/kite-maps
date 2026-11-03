@@ -19,6 +19,19 @@ public struct LatLng: Hashable, Codable, Sendable {
     }
 }
 
+extension Double {
+    /**
+     * A coordinate written out in plain digits for a web address. Swift writes very small numbers
+     * like 0.00005 as "5e-05" (right by the Greenwich line, in London), which servers turn away.
+     */
+    public var plain: String {
+        if self == 0 || abs(self) >= 1e-4 { return String(self) }
+        var s = String(format: "%.10f", self)
+        while s.hasSuffix("0") { s.removeLast() }
+        return s.hasSuffix(".") ? s + "0" : s
+    }
+}
+
 public struct AboutSection: Hashable, Codable, Sendable {
     public var title: String
     public var items: [String]

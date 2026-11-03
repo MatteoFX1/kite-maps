@@ -63,7 +63,7 @@ class GoogleClient {
         warm()
         ech += 1
         val span = spanMeters.coerceIn(2_000.0, 500_000.0)
-        val pb = suggestPb.replace("{SPAN}", span.toString()).replace("{LNG}", near.lng.toString()).replace("{LAT}", near.lat.toString())
+        val pb = suggestPb.replace("{SPAN}", span.toString()).replace("{LNG}", near.lng.plain()).replace("{LAT}", near.lat.plain())
         val body = get(suggestEndpoint + "&pb=" + enc(pb) + "&q=" + enc(query) + "&tch=1&ech=$ech", "https://www.google.com/", true)
         return SuggestParser.parse(body, near)
     }
@@ -155,7 +155,7 @@ object SearchPb {
 
     fun build(query: String, center: LatLng, spanMeters: Double? = null, offset: Int = 0): String {
         var pb = template.replace("{QUERY}", query.replace("!", " ").trim())
-            .replace("{LNG}", center.lng.toString()).replace("{LAT}", center.lat.toString())
+            .replace("{LNG}", center.lng.plain()).replace("{LAT}", center.lat.plain())
         if (spanMeters != null) {
             Regex("!1d[0-9.]+").find(pb)?.let { pb = pb.replaceRange(it.range, "!1d${spanMeters.coerceIn(minSpanMeters, 500_000.0)}") }
         }

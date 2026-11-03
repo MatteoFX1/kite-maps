@@ -46,6 +46,13 @@ object WazeWeb {
         Waze.fallback = { url -> fetch(url) }
     }
 
+    /** The screen is going away: drop the hidden page so it doesn't keep the old screen in memory. */
+    fun uninstall(a: Activity) {
+        if (activity?.get() !== a) return
+        reset(); finish(ok = false)
+        activity = null
+    }
+
     /** Watches the page's own requests for the feed, and notes reCAPTCHA's key and action. */
     private val watcher = """
 (function () {
@@ -121,6 +128,8 @@ object WazeWeb {
     }
 
     suspend fun fetch(url: String): ByteArray? = withContext(Dispatchers.Main) {
+        // Switched off while a request was on its way: don't open the page again.
+        if (!AppSettings.wazeOn) return@withContext null
         openPage()
         val w = web
         if (w == null || !ready) { note = "page: didn't load"; return@withContext null }
@@ -175,6 +184,12 @@ object WazeWeb {
 
     private fun hasPass(): Boolean =
         CookieManager.getInstance().getCookie("https://www.waze.com")?.split(";")?.any { it.trim().startsWith("recaptcha-ca") } == true
+
+    /** Road alerts off, or "Use Kite without Google": close the hidden page so its scripts stop too. */
+    fun shutDown() {
+        reset()
+        finish(ok = false)
+    }
 
     private fun reset() {
         web?.let { w -> (w.parent as? ViewGroup)?.removeView(w); w.destroy() }

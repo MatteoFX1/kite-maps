@@ -38,6 +38,7 @@ final class DataDiagnostics: ObservableObject {
                 "GPS accuracy now: \(model.location.last.map { "\(Int($0.horizontalAccuracy)) m" } ?? "no fix")",
                 "Road alerts: \(s.wazeOn), on map: \(s.wazeOnMap), heat map: \(s.wazeHeatmap), no Google: \(s.noGoogle)",
                 "Speed cameras: \(s.speedCameras), plate cameras: \(s.plateCameras), surveillance: \(s.surveillanceCameras)",
+                "Live cameras: \(s.liveCams) (road \(s.liveRoadCams), webcams \(s.liveWebcams), route \(s.liveCamsOnRoute)), list: \(LiveCamStore.shared.status ?? "not loaded")",
                 "Navigating: \(model.nav != nil)",
                 "Map picture included: \(mapImage != nil) (it can show where you are).",
                 "No GPS position, searches, saved places or accounts are in this file.",

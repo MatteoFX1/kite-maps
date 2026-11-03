@@ -22,8 +22,13 @@ final class Navigator: ObservableObject {
     @Published var following = true
     @Published private(set) var speedMps: Double = 0
     @Published private(set) var lastFix: CLLocation?
+    /** No GPS fix for a while (a tunnel, a car park): the screen says so instead of looking live. */
+    @Published private(set) var gpsLost = false
+    private var gpsWatch: Timer?
     /** A camera coming up within about twelve seconds, for the warning card. */
     @Published private(set) var cameraAhead: CameraAlert?
+    /** How far along the route the card's camera is. */
+    private var cameraAheadAt = 0.0
     /** A Waze report coming up on the route (police, a crash…), for its warning card. */
     @Published private(set) var wazeAhead: WazeAhead?
     /** How many Waze reports this drive warned about, for the arrival card. */
@@ -118,6 +123,9 @@ final class Navigator: ObservableObject {
     private var riskPast: [PoliceRisk.Report]?
     private var riskSpokenAt = Date.distantPast
     private var aircraftAt = Date.distantPast
+    /** When the aircraft service last answered: an old sighting isn't "nearby" for long. */
+    private var aircraftSeenAt = Date.distantPast
+    private static let majorWaze: Set<WazeAlert.Kind> = [.police, .accident]
     private var aircraftLoading = false
     private var spokenAircraft: Set<String> = []
 
@@ -136,13 +144,26 @@ final class Navigator: ObservableObject {
         loadCameras()
         loadWaze()
         loadRoundabouts()
-        speak("Starting route to \(destination.name). " + (first.map { "\($0.instruction)." } ?? ""))
-        // That was the heads-up for the first step: don't say it again a moment later.
-        if let f = first, f.alongMeters < 1500, let i = route.maneuvers.firstIndex(of: f) { spokenStage[i] = f.alongMeters < 100 ? 3 : f.alongMeters < 300 ? 2 : 1 }
+        gpsWatch = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.demoAlerts, let fix = self.lastFix else { return }
+                let lost = Date().timeIntervalSince(fix.timestamp) > 8
+                if lost != self.gpsLost { self.gpsLost = lost }
+            }
+        }
+        // The first step with how far it is ("In 300 yards, turn left"), so a turn a little way off
+        // doesn't sound like it's right here.
+        let firstWords = first.map { f in f.alongMeters < 40 || f.type == .arrive ? "\(f.instruction)."
+            : "In \(Fmt.spokenDistance(f.alongMeters)), \(f.instruction.lowercasedFirst)." } ?? ""
+        speak("Starting route to \(destination.name). " + firstWords)
+        // That was the heads-up for the first step: don't say it again a moment later, but still
+        // say the turn itself as it comes up.
+        if let f = first, f.alongMeters < 1500, let i = route.maneuvers.firstIndex(of: f) { spokenStage[i] = f.alongMeters < 40 ? 3 : f.alongMeters < 300 ? 2 : 1 }
     }
 
     func stop() {
         stopped = true
+        gpsWatch?.invalidate()
         speech.stopSpeaking(at: .immediate)
         UIApplication.shared.isIdleTimerDisabled = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -194,6 +215,10 @@ final class Navigator: ObservableObject {
         // under a motorway has its route end on some road nearby, and simulated drives to Exeter
         // services and Spaghetti Junction went round in circles next to the pin.
         let toPin = latLng(loc).distance(to: destination.location)
+        // Near the pin only counts near the end of the route too: a route can pass right by the
+        // place (or by it on the way to a stop) before looping round to its way in.
+        // And only once every stop is done: a round trip starts right by its own destination.
+        let nearPin = p.remainingMeters < 400 && stops.isEmpty
         if loc.speed >= 0 && loc.speed < 1, p.remainingMeters < 150 || toPin < 150 {
             if stoppedNearEnd == nil { stoppedNearEnd = loc.timestamp }
         } else {
@@ -201,9 +226,10 @@ final class Navigator: ObservableObject {
         }
         // Off the road into a car park (or right at the end): 20 seconds stopped. Still on the road
         // short of it, it could be a red light or a queue, so a minute and a half.
-        let offRoad = p.offsetMeters > 20 || p.remainingMeters < 40 || toPin < 60
-        let parked = stoppedNearEnd.map { loc.timestamp.timeIntervalSince($0) > (offRoad ? 20 : 90) } ?? false
-        if p.arrived || parked || (route.mode == .drive && toPin < 40) {
+        let offRoad = p.offsetMeters > 20 || p.remainingMeters < 40 || (toPin < 60 && nearPin)
+        // Parked by the pin with the route still going round (a way in the map doesn't have): three minutes.
+        let parked = stoppedNearEnd.map { loc.timestamp.timeIntervalSince($0) > (p.remainingMeters >= 150 && !nearPin ? 180 : offRoad ? 20 : 90) } ?? false
+        if p.arrived || parked || (route.mode == .drive && toPin < 40 && nearPin) {
             arrived = true
             speak("You have arrived at \(destination.name)" + (destinationSide.map { ", on the \($0)." } ?? "."))
             // Parked, the phone goes in a pocket: let the screen sleep, and a few minutes on, end
@@ -219,8 +245,9 @@ final class Navigator: ObservableObject {
         // wrong turn, so no "Rerouting" every few seconds until the car has reached the route once
         // (or has clearly gone another way).
         if p.offsetMeters < 40 { joinedRoute = true }
-        // Right by the pin, a new route is only a U-turn round the block: let the car park instead.
-        if p.offRoute && !rerouting && toPin > 150 && (joinedRoute || p.offsetMeters > 400) && Date().timeIntervalSince(lastReroute) > 8 {
+        // Right by the pin at the end of the route, a new route is only a U-turn round the block: let
+        // the car park instead. Still a long way round to go, though, the driver found another way in.
+        if p.offRoute && !rerouting && (toPin > 150 || !nearPin) && (joinedRoute || p.offsetMeters > 400) && Date().timeIntervalSince(lastReroute) > 8 {
             reroute(from: loc)
             return
         }
@@ -246,7 +273,7 @@ final class Navigator: ObservableObject {
     func addStop(_ p: Place) {
         stops.insert(p, at: 0)
         speak("Adding a stop at \(p.name).")
-        if let fix = lastFix { reroute(from: fix, quiet: true) }
+        if let fix = lastFix { reroute(from: fix, quiet: true, adding: p) }
     }
 
     /** Says when a stop is reached (within 40 m of it along the route) and drops it. */
@@ -377,10 +404,10 @@ final class Navigator: ObservableObject {
         guard !demoAlerts else { return }
         let meters = routeCameras.map(\.along)
         if let ahead = cameraAhead {
-            // Keep the card up, counting down, until the camera is passed.
-            if let next = meters.first(where: { $0 > p.alongMeters }), next - p.alongMeters < CameraAlerts.maxLead {
+            // Keep the card up, counting down, until its own camera is passed.
+            if cameraAheadAt > p.alongMeters, cameraAheadAt - p.alongMeters < CameraAlerts.maxLead {
                 var a = ahead
-                a.meters = next - p.alongMeters
+                a.meters = cameraAheadAt - p.alongMeters
                 cameraAhead = a
             } else {
                 cameraAhead = nil
@@ -389,17 +416,23 @@ final class Navigator: ObservableObject {
         let spoken = Set(routeCameras.indices.filter { spokenCameras.contains(routeCameras[$0].camera.id) })
         guard let i = CameraAlerts.due(cameraMeters: meters, traveled: p.alongMeters, speedMps: speedMps, spoken: spoken) else { return }
         let cam = routeCameras[i].camera
+        // A speed camera's card stays up until it's passed: a plate camera just after it waits its turn.
+        if cam.kind != .speed, cameraAhead?.kind == .speed { return }
         // Cameras close together are one warning: OSM often maps one per direction, or a pole and its
         // sign, and the A33 at Redbridge got three warnings in ten seconds. A quiet one (likely the
         // other side's) never stands in for a real one next to it.
         if cam.quiet {
             spokenCameras.insert(cam.id)
         } else {
-            for (j, m) in meters.enumerated() where m >= meters[i] && m - meters[i] < 200 { spokenCameras.insert(routeCameras[j].camera.id) }
+            // Only the same kind, though: a number plate camera just before a speed camera mustn't use up its warning.
+            for (j, m) in meters.enumerated() where m >= meters[i] && m - meters[i] < 200 && routeCameras[j].camera.kind == cam.kind {
+                spokenCameras.insert(routeCameras[j].camera.id)
+            }
         }
         let ahead = meters[i] - p.alongMeters
         let limit = cam.kind == .speed ? (cam.maxspeedKmh ?? route.speedLimit(at: meters[i])) : nil
         cameraAhead = CameraAlert(kind: cam.kind, meters: ahead, startMeters: max(ahead, 1), limitKmh: limit)
+        cameraAheadAt = meters[i]
         // Spoken for speed cameras only: number plate cameras are everywhere in Britain, and
         // saying each one would bury the turns. Those get the card alone.
         // A run of cameras (a smart motorway's gantries, every mile or so) is said once: after
@@ -476,7 +509,8 @@ final class Navigator: ObservableObject {
         // Reports a few meters apart are one warning.
         // So are two of the same kind close together: the live map and Waze's app servers can list one
         // police car under two ids, and London got "Police reported ahead" twice in 7 seconds.
-        for w in routeWaze where abs(w.along - next.along) < 60
+        // A police car or a crash is never folded into a lesser report next to it, though.
+        for w in routeWaze where (abs(w.along - next.along) < 60 && (w.alert.kind == next.alert.kind || !Self.majorWaze.contains(w.alert.kind)))
             || (w.alert.kind == next.alert.kind && abs(w.along - next.along) < 400) { spokenWaze.insert(w.alert.id) }
         let ahead = next.along - p.alongMeters
         wazeAhead = WazeAhead(alert: next.alert, meters: ahead, startMeters: max(ahead, 1))
@@ -519,7 +553,11 @@ final class Navigator: ObservableObject {
         guard !demoAlerts else { return }
         guard route.mode == .drive, AppSettings.shared.policeAircraft else { aircraftNear = nil; return }
         let here = LatLng(loc.coordinate.latitude, loc.coordinate.longitude)
-        if let near = aircraftNear { aircraftNear = (near.aircraft, near.aircraft.location.distance(to: here)) }
+        if let near = aircraftNear {
+            let d = near.aircraft.location.distance(to: here)
+            // No answer for two minutes (no signal), or 10 km past where it was: it's no longer nearby.
+            aircraftNear = d < 10_000 && Date().timeIntervalSince(aircraftSeenAt) < 120 ? (near.aircraft, d) : nil
+        }
         guard !aircraftLoading, Date().timeIntervalSince(aircraftAt) > 30 else { return }
         aircraftLoading = true
         aircraftAt = Date()
@@ -527,6 +565,7 @@ final class Navigator: ObservableObject {
             let found = await Aircraft.police(near: here, nauticalMiles: 10)
             self.aircraftLoading = false
             guard let found, !self.stopped else { return }
+            self.aircraftSeenAt = Date()
             let me = self.lastFix.map { LatLng($0.coordinate.latitude, $0.coordinate.longitude) } ?? here
             let nearest = found.map { ($0, $0.location.distance(to: me)) }.filter { $0.1 < 10_000 }.min { $0.1 < $1.1 }
             self.aircraftNear = nearest.map { (aircraft: $0.0, meters: $0.1) }
@@ -754,7 +793,7 @@ final class Navigator: ObservableObject {
 
     private func latLng(_ loc: CLLocation) -> LatLng { LatLng(loc.coordinate.latitude, loc.coordinate.longitude) }
 
-    private func reroute(from loc: CLLocation, quiet: Bool = false) {
+    private func reroute(from loc: CLLocation, quiet: Bool = false, adding: Place? = nil) {
         Self.trace.info("reroute from \(String(format: "%.5f,%.5f", loc.coordinate.latitude, loc.coordinate.longitude), privacy: .public) heading \(self.heading(loc).map { Int($0) } ?? -1)")
         rerouting = true
         lastReroute = Date()
@@ -785,7 +824,14 @@ final class Navigator: ObservableObject {
                                             heading: course)
             guard !self.stopped, req == self.rerouteRequest else { return }
             self.rerouting = false
-            guard let fresh = r.routes.first else { return }
+            guard let fresh = r.routes.first else {
+                // The stop just added couldn't be routed to: say so, and don't keep it as if it were on the way.
+                if let adding, let i = self.stops.firstIndex(where: { $0.id == adding.id }) {
+                    self.stops.remove(at: i)
+                    self.speak("Couldn't add a stop at \(adding.name). Carrying on to \(self.stops.first?.name ?? self.destination.name).")
+                }
+                return
+            }
             self.toldNoSignal = false
             self.adopt(fresh)
             if !quiet { self.sayNewRoute() }
@@ -810,6 +856,9 @@ final class Navigator: ObservableObject {
         loadWaze()
         if let fix = lastFix { handle(fix) }
     }
+
+    /** Something the app needs to tell the driver mid-drive, where a notice wouldn't be seen. */
+    func say(_ text: String) { speak(text) }
 
     private func speak(_ text: String, urgent: Bool = false) {
         guard !muted, !stopped else { return }

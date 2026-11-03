@@ -23,6 +23,39 @@ jobs:
       - name: Unit tests
         working-directory: VelaCore
         run: swift test
+      - name: Live camera photos check (OpenHighways, TfL, Windy)
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          python3 - <<'PY'
+          import json, re, urllib.request
+          ua = {"User-Agent": "Kite-Maps (https://github.com/matteofx1/kite-maps)"}
+          def get(url, h={}):
+              r = urllib.request.urlopen(urllib.request.Request(url, headers={**ua, **h}), timeout=40)
+              return r.status, r.headers, r.read()
+          code, _, body = get("https://openhighways.uk/api/cameras")
+          cams = json.loads(body)
+          by = {}
+          for c in cams: by[c.get("source")] = by.get(c.get("source"), 0) + 1
+          print("OpenHighways", code, len(cams), by)
+          print("  sample", json.dumps(cams[0])[:400])
+          for src in by:
+              c = next(c for c in cams if c.get("source") == src and c.get("image_url"))
+              url = c["image_url"] if c["image_url"].startswith("http") else "https://openhighways.uk" + c["image_url"]
+              try:
+                  code, h, img = get(url)
+                  print("  photo", src, code, h.get("Content-Type"), len(img), "Last-Modified:", h.get("Last-Modified"), url)
+              except Exception as e:
+                  print("  photo", src, "FAILED", e, url)
+          code, _, body = get("https://api.tfl.gov.uk/Place/Type/JamCam")
+          print("TfL", code, len(json.loads(body)))
+          key = re.search(r'static let value = "([^"]*)"', open("App/Sources/LiveCamStore.swift").read()).group(1)
+          code, _, body = get("https://api.windy.com/webcams/api/v3/webcams?nearby=54.6,-3.13,60&limit=50&include=images,location,urls", {"x-windy-api-key": key})
+          w = json.loads(body)
+          print("Windy", code, w.get("total"), len(w.get("webcams", [])))
+          print("  sample", json.dumps(w["webcams"][0])[:700])
+          PY
+
       - name: Live roundabout check
         continue-on-error: true
         timeout-minutes: 4
@@ -284,6 +317,18 @@ jobs:
             xcrun simctl io "$DEV" screenshot "shots/big-$step.png"
           done
           xcrun simctl ui "$DEV" content_size large
+          # Live camera photos (GitHub #15): London's cameras on the map, one opened, and the M3's before a drive.
+          for step in livecams livecamcard; do
+            xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo "$step"
+            sleep 60
+            xcrun simctl io "$DEV" screenshot "shots/$step.png"
+          done
+          xcrun simctl location "$DEV" set 50.9097,-1.4044
+          for step in livecamroute livecamroutecard; do
+            xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo "$step"
+            sleep 60
+            xcrun simctl io "$DEV" screenshot "shots/$step.png"
+          done
           xcrun simctl location "$DEV" set 56.4120,-3.4700
           xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo uk
           sleep 50

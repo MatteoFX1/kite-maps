@@ -25,7 +25,7 @@ enum DirectionsPb {
         // Stops: one more top-level waypoint group each, between origin and destination (Vela's
         // withWaypoints). Google answers a single route through them.
         if !waypoints.isEmpty, let r = pb.range(of: "!1m4!3m2!3d{DLAT}!4d{DLNG}!6e2") {
-            pb.insert(contentsOf: waypoints.map { "!1m4!3m2!3d\($0.lat)!4d\($0.lng)!6e2" }.joined(), at: r.lowerBound)
+            pb.insert(contentsOf: waypoints.map { "!1m4!3m2!3d\($0.lat.plain)!4d\($0.lng.plain)!6e2" }.joined(), at: r.lowerBound)
         }
         let all = [origin, destination] + waypoints
         // Center the request's map on the trip, the way a browser's map sits around it.
@@ -34,7 +34,7 @@ enum DirectionsPb {
             let w = all.map(\.lng).min()!, e = all.map(\.lng).max()!
             let lat = (s + n) / 2, lng = (w + e) / 2
             let span = max((n - s) * 111_320, (e - w) * 111_320 * cos(lat * .pi / 180))
-            pb.replaceSubrange(r, with: "!3m12!1m3!1d\(max(span * 1.35, 1500))!2d\(lng)!3d\(lat)")
+            pb.replaceSubrange(r, with: "!3m12!1m3!1d\(max(span * 1.35, 1500))!2d\(lng.plain)!3d\(lat.plain)")
         }
         if mode == .drive, avoidHighways || avoidTolls,
            let r = pb.range(of: "!6m56!1m5!18b1!30b1!31m1!1b1!34e1!2m4") {
@@ -43,10 +43,10 @@ enum DirectionsPb {
             pb.replaceSubrange(r, with: "!6m\(56 + added)!1m5!18b1!30b1!31m1!1b1!34e1!2m\(4 + added)\(flags)")
         }
         return pb
-            .replacingOccurrences(of: "{OLAT}", with: String(origin.lat))
-            .replacingOccurrences(of: "{OLNG}", with: String(origin.lng))
-            .replacingOccurrences(of: "{DLAT}", with: String(destination.lat))
-            .replacingOccurrences(of: "{DLNG}", with: String(destination.lng))
+            .replacingOccurrences(of: "{OLAT}", with: origin.lat.plain)
+            .replacingOccurrences(of: "{OLNG}", with: origin.lng.plain)
+            .replacingOccurrences(of: "{DLAT}", with: destination.lat.plain)
+            .replacingOccurrences(of: "{DLNG}", with: destination.lng.plain)
             .replacingOccurrences(of: "{MODE}", with: String(mode.rawValue))
     }
 }

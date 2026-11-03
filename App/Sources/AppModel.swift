@@ -118,6 +118,10 @@ final class AppModel: ObservableObject {
     /** A Waze report tapped on the map, shown in a small card. */
     @Published var wazeInfo: WazeAlert?
     @Published var surveillanceInfo: SurveillanceCamera?
+    /** The live camera whose photo is open (tapped on the map or in a route's camera row). */
+    @Published var liveCam: LiveCam?
+    /** The route's cameras in order, when the open one was picked from the route's row (for next/previous). */
+    @Published var liveCamRoute: [LiveCam] = []
     /** The "Add stop" search sheet. */
     @Published var addingStop = false
     @Published var showSaved = false
@@ -141,6 +145,7 @@ final class AppModel: ObservableObject {
      *  reverse, a new stop or another time) are dropped instead of replacing the new ones. */
     private var routesRequest = 0
     private var transitRequest = 0
+    private var transitLoadedAt = Date.distantPast
     private var searchTask: Task<Void, Never>?
     private var navSub: AnyCancellable?
 
@@ -169,7 +174,7 @@ final class AppModel: ObservableObject {
     }
 
     var viewport: (center: LatLng, span: Double?) {
-        guard let map, map.bounds.width > 0 else { return (userLatLng ?? LatLng(40.7484, -73.9857), nil) }
+        guard let map, map.bounds.width > 0 else { return (userLatLng ?? LatLng(51.5074, -0.1278), nil) }
         let c = map.centerCoordinate
         let b = map.visibleCoordinateBounds
         let span = LatLng(b.sw.latitude, b.sw.longitude).distance(to: LatLng(b.ne.latitude, b.ne.longitude)) / 1.4
@@ -349,7 +354,8 @@ final class AppModel: ObservableObject {
         Task {
             let found = (try? await GoogleClient.shared.search(q, center: point, spanMeters: 1_000, pages: 1)) ?? []
             guard selected?.id == pid else { return }
-            if let best = found.filter({ $0.location.distance(to: point) < 150 })
+            // The same place by name too, not just the nearest: a café next door mustn't take its place.
+            if let best = found.filter({ $0.location.distance(to: point) < 150 && Self.similarNames($0.name, name) })
                 .min(by: { $0.location.distance(to: point) < $1.location.distance(to: point) }) {
                 var b = best
                 // Enrich a tapped map feature without moving its pin to a nearby search result.
@@ -361,6 +367,41 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /**
+     * A saved place: its "Open · Closes 10 pm" was true the day it was saved, not now. Show it
+     * without that, then fill in today's from Google (left out with no internet).
+     */
+    func openSaved(_ saved: Place) {
+        var p = saved
+        p.statusText = nil
+        p.openNow = nil
+        select(p)
+        guard !settings.noGoogle else { return }
+        let q = [p.name, p.address].compactMap { $0 }.joined(separator: " ")
+        Task {
+            let found = (try? await GoogleClient.shared.search(q, center: p.location, spanMeters: 1_000, pages: 1)) ?? []
+            guard selected?.id == p.id, let fresh = found.first(where: {
+                $0.location.distance(to: p.location) < 150 && Self.similarNames($0.name, p.name)
+            }) else { return }
+            selected?.statusText = fresh.statusText
+            selected?.openNow = fresh.openNow
+            selected?.hours = fresh.hours
+            selected?.permanentlyClosed = fresh.permanentlyClosed
+        }
+    }
+
+    /** "Costa" and "Costa Coffee", "St Mary's Church" and "St. Mary's": every word of one name is in the other. */
+    static func similarNames(_ a: String, _ b: String) -> Bool {
+        func words(_ s: String) -> [String] {
+            s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+                .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+        }
+        let x = words(a), y = words(b)
+        guard !x.isEmpty, !y.isEmpty else { return false }
+        // Whole words, so "Costa" isn't "Costas" and "Royal Hotel" isn't "Royal Cafe".
+        return Set(x).isSubset(of: y) || Set(y).isSubset(of: x)
+    }
+
     static let locationOffText = "Location is off for Kite. Turn it on in Settings to get directions from where you are."
 
     // MARK: My places
@@ -369,7 +410,6 @@ final class AppModel: ObservableObject {
     func perform(_ kind: LaunchAction.Kind) async {
         // At a cold start, give location a few seconds to come in first.
         for _ in 0..<20 where userLatLng == nil { try? await Task.sleep(nanoseconds: 250_000_000) }
-        if nav != nil { endNavigation() }
         let target: Place?
         switch kind {
         case .home: target = settings.home
@@ -377,10 +417,16 @@ final class AppModel: ObservableObject {
         case .car: target = settings.parking
         }
         guard let target else {
-            if kind == .car { notice = "No parking spot saved yet. Tap P on the map when you park." }
+            if kind == .car {
+                if let nav { nav.say("No parking spot saved yet.") } else { notice = "No parking spot saved yet. Tap P on the map when you park." }
+            }
+            // Mid-drive, keep the trip going: a picker on top of it, cancelled, would lose it.
+            else if let nav { nav.say("No \(kind == .home ? "home" : "work") address saved yet. Set it in Saved after this drive.") }
             else { picking = kind == .home ? .home : .work }
             return
         }
+        // Only now that there's somewhere to go does the current drive end.
+        if nav != nil { endNavigation() }
         openDirections(to: target)
         if kind == .car { directions?.mode = .walk }
     }
@@ -493,6 +539,8 @@ final class AppModel: ObservableObject {
 
     func showTransit() {
         directions?.transit = true
+        // "Leave now" times found a while ago may have left already: look again.
+        if directions?.transitTime == nil, Date().timeIntervalSince(transitLoadedAt) > 120 { loadTransit() }
         frameRoute()
     }
 
@@ -566,10 +614,18 @@ final class AppModel: ObservableObject {
     /** Transit trips for the current trip, leaving now or at the picked time. */
     func loadTransit() {
         guard let d = directions, let me = userLatLng else { return }
+        transitLoadedAt = Date()
+        // A new request either way, so one still loading can't put back trips without the stops.
+        transitRequest += 1
+        // The planner can't go via stops: rather say so than show trains for a different trip.
+        if !d.stops.isEmpty {
+            directions?.trips = []
+            directions?.tripsError = "Public transport can't go via stops. Remove the stops to see trains and buses."
+            return
+        }
         let (from, to) = d.reversed ? (d.destination.location, me) : (me, d.destination.location)
         let destId = d.destination.id
         let time = d.transitTime, arriveBy = d.arriveBy
-        transitRequest += 1
         let req = transitRequest
         directions?.trips = nil
         directions?.tripsError = nil

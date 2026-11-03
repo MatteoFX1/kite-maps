@@ -37,7 +37,7 @@ final class AppSettings: ObservableObject {
     @Published var avoidTolls: Bool { didSet { d.set(avoidTolls, forKey: "avoidTolls") } }
     @Published var avoidHighways: Bool { didSet { d.set(avoidHighways, forKey: "avoidHighways") } }
     /** "Use Kite without Google": search and routes from open data only. */
-    @Published var noGoogle: Bool { didSet { d.set(noGoogle, forKey: "noGoogle") } }
+    @Published var noGoogle: Bool { didSet { d.set(noGoogle, forKey: "noGoogle"); if noGoogle { Task { @MainActor in WazeWeb.shared.shutDown() } } } }
     /** Fixed speed cameras on the map, and plate readers (DeFlock), from OpenStreetMap. */
     @Published var speedCameras: Bool { didSet { d.set(speedCameras, forKey: "speedCameras") } }
     @Published var surveillanceCameras: Bool { didSet { d.set(surveillanceCameras, forKey: "surveillanceCameras") } }
@@ -47,7 +47,7 @@ final class AppSettings: ObservableObject {
     /** Say so when driving over the posted limit. Off by default, like Vela. */
     @Published var speedingAlert: Bool { didSet { d.set(speedingAlert, forKey: "speedingAlert") } }
     /** Live reports from Waze drivers (police, crashes, hazards…): on the map, and warned about while driving. */
-    @Published var waze: Bool { didSet { d.set(waze, forKey: "waze") } }
+    @Published var waze: Bool { didSet { d.set(waze, forKey: "waze"); if !waze { Task { @MainActor in WazeWeb.shared.shutDown() } } } }
     /** The "Waze alerts (beta)" question has been answered, on first launch or after updating. */
     @Published var wazeAsked: Bool { didSet { d.set(wazeAsked, forKey: "wazeAsked") } }
     /** Which kinds of Waze report to show; the basics are on at first. */
@@ -64,6 +64,14 @@ final class AppSettings: ObservableObject {
     @Published var policeRisk: Bool { didSet { d.set(policeRisk, forKey: "policeRisk") } }
     /** Warn about police planes and helicopters nearby (open ADS-B flight tracking, not Waze). */
     @Published var policeAircraft: Bool { didSet { d.set(policeAircraft, forKey: "policeAircraft") } }
+    /** Live camera photos (GitHub #15): camera dots on the map, and the cameras along a route before you go. */
+    @Published var liveCams: Bool { didSet { d.set(liveCams, forKey: "liveCams") } }
+    /** UK road traffic cameras (National Highways, TfL, Traffic Scotland, Traffic Wales, TrafficWatch NI). */
+    @Published var liveRoadCams: Bool { didSet { d.set(liveRoadCams, forKey: "liveRoadCams") } }
+    /** Windy's scenic webcams, worldwide. */
+    @Published var liveWebcams: Bool { didSet { d.set(liveWebcams, forKey: "liveWebcams") } }
+    /** The row of camera photos along the route, before pressing Go. */
+    @Published var liveCamsOnRoute: Bool { didSet { d.set(liveCamsOnRoute, forKey: "liveCamsOnRoute") } }
     /** The map's "P" button: save where you parked, and find the way back. */
     @Published var parkingButton: Bool { didSet { d.set(parkingButton, forKey: "parkingButton") } }
     @Published var home: Place? { didSet { save(home, "home") } }
@@ -96,6 +104,10 @@ final class AppSettings: ObservableObject {
         cameraWarnings = d.object(forKey: "cameraWarnings") as? Bool ?? !Self.camerasRestricted
         speedingAlert = d.bool(forKey: "speedingAlert")
         parkingButton = d.object(forKey: "parkingButton") as? Bool ?? true
+        liveCams = d.object(forKey: "liveCams") as? Bool ?? true
+        liveRoadCams = d.object(forKey: "liveRoadCams") as? Bool ?? true
+        liveWebcams = d.object(forKey: "liveWebcams") as? Bool ?? true
+        liveCamsOnRoute = d.object(forKey: "liveCamsOnRoute") as? Bool ?? true
         // Off until the person says yes on the Waze screen.
         waze = d.bool(forKey: "waze")
         wazeAsked = d.bool(forKey: "wazeAsked")
@@ -146,6 +158,10 @@ final class AppSettings: ObservableObject {
 
     /** Waze still shares police reports, for the heat map and risk score (or the screenshot run's made-up ones). */
     var wazePolice: Bool { Waze.shares.contains(.police) || DemoScript.active }
+
+    /** Live camera dots on the map: road cameras, and Windy's webcams when Kite has a key. */
+    var showsRoadCams: Bool { liveCams && liveRoadCams }
+    var showsWebcams: Bool { liveCams && liveWebcams && WindyKey.present }
 
     func wants(_ k: WazeAlert.Kind) -> Bool { wazeOn && wazeKinds.contains(k) }
 

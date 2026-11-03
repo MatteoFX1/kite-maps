@@ -13,8 +13,8 @@ public enum Photon {
         var c = URLComponents(string: base)!
         var items = [URLQueryItem(name: "q", value: query), URLQueryItem(name: "limit", value: String(limit))]
         if let near {
-            items.append(URLQueryItem(name: "lat", value: String(near.lat)))
-            items.append(URLQueryItem(name: "lon", value: String(near.lng)))
+            items.append(URLQueryItem(name: "lat", value: near.lat.plain))
+            items.append(URLQueryItem(name: "lon", value: near.lng.plain))
         }
         let lang = Locale.current.language.languageCode?.identifier ?? "en"
         items.append(URLQueryItem(name: "lang", value: langs.contains(lang) ? lang : "en"))
@@ -28,7 +28,7 @@ public enum Photon {
 
     /** The address at a point, for a dropped pin. */
     public static func reverse(_ p: LatLng) async -> Place? {
-        guard let url = URL(string: "https://photon.komoot.io/reverse?lat=\(p.lat)&lon=\(p.lng)&limit=1") else { return nil }
+        guard let url = URL(string: "https://photon.komoot.io/reverse?lat=\(p.lat.plain)&lon=\(p.lng.plain)&limit=1") else { return nil }
         var r = URLRequest(url: url)
         r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         r.timeoutInterval = 10

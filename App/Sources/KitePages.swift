@@ -229,7 +229,7 @@ struct SavedPage: View {
 
     private func show(_ p: Place) {
         model.tab = .map
-        model.select(p)
+        model.openSaved(p)
     }
 }
 
@@ -263,6 +263,7 @@ struct PlacePicker: View {
     @State private var searching = false
     @State private var task: Task<Void, Never>?
     @State private var locating = false
+    @State private var locateTask: Task<Void, Never>?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
@@ -314,6 +315,8 @@ struct PlacePicker: View {
             .navigationTitle("Set \(title.lowercased())")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            // Cancelled while the address was still loading: don't save it anyway.
+            .onDisappear { locateTask?.cancel() }
         }
     }
 
@@ -344,8 +347,9 @@ struct PlacePicker: View {
     private func useHere() {
         guard let me = model.userLatLng else { return }
         locating = true
-        Task {
+        locateTask = Task {
             let near = await Photon.reverse(me)
+            guard !Task.isCancelled else { return }
             var p = Place(id: "\(kind.rawValue):\(me.lat),\(me.lng)", name: near?.name ?? title, location: me, source: "osm")
             p.address = near?.address
             locating = false

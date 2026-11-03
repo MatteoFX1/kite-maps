@@ -185,6 +185,17 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(steps[0].laneHint, "Use the right lane")
     }
 
+    func testGoogleLaneHintOnlyForItsOwnJunction() {
+        // A left turn 80 m before a right turn: Google only has lanes for the right turn.
+        let p = LatLng(0, 0)
+        var steps = [Maneuver(type: .turnLeft, instruction: "Turn left", location: p, alongMeters: 1000, distanceMeters: 80),
+                     Maneuver(type: .turnRight, instruction: "Turn right", location: p, alongMeters: 1080, distanceMeters: 300)]
+        let google = [Maneuver(type: .turnRight, instruction: "Turn right", location: p, alongMeters: 1085, distanceMeters: 300, laneHint: "Use the right lane")]
+        StepMerge.addGoogleLaneHints(&steps, from: google)
+        XCTAssertNil(steps[0].laneHint)
+        XCTAssertEqual(steps[1].laneHint, "Use the right lane")
+    }
+
     func testRerouteKeepsHeading() {
         let url = OSRM.routeURL(from: LatLng(50.9, -1.4), to: LatLng(50.8, -1.3), mode: .drive, heading: 271.6).absoluteString
         XCTAssertTrue(url.hasSuffix("&bearings=272,60;"), url)
@@ -390,5 +401,17 @@ final class DestinationSideTests: XCTestCase {
         XCTAssertEqual(Geo.sideAtEnd(LatLng(50.901, -1.4004), of: line), "left")
         XCTAssertNil(Geo.sideAtEnd(LatLng(50.901, -1.400), of: line), "on the road itself")
         XCTAssertNil(Geo.sideAtEnd(LatLng(50.910, -1.3996), of: line), "a kilometre past the end")
+    }
+
+    func testCoordinatesByGreenwichStayPlain() {
+        // Swift writes 0.00005 as "5e-05"; Google, OSRM and Photon turn that away.
+        XCTAssertEqual(0.00005.plain, "0.00005")
+        XCTAssertEqual((-0.00002).plain, "-0.00002")
+        XCTAssertEqual(0.0.plain, "0.0")
+        XCTAssertEqual((-1.3996).plain, "-1.3996")
+        let pb = DirectionsPb.build(origin: LatLng(51.4779, 0.00005), destination: LatLng(51.5, -0.00002), mode: .drive)
+        XCTAssertFalse(pb.contains("e-"), pb)
+        XCTAssertTrue(pb.contains("!4d0.00005"), pb)
+        XCTAssertFalse(SearchPb.build(query: "cafe", center: LatLng(51.4779, 0.00003)).contains("e-"))
     }
 }

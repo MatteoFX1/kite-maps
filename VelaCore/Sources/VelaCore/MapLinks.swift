@@ -32,8 +32,9 @@ public enum MapLinks {
     public static func coordinates(_ text: String) -> LatLng? {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let parts = t.split(whereSeparator: { $0 == "," || $0 == " " }).filter { !$0.isEmpty }
+        // "52, -1.5" is fine with its comma; without one both need a decimal point, so "M27 5" isn't a place.
         guard parts.count == 2, let lat = Double(parts[0]), let lng = Double(parts[1]),
-              parts.allSatisfy({ $0.contains(".") }) else { return nil }
+              t.contains(",") || parts.allSatisfy({ $0.contains(".") }) else { return nil }
         return valid(lat, lng)
     }
 
@@ -73,8 +74,10 @@ public enum MapLinks {
         if let i = segments.firstIndex(of: "place"), i + 1 < segments.count, !segments[i + 1].hasPrefix("@") {
             name = segments[i + 1].replacingOccurrences(of: "+", with: " ")
         }
-        // The pin itself (!3d lat !4d lng) beats the map's middle (@lat,lng).
-        if let m = match(full, #"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)"#), let p = valid(m.0, m.1) {
+        // The pin itself (!3d lat !4d lng) beats the map's middle (@lat,lng). A directions link has
+        // one for each end: the destination is the last.
+        let isDirections = segments.contains("dir")
+        if let m = match(full, #"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)"#, last: isDirections), let p = valid(m.0, m.1) {
             return .spot(p, name: name.flatMap(nameIfNotCoordinates))
         }
         let at = match(path, #"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)"#).flatMap { valid($0.0, $0.1) }
@@ -120,14 +123,21 @@ public enum MapLinks {
     // MARK: Apple and geo:
 
     static func parseApple(_ q: [String: String]) -> Target? {
-        let near = q["ll"].flatMap(latLngPair) ?? q["sll"].flatMap(latLngPair)
-        if let c = q["coordinate"].flatMap(latLngPair) ?? near {
+        // ll is the pin; sll is only where a search was made.
+        let ll = q["ll"].flatMap(latLngPair), sll = q["sll"].flatMap(latLngPair)
+        // Directions: the destination, not wherever the map was.
+        if let d = q["daddr"], !d.isEmpty {
+            if let c = latLngPair(d) { return .spot(c, name: nil) }
+            return .search(d, near: ll ?? sll)
+        }
+        if let c = q["coordinate"].flatMap(latLngPair) ?? ll {
             return .spot(c, name: q["q"] ?? q["name"])
         }
-        if let v = q["q"] ?? q["address"] ?? q["daddr"], !v.isEmpty {
+        if let v = q["q"] ?? q["address"], !v.isEmpty {
             if let c = latLngPair(v) { return .spot(c, name: nil) }
-            return .search(v, near: nil)
+            return .search(v, near: sll)
         }
+        if let sll { return .spot(sll, name: nil) }
         return nil
     }
 
@@ -189,9 +199,10 @@ public enum MapLinks {
         return valid(lat, lng)
     }
 
-    static func match(_ s: String, _ pattern: String) -> (Double, Double)? {
+    static func match(_ s: String, _ pattern: String, last: Bool = false) -> (Double, Double)? {
         guard let re = try? NSRegularExpression(pattern: pattern),
-              let m = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)),
+              let m = last ? re.matches(in: s, range: NSRange(s.startIndex..., in: s)).last
+                  : re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)),
               let a = Range(m.range(at: 1), in: s), let b = Range(m.range(at: 2), in: s),
               let x = Double(s[a]), let y = Double(s[b]) else { return nil }
         return (x, y)

@@ -70,8 +70,8 @@ public actor GoogleClient {
         ech += 1
         let span = min(max(spanMeters, 2_000), 500_000)
         let pb = Self.suggestPb.replacingOccurrences(of: "{SPAN}", with: String(span))
-            .replacingOccurrences(of: "{LNG}", with: String(near.lng))
-            .replacingOccurrences(of: "{LAT}", with: String(near.lat))
+            .replacingOccurrences(of: "{LNG}", with: near.lng.plain)
+            .replacingOccurrences(of: "{LAT}", with: near.lat.plain)
         let url = URL(string: Self.suggestEndpoint + "&pb=" + enc(pb) + "&q=" + enc(query) + "&tch=1&ech=\(ech)")!
         let body = try await get(url, referer: "https://www.google.com/", xhr: true)
         return SuggestParser.parse(body, near: near)

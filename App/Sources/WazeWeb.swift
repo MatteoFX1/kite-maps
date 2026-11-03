@@ -82,6 +82,8 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
     """
 
     func fetch(_ url: URL) async -> Data? {
+        // Switched off while a request was on its way: don't open the page again.
+        guard AppSettings.shared.wazeOn else { return nil }
         await openPage()
         guard let web, ready else { note = "page: didn't load"; return nil }
         let js = """
@@ -159,6 +161,12 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
         guard let store = web?.configuration.websiteDataStore.httpCookieStore else { return false }
         let cookies = await store.allCookies()
         return cookies.contains { $0.name.hasPrefix("recaptcha-ca") && $0.domain.contains("waze.com") }
+    }
+
+    /** Road alerts off, or "Use Kite without Google": close the hidden page so its scripts stop too. */
+    func shutDown() {
+        reset()
+        finish(ok: false)
     }
 
     private func reset() {

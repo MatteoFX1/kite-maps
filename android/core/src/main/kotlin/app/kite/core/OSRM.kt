@@ -554,10 +554,15 @@ object StepMerge {
 
     /** Google's own lane advice ("Use the right lane to merge onto Redbridge Rd") where the open map has no lanes. */
     fun addGoogleLaneHints(steps: MutableList<Maneuver>, google: List<Maneuver>) {
-        for (s in steps) {
-            if (s.silent || s.lanes.isNotEmpty() || s.laneHint != null) continue
-            s.laneHint = google.filter { it.laneHint != null && abs(it.alongMeters - s.alongMeters) < 150 }
-                .minByOrNull { abs(it.alongMeters - s.alongMeters) }?.laneHint
+        // Each of Google's hints goes to one step only, and only when they're each other's nearest:
+        // a left turn 80 m before a right one mustn't take the right turn's lanes.
+        val open = steps.filter { !it.silent && it.lanes.isEmpty() && it.laneHint == null }
+        val hints = google.filter { it.laneHint != null }
+        for (g in hints) {
+            val s = open.minByOrNull { abs(it.alongMeters - g.alongMeters) } ?: continue
+            if (abs(s.alongMeters - g.alongMeters) >= 150) continue
+            val back = hints.minByOrNull { abs(it.alongMeters - s.alongMeters) } ?: continue
+            if (back.alongMeters == g.alongMeters) s.laneHint = g.laneHint
         }
     }
 }

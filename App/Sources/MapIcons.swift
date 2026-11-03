@@ -41,6 +41,9 @@ enum MapIcons {
         style.setImage(plateCamera(), forName: "cam-plate")
         style.setImage(surveillanceCamera(), forName: "cam-surveillance")
         style.setImage(trafficLight(), forName: "traffic-light")
+        // Live camera photos: sky blue for road cameras, violet for Windy's scenic webcams.
+        style.setImage(dot("web.camera.fill", UIColor(hex: 0x0284C7)), forName: "livecam-road")
+        style.setImage(dot("sun.horizon.fill", UIColor(hex: 0x7C3AED)), forName: "livecam-web")
         for k in WazeAlert.Kind.allCases { style.setImage(waze(k), forName: "waze-\(k.rawValue)") }
         style.setImage(turnHead(), forName: "turn-head")
         style.setImage(routeChevron(), forName: "route-chevron")
