@@ -82,6 +82,8 @@ final class WazeWeb: NSObject, WKNavigationDelegate {
     """
 
     func fetch(_ url: URL) async -> Data? {
+        // Switched off while a request was on its way: don't open the page again.
+        guard AppSettings.shared.wazeOn else { return nil }
         await openPage()
         guard let web, ready else { note = "page: didn't load"; return nil }
         let js = """

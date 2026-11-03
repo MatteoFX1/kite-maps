@@ -121,6 +121,8 @@ object WazeWeb {
     }
 
     suspend fun fetch(url: String): ByteArray? = withContext(Dispatchers.Main) {
+        // Switched off while a request was on its way: don't open the page again.
+        if (!AppSettings.wazeOn) return@withContext null
         openPage()
         val w = web
         if (w == null || !ready) { note = "page: didn't load"; return@withContext null }
