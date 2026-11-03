@@ -44,11 +44,12 @@ class DriveService : Service() {
             .build()
         // Always go foreground first, even when this start is only to stop: Android ends the app if a
         // service started with startForegroundService() stops before it calls startForeground().
-        runCatching {
+        val foreground = runCatching {
             ServiceCompat.startForeground(this, 1, n,
                 if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0)
-        }
-        if (intent?.action == STOP) {
+        }.isSuccess
+        if (!foreground || intent?.action == STOP) {
+            running = false
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
