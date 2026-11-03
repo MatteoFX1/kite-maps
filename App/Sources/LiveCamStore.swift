@@ -167,7 +167,7 @@ final class LiveCamStore: ObservableObject {
         r.cachePolicy = .reloadIgnoringLocalCacheData
         guard let (data, resp) = try? await session.data(for: r),
               let http = resp as? HTTPURLResponse, http.statusCode == 200,
-              let img = UIImage(data: data), img.size.width > 8 else { return nil }
+              let img = UIImage(data: data), img.size.width > 8, !isPlaceholder(img) else { return nil }
         var taken = cam.updatedAt
         if let lm = http.value(forHTTPHeaderField: "Last-Modified") {
             let f = DateFormatter()
@@ -177,5 +177,34 @@ final class LiveCamStore: ObservableObject {
             if let d = f.date(from: lm) { taken = d }
         }
         return (img, taken)
+    }
+
+    /**
+     * National Highways sends a "CAMERA UNAVAILABLE" card (white, with a red cross) instead of a
+     * photo when a camera is off. That card is mostly pale with a red cross over a black camera; treat it as no photo.
+     */
+    nonisolated static func isPlaceholder(_ img: UIImage) -> Bool {
+        guard let cg = img.cgImage else { return false }
+        let w = 32, h = 18
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        let drawn = px.withUnsafeMutableBytes { buf -> Bool in
+            guard let ctx = CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard drawn else { return false }
+        var light = 0, red = 0, black = 0
+        for i in stride(from: 0, to: px.count, by: 4) {
+            let r = Int(px[i]), g = Int(px[i + 1]), b = Int(px[i + 2])
+            let lo = min(r, g, b), hi = max(r, g, b)
+            if lo > 195 && hi - lo < 45 { light += 1 }
+            if r > 140 && g < 70 && b < 100 { red += 1 }
+            if hi < 45 { black += 1 }
+        }
+        // A pale card, a red cross and a black camera all at once: not a real road photo.
+        let n = w * h
+        return light * 10 > n * 3 && red * 40 > n && black * 12 > n
     }
 }

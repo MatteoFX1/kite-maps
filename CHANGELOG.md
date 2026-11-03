@@ -16,6 +16,8 @@ the middle number for big milestones.
 - **Easy to switch off:** Settings › Live cameras turns it all off, or just road cameras,
   webcams or the route row. There's a "Live cameras" button in Layers too. Never shown while
   driving.
+- **Broken cameras hidden:** when a road camera is off, Kite says "No photo right now" instead of
+  showing the "camera unavailable" picture.
 
 ## Android 0.7.7
 

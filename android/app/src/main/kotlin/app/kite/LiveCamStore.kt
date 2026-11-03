@@ -156,12 +156,34 @@ object LiveCamStore {
     suspend fun photo(cam: LiveCam): Pair<Bitmap, Long?>? = withContext(Dispatchers.IO) {
         val r = Http.getOrNull(cam.imageUrl, mapOf("User-Agent" to USER_AGENT, "Cache-Control" to "no-cache"), client)
             ?.takeIf { it.code == 200 } ?: return@withContext null
-        val bmp = BitmapFactory.decodeByteArray(r.body, 0, r.body.size)?.takeIf { it.width > 8 } ?: return@withContext null
+        val bmp = BitmapFactory.decodeByteArray(r.body, 0, r.body.size)?.takeIf { it.width > 8 && !isPlaceholder(it) } ?: return@withContext null
         val taken = r.headers["Last-Modified"]?.let { lm ->
             runCatching {
                 SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US).apply { timeZone = TimeZone.getTimeZone("GMT") }.parse(lm)?.time
             }.getOrNull()
         } ?: cam.updatedAtMillis
         bmp to taken
+    }
+
+    /**
+     * National Highways sends a "CAMERA UNAVAILABLE" card (white, with a red cross) instead of a
+     * photo when a camera is off. That card is mostly pale with a red cross over a black camera; treat it as no photo.
+     */
+    private fun isPlaceholder(bmp: Bitmap): Boolean {
+        val small = Bitmap.createScaledBitmap(bmp, 32, 18, true)
+        val px = IntArray(32 * 18)
+        small.getPixels(px, 0, 32, 0, 0, 32, 18)
+        if (small !== bmp) small.recycle()
+        var light = 0; var red = 0; var black = 0
+        for (c in px) {
+            val r = (c shr 16) and 0xFF; val g = (c shr 8) and 0xFF; val b = c and 0xFF
+            val lo = minOf(r, g, b); val hi = maxOf(r, g, b)
+            if (lo > 195 && hi - lo < 45) light++
+            if (r > 140 && g < 70 && b < 100) red++
+            if (hi < 45) black++
+        }
+        // A pale card, a red cross and a black camera all at once: not a real road photo.
+        val n = px.size
+        return light * 10 > n * 3 && red * 40 > n && black * 12 > n
     }
 }
