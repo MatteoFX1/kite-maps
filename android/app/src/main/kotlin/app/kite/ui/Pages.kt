@@ -56,7 +56,7 @@ fun SavedPage(model: AppModel) {
     var renaming by remember { mutableStateOf<Place?>(null) }
     var newName by remember { mutableStateOf("") }
     fun go(p: Place) { model.tab = AppTab.MAP; model.openDirections(p) }
-    fun show(p: Place) { model.tab = AppTab.MAP; model.select(p) }
+    fun show(p: Place) { model.tab = AppTab.MAP; model.openSaved(p) }
     fun distance(p: Place) = model.userLatLng?.let { Fmt.distance(it.distanceTo(p.location)) }
 
     Box(Modifier.fillMaxSize().background(Vela.ground(dark))) {

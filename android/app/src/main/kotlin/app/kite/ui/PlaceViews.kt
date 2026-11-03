@@ -272,7 +272,9 @@ private fun countdown(t: Long): String {
 }
 
 @Composable
-fun PhotoStrip(urls: List<String>, height: Dp = 130.dp, opensViewer: Boolean = false, streetView: Place? = null, model: AppModel? = null) {
+fun PhotoStrip(all: List<String>, height: Dp = 130.dp, opensViewer: Boolean = false, streetView: Place? = null, model: AppModel? = null) {
+    // "Use Kite without Google": a place saved earlier still has Google's photo links; don't load them.
+    val urls = if (AppSettings.noGoogle) all.filterNot(::isGooglePhoto) else all
     var viewing by remember { mutableStateOf<Int?>(null) }
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (streetView != null && model != null) StreetViewTile(model, streetView, height)
@@ -283,6 +285,11 @@ fun PhotoStrip(urls: List<String>, height: Dp = 130.dp, opensViewer: Boolean = f
         }
     }
     viewing?.let { start -> PhotoViewer(urls, start) { viewing = null } }
+}
+
+fun isGooglePhoto(u: String): Boolean {
+    val host = runCatching { java.net.URI(u).host?.lowercase() }.getOrNull() ?: return false
+    return "google" in host || "gstatic" in host || "ggpht" in host
 }
 
 /** Google photo links carry their size ("=w408-h306-k-no"): ask for a bigger one. */

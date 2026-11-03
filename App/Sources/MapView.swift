@@ -26,7 +26,7 @@ struct VelaMapView: UIViewRepresentable {
         map.logoView.isHidden = true
         map.attributionButtonPosition = .bottomLeft
         map.attributionButtonMargins = CGPoint(x: 8, y: 8)
-        map.setCenter(CLLocationCoordinate2D(latitude: 40.7484, longitude: -73.9857), zoomLevel: 12, animated: false)
+        map.setCenter(CLLocationCoordinate2D(latitude: 51.5074, longitude: -0.1278), zoomLevel: 12, animated: false)
 
         let tap = UITapGestureRecognizer(target: c, action: #selector(Coordinator.tapped(_:)))
         for r in map.gestureRecognizers ?? [] {

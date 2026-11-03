@@ -293,7 +293,7 @@ struct SearchBar: View {
                 .submitLabel(.search)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-                .onSubmit { model.search() }
+                .onSubmit { focused.wrappedValue = false; model.search() }
                 .onChange(of: model.query) { q in
                     if focused.wrappedValue { model.typed(q) }
                 }
