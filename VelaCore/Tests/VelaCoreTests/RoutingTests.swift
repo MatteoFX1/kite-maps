@@ -185,6 +185,17 @@ final class RoutingTests: XCTestCase {
         XCTAssertEqual(steps[0].laneHint, "Use the right lane")
     }
 
+    func testGoogleLaneHintOnlyForItsOwnJunction() {
+        // A left turn 80 m before a right turn: Google only has lanes for the right turn.
+        let p = LatLng(0, 0)
+        var steps = [Maneuver(type: .turnLeft, instruction: "Turn left", location: p, alongMeters: 1000, distanceMeters: 80),
+                     Maneuver(type: .turnRight, instruction: "Turn right", location: p, alongMeters: 1080, distanceMeters: 300)]
+        let google = [Maneuver(type: .turnRight, instruction: "Turn right", location: p, alongMeters: 1085, distanceMeters: 300, laneHint: "Use the right lane")]
+        StepMerge.addGoogleLaneHints(&steps, from: google)
+        XCTAssertNil(steps[0].laneHint)
+        XCTAssertEqual(steps[1].laneHint, "Use the right lane")
+    }
+
     func testRerouteKeepsHeading() {
         let url = OSRM.routeURL(from: LatLng(50.9, -1.4), to: LatLng(50.8, -1.3), mode: .drive, heading: 271.6).absoluteString
         XCTAssertTrue(url.hasSuffix("&bearings=272,60;"), url)
