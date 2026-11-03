@@ -36,6 +36,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     var speedMps by mutableStateOf(0.0); private set
     var lastFix by mutableStateOf<Fix?>(null); private set
     var cameraAhead by mutableStateOf<CameraAlert?>(null); private set
+    /** How far along the route the card's camera is. */
+    private var cameraAheadAt = 0.0
     var wazeAhead by mutableStateOf<WazeAhead?>(null); private set
     var wazeWarned by mutableIntStateOf(0); private set
     var policeRisk by mutableStateOf<Int?>(null); private set
@@ -330,13 +332,16 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     private fun checkCameras(p: RouteTracker.Progress) {
         if (demoAlerts) return
         val meters = routeCameras.map { it.along }
+        // Keep the card up, counting down, until its own camera is passed.
         cameraAhead?.let { ahead ->
-            val next = meters.firstOrNull { it > p.alongMeters }
-            cameraAhead = if (next != null && next - p.alongMeters < CameraAlerts.maxLead) ahead.copy(meters = next - p.alongMeters) else null
+            val left = cameraAheadAt - p.alongMeters
+            cameraAhead = if (left > 0 && left < CameraAlerts.maxLead) ahead.copy(meters = left) else null
         }
         val spoken = routeCameras.indices.filter { spokenCameras.contains(routeCameras[it].camera.id) }.toSet()
         val i = CameraAlerts.due(meters, p.alongMeters, speedMps, spoken) ?: return
         val cam = routeCameras[i].camera
+        // A speed camera's card stays up until it's passed: a plate camera just after it waits its turn.
+        if (cam.kind != RoadCamera.Kind.SPEED && cameraAhead?.kind == RoadCamera.Kind.SPEED) return
         if (cam.quiet) spokenCameras.add(cam.id)
         // Only the same kind, though: a number plate camera just before a speed camera mustn't use up its warning.
         else meters.forEachIndexed { j, m ->
@@ -345,6 +350,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         val ahead = meters[i] - p.alongMeters
         val limit = if (cam.kind == RoadCamera.Kind.SPEED) (cam.maxspeedKmh ?: route.speedLimit(meters[i])) else null
         cameraAhead = CameraAlert(cam.kind, ahead, max(ahead, 1.0), limit)
+        cameraAheadAt = meters[i]
         val repeatRun = since(cameraSpokenAt) < 150 && limit == cameraSpokenLimit
         if (AppSettings.cameraWarnings && cam.kind == RoadCamera.Kind.SPEED && !cam.quiet) {
             chime()

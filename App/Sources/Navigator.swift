@@ -24,6 +24,8 @@ final class Navigator: ObservableObject {
     @Published private(set) var lastFix: CLLocation?
     /** A camera coming up within about twelve seconds, for the warning card. */
     @Published private(set) var cameraAhead: CameraAlert?
+    /** How far along the route the card's camera is. */
+    private var cameraAheadAt = 0.0
     /** A Waze report coming up on the route (police, a crash…), for its warning card. */
     @Published private(set) var wazeAhead: WazeAhead?
     /** How many Waze reports this drive warned about, for the arrival card. */
@@ -380,10 +382,10 @@ final class Navigator: ObservableObject {
         guard !demoAlerts else { return }
         let meters = routeCameras.map(\.along)
         if let ahead = cameraAhead {
-            // Keep the card up, counting down, until the camera is passed.
-            if let next = meters.first(where: { $0 > p.alongMeters }), next - p.alongMeters < CameraAlerts.maxLead {
+            // Keep the card up, counting down, until its own camera is passed.
+            if cameraAheadAt > p.alongMeters, cameraAheadAt - p.alongMeters < CameraAlerts.maxLead {
                 var a = ahead
-                a.meters = next - p.alongMeters
+                a.meters = cameraAheadAt - p.alongMeters
                 cameraAhead = a
             } else {
                 cameraAhead = nil
@@ -392,6 +394,8 @@ final class Navigator: ObservableObject {
         let spoken = Set(routeCameras.indices.filter { spokenCameras.contains(routeCameras[$0].camera.id) })
         guard let i = CameraAlerts.due(cameraMeters: meters, traveled: p.alongMeters, speedMps: speedMps, spoken: spoken) else { return }
         let cam = routeCameras[i].camera
+        // A speed camera's card stays up until it's passed: a plate camera just after it waits its turn.
+        if cam.kind != .speed, cameraAhead?.kind == .speed { return }
         // Cameras close together are one warning: OSM often maps one per direction, or a pole and its
         // sign, and the A33 at Redbridge got three warnings in ten seconds. A quiet one (likely the
         // other side's) never stands in for a real one next to it.
@@ -406,6 +410,7 @@ final class Navigator: ObservableObject {
         let ahead = meters[i] - p.alongMeters
         let limit = cam.kind == .speed ? (cam.maxspeedKmh ?? route.speedLimit(at: meters[i])) : nil
         cameraAhead = CameraAlert(kind: cam.kind, meters: ahead, startMeters: max(ahead, 1), limitKmh: limit)
+        cameraAheadAt = meters[i]
         // Spoken for speed cameras only: number plate cameras are everywhere in Britain, and
         // saying each one would bury the turns. Those get the card alone.
         // A run of cameras (a smart motorway's gantries, every mile or so) is said once: after
