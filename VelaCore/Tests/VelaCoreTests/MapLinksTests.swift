@@ -54,6 +54,17 @@ final class MapLinksTests: XCTestCase {
         XCTAssertNil(MapLinks.coordinates("10 20"))
     }
 
+    func testDirectionsAndSearchLinksGoToTheRightPlace() {
+        // A Google directions link has a pin for each end: the destination is the last one.
+        assertSpot(target("https://www.google.com/maps/dir/Home/Big+Ben/@51.5,-0.12,13z/data=!4m8!4m7!1m2!1m1!1s0x1!2m2!1d-0.1!2d51.4!3m2!3d51.45!4d-0.2!3m2!3d51.5007!4d-0.1246"),
+                   51.5007, -0.1246)
+        // Apple: a search near somewhere is a search, and directions go to daddr.
+        XCTAssertEqual(target("https://maps.apple.com/?sll=51.5,-0.12&q=petrol"), .search("petrol", near: LatLng(51.5, -0.12)))
+        assertSpot(target("https://maps.apple.com/?ll=51.5,-0.12&daddr=51.48,-3.18"), 51.48, -3.18)
+        // Whole numbers with a comma are coordinates too.
+        XCTAssertEqual(MapLinks.coordinates("52, -1.5")?.lng ?? 0, -1.5, accuracy: 1e-6)
+    }
+
     func testGeohash() {
         let p = MapLinks.geohash("gcpvj0d6")!
         XCTAssertEqual(p.lat, 51.5071, accuracy: 0.001)
