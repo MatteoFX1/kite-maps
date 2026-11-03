@@ -158,7 +158,7 @@ private fun SavedRow(p: Place, icon: ImageVector, color: Color, distance: String
 // Settings
 
 private enum class SettingsScreen(val title: String) {
-    MENU("Settings"), DRIVING("Voice & driving"), CAMERAS("Cameras & speed"), WAZE("Road alerts"), MAP("Map & display"),
+    MENU("Settings"), DRIVING("Voice & driving"), CAMERAS("Cameras & speed"), WAZE("Road alerts"), LIVECAMS("Live cameras"), MAP("Map & display"),
     PLACES("My places"), PRIVACY("Privacy"), ABOUT("About"), DIAGNOSTICS("Diagnostics");
 
     /** Where the back button goes. */
@@ -196,6 +196,7 @@ fun SettingsPage(model: AppModel) {
                         SettingsScreen.DRIVING -> DrivingSettings()
                         SettingsScreen.CAMERAS -> CameraSettings()
                         SettingsScreen.WAZE -> WazeSettings()
+                        SettingsScreen.LIVECAMS -> LiveCamSettings()
                         SettingsScreen.MAP -> MapSettings()
                         SettingsScreen.PLACES -> PlacesSettings(model)
                         SettingsScreen.PRIVACY -> PrivacySettings()
@@ -289,6 +290,7 @@ private fun SettingsMenu(open: (SettingsScreen) -> Unit) {
         item(SettingsScreen.CAMERAS, "Camera warnings, speeding alert", null, Icons.Filled.PhotoCamera, 0xDC2626)
         item(SettingsScreen.WAZE, if (WazeAlert.Kind.POLICE in Waze.shares) "Police, crashes, closures" else "Closures, police aircraft",
             if (s.wazeOn) "On" else "Off", Icons.Filled.Warning, 0x7C3AED)
+        item(SettingsScreen.LIVECAMS, "Road camera photos and scenic webcams", if (s.liveCams) "On" else "Off", Icons.Filled.Videocam, 0x0284C7)
         item(SettingsScreen.MAP, "Theme, units, parking button", null, Icons.Filled.Contrast, 0x334155)
         item(SettingsScreen.PLACES, "Home and work", null, Icons.Filled.Home, 0x16A34A)
         item(SettingsScreen.PRIVACY, "Use Kite without Google", if (s.noGoogle) "On" else null, Icons.Filled.Lock, 0x475569)
@@ -325,6 +327,34 @@ private fun CameraSettings() {
         ToggleRow("Surveillance cameras", Icons.Filled.Videocam, 0x16A34A, s.surveillanceCameras) { s.surveillanceCameras = it }
         RowDivider()
         ToggleRow(if (Fmt.yards) "Number plate cameras" else "License plate cameras", Icons.Filled.Pin, 0x6B7280, s.plateCameras) { s.plateCameras = it }
+    }
+}
+
+/** Settings › Live cameras: the camera dots on the map, which kinds, and the row on a route. */
+@Composable
+private fun LiveCamSettings() {
+    val s = AppSettings
+    SettingsGroup(footer = "See the latest photo from traffic cameras and webcams: tap a camera on the map, or look at the ones on your route before you go. Never shown while you're driving.") {
+        ToggleRow("Live cameras", Icons.Filled.Videocam, 0x0284C7, s.liveCams) { s.liveCams = it }
+    }
+    if (s.liveCams) {
+        SettingsGroup("Show", if (WindyKey.present)
+            "Road cameras: National Highways, Transport for London, Traffic Scotland, Traffic Wales and TrafficWatch NI, listed by OpenHighways. Webcams: Windy.com, worldwide."
+        else "Road cameras: National Highways, Transport for London, Traffic Scotland, Traffic Wales and TrafficWatch NI, listed by OpenHighways. Scenic webcams aren't set up in this version of Kite yet.") {
+            ToggleRow("Road cameras (UK)", Icons.Filled.DirectionsCar, 0x0284C7, s.liveRoadCams) { s.liveRoadCams = it }
+            RowDivider()
+            ToggleRow("Scenic webcams", Icons.Filled.Landscape, 0x7C3AED, s.liveWebcams && WindyKey.present, enabled = WindyKey.present) { s.liveWebcams = it }
+            RowDivider()
+            ToggleRow("Cameras on your route", Icons.Filled.Directions, 0x0F766E, s.liveCamsOnRoute) { s.liveCamsOnRoute = it }
+        }
+        LiveCamStore.status?.let { st ->
+            SettingsGroup {
+                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Camera list", fontSize = KType.body, color = primaryText, modifier = Modifier.weight(1f))
+                    Text(st, fontSize = KType.body, color = secondaryText)
+                }
+            }
+        }
     }
 }
 
@@ -396,6 +426,10 @@ private fun AboutSettings(openDiagnostics: () -> Unit) {
     }
     SettingsGroup("Thanks to") {
         link("Surveillance cameras, saved-place matching, GPS warnings and diagnostics from Ausbloke's Kite fork", "https://github.com/NotDiscordOfficial/kite-maps")
+        HorizontalDivider()
+        link("UK road camera list from OpenHighways (MIT)", "https://github.com/JamesDillonDev/openhighways")
+        HorizontalDivider()
+        link("Webcams provided by Windy.com", "https://www.windy.com/webcams")
     }
 }
 
@@ -525,6 +559,11 @@ fun LayersSheet(close: () -> Unit) {
             tiles += { LayerTile("Speed cameras", s.speedCameras, { CameraBadge(RoadCamera.Kind.SPEED, 34.dp) }) { s.speedCameras = !s.speedCameras } }
             tiles += { LayerTile("Plate cameras", s.plateCameras, { CameraBadge(RoadCamera.Kind.PLATE, 34.dp) }) { s.plateCameras = !s.plateCameras } }
             tiles += { LayerTile("Surveillance", s.surveillanceCameras, { ic(Icons.Filled.Videocam) }) { s.surveillanceCameras = !s.surveillanceCameras } }
+            tiles += {
+                LayerTile("Live cameras", s.liveCams && (s.liveRoadCams || s.showsWebcams), { ic(Icons.Filled.Videocam) }) {
+                    if (s.liveCams) s.liveCams = false else { s.liveCams = true; s.liveRoadCams = true }
+                }
+            }
             tiles += {
                 LayerTile("Road alerts", s.wazeOn && s.wazeOnMap, { WazeBadge(if (WazeAlert.Kind.POLICE in Waze.shares) WazeAlert.Kind.POLICE else WazeAlert.Kind.CLOSURE, 34.dp) }) {
                     if (s.waze && s.wazeOnMap) s.wazeOnMap = false else { s.waze = true; s.wazeOnMap = true }

@@ -48,6 +48,15 @@ struct ContentView: View {
                 }
             }
         }
+        .overlay(alignment: .top) {
+            if let cam = model.liveCam, model.nav == nil, model.tab == .map {
+                LiveCamCard(model: model, cam: cam)
+                    .padding(.top, 58)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .inSidePanel(panel)
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.liveCam?.id)
         .alert(item: $model.surveillanceInfo) { camera in
             let details = [camera.operatorName.map { "Operator: \($0)" }, camera.manufacturer.map { "Manufacturer: \($0)" },
                            camera.surveillance.map { "Watches: \($0)" }, camera.mount.map { "Mount: \($0)" },
@@ -508,6 +517,37 @@ enum DemoScript {
         if step == "cameras" {
             // Central Munich, where many fixed speed cameras are mapped.
             model.map?.setCenter(CLLocationCoordinate2D(latitude: 48.137, longitude: 11.575), zoomLevel: 12.5, animated: false)
+            return
+        }
+        if step == "livecams" || step == "livecamcard" {
+            // Central London's traffic cameras; then one opened, as if tapped.
+            model.map?.setCenter(CLLocationCoordinate2D(latitude: 51.5045, longitude: -0.1260), zoomLevel: 13.2, animated: false)
+            LiveCamStore.shared.ensureLoaded()
+            guard step == "livecamcard" else { return }
+            for _ in 0..<40 where LiveCamStore.shared.road.isEmpty { await wait(1) }
+            let here = LatLng(51.5045, -0.1260)
+            if let cam = LiveCamStore.shared.road.min(by: { $0.location.distance(to: here) < $1.location.distance(to: here) }) {
+                model.liveCamRoute = []
+                model.liveCam = cam
+            }
+            return
+        }
+        if step == "livecamroute" || step == "livecamroutecard" {
+            // Southampton up the M3 to Basingstoke: the cameras along it before pressing Go.
+            model.settings.units = .yards
+            LiveCamStore.shared.ensureLoaded()
+            let to = Place(id: "demo-basingstoke", name: "Basingstoke", location: LatLng(51.2665, -1.0924), source: "demo")
+            model.select(to)
+            await wait(2)
+            model.openDirections(to: to)
+            model.detent = .full
+            guard step == "livecamroutecard" else { return }
+            await wait(25)
+            if let line = model.directions?.route?.polyline {
+                let cams = LiveCams.along(LiveCamStore.shared.road, line: line).map(\.cam)
+                model.liveCamRoute = cams
+                model.liveCam = cams.dropFirst().first ?? cams.first
+            }
             return
         }
         if step == "layers" { model.showLayers = true; return }

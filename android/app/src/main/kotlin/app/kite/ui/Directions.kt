@@ -242,6 +242,7 @@ fun TripBody(model: AppModel) {
                             fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = delayColor(r, dark))
                     }
                     if (r.mode == TravelMode.DRIVE) Box(Modifier.padding(top = 4.dp)) { RouteWazeSummary(r) }
+                    if (r.mode == TravelMode.DRIVE) Box(Modifier.padding(top = 6.dp)) { RouteLiveCams(model, r) }
                 }
                 Row(Modifier.height(52.dp).clip(CircleShape).background(Vela.tonal(dark)).tap { ctx.share(d.destination.shareUrl) }.padding(horizontal = 20.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

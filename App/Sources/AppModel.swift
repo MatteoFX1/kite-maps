@@ -118,6 +118,10 @@ final class AppModel: ObservableObject {
     /** A Waze report tapped on the map, shown in a small card. */
     @Published var wazeInfo: WazeAlert?
     @Published var surveillanceInfo: SurveillanceCamera?
+    /** The live camera whose photo is open (tapped on the map or in a route's camera row). */
+    @Published var liveCam: LiveCam?
+    /** The route's cameras in order, when the open one was picked from the route's row (for next/previous). */
+    @Published var liveCamRoute: [LiveCam] = []
     /** The "Add stop" search sheet. */
     @Published var addingStop = false
     @Published var showSaved = false
