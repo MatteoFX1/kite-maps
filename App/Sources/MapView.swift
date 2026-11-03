@@ -439,7 +439,8 @@ struct VelaMapView: UIViewRepresentable {
             let navigating = model.nav != nil
             // The navigation arrow replaces the blue dot.
             if map.showsUserLocation == navigating { map.showsUserLocation = !navigating }
-            style.layer(withIdentifier: "vela-traffic")?.isVisible = s.traffic && !navigating && !s.noGoogle
+            // Not before the welcome screen's choice: "Open data only" means nothing ever went to Google.
+            style.layer(withIdentifier: "vela-traffic")?.isVisible = s.traffic && !navigating && !s.noGoogle && s.welcomed
             style.layer(withIdentifier: "vela-sat")?.isVisible = s.satellite
             style.layer(withIdentifier: "vela-terrain")?.isVisible = s.terrain && !s.satellite
             for id in ["vela-rail", "vela-rail-case"] { style.layer(withIdentifier: id)?.isVisible = s.transitLines && !navigating }
@@ -474,7 +475,8 @@ struct VelaMapView: UIViewRepresentable {
             }
             let selected = model.selected
             let sel = selected?.id
-            let key = items.map { $0.0.id + $0.1 }.joined(separator: ",") + "|" + (sel ?? "")
+            // The label too, so a renamed place shows its new name.
+            let key = items.map { $0.0.id + $0.1 + $0.2 }.joined(separator: ",") + "|" + (sel ?? "")
             guard key != lastMineKey else { return }
             lastMineKey = key
             let features: [MLNPointFeature] = items.compactMap { p, icon, label in

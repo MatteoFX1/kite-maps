@@ -65,6 +65,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
     private val cameraCells = mutableSetOf<String>()
     private var cameraFetch: Job? = null
     private var surveillanceFetch: Job? = null
+    private var surveillanceWasOn = false
     private val surveillanceCells = mutableSetOf<String>()
     private val surveillance = mutableMapOf<Long, SurveillanceCamera>()
     private var railFetch: Job? = null
@@ -375,7 +376,12 @@ class KiteMap(private val model: AppModel, private val context: Context) {
         if (m.locationComponent.isLocationComponentActivated) {
             if (m.locationComponent.isLocationComponentEnabled == navigating) m.locationComponent.isLocationComponentEnabled = !navigating
         } else if (LocationService.authorized) enableLocation(style)
-        visible(style, "vela-traffic", s.traffic && !navigating && !s.noGoogle)
+        // Not before the welcome screen's choice: "Open data only" means nothing ever went to Google.
+        visible(style, "vela-traffic", s.traffic && !navigating && !s.noGoogle && s.welcomed)
+        // The Surveillance layer just switched on: fetch it now, not at the next pan (only on the
+        // switch, so a failed fetch keeps its 30-second pause).
+        if (s.surveillanceCameras && !surveillanceWasOn) loadSurveillance(m)
+        surveillanceWasOn = s.surveillanceCameras
         visible(style, "vela-sat", s.satellite)
         visible(style, "vela-terrain", s.terrain && !s.satellite)
         for (id in listOf("vela-rail", "vela-rail-case")) visible(style, id, s.transitLines && !navigating)
@@ -408,7 +414,8 @@ class KiteMap(private val model: AppModel, private val context: Context) {
             for (p in s.saved.take(200)) if (items.none { it.first.id == p.id }) items.add(Triple(p, "mine-saved", p.name))
         }
         val selected = model.selected
-        val key = items.joinToString(",") { it.first.id + it.second } + "|" + (selected?.id ?: "")
+        // The label too, so a renamed place shows its new name.
+        val key = items.joinToString(",") { it.first.id + it.second + it.third } + "|" + (selected?.id ?: "")
         if (key == lastMineKey) return
         lastMineKey = key
         setShape(style, "vela-mine", items.filter { selected == null || !it.first.matchesNearby(selected) }.map { (p, icon, label) ->
