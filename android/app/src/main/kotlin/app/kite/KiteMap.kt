@@ -474,7 +474,8 @@ class KiteMap(private val model: AppModel, private val context: Context) {
     fun loadWaze(m: MapLibreMap) {
         val s = model.settings
         if (s.wazeOn && (s.wazeHeatmap || s.policeRisk)) {
-            val places = listOfNotNull(LocationService.last?.coord, s.home?.location, s.work?.location)
+            // Only around where you are: Waze is never asked about saved Home and Work.
+            val places = listOfNotNull(LocationService.last?.coord)
             WazeHistory.sweepIfDue(places, scope)
         }
         if (fakeWaze || !s.wazeOn || !(s.wazeOnMap || s.wazeHeatmap) || m.cameraPosition.zoom < 10 || wazeFetch != null || now() - wazeFailedAt <= 60_000) return

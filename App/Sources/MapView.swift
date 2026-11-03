@@ -563,9 +563,8 @@ struct VelaMapView: UIViewRepresentable {
             let s = model.settings
             if s.wazeOn, s.wazeHeatmap || s.policeRisk, !DemoScript.active {
                 var places: [LatLng] = []
+                // Only around where you are: Waze is never asked about saved Home and Work.
                 if let c = map.userLocation?.location?.coordinate, CLLocationCoordinate2DIsValid(c) { places.append(LatLng(c.latitude, c.longitude)) }
-                if let h = s.home { places.append(h.location) }
-                if let w = s.work { places.append(w.location) }
                 WazeHistory.shared.sweepIfDue(places)
             }
             guard s.wazeOn, s.wazeOnMap || s.wazeHeatmap, map.zoomLevel >= 10, wazeFetch == nil, !DemoScript.fakeWaze,

@@ -36,6 +36,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     var speedMps by mutableStateOf(0.0); private set
     var lastFix by mutableStateOf<Fix?>(null); private set
     var cameraAhead by mutableStateOf<CameraAlert?>(null); private set
+    /** How far along the route the card's camera is. */
+    private var cameraAheadAt = 0.0
     var wazeAhead by mutableStateOf<WazeAhead?>(null); private set
     var wazeWarned by mutableIntStateOf(0); private set
     var policeRisk by mutableStateOf<Int?>(null); private set
@@ -87,6 +89,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     private var riskPast: List<PoliceRisk.Report>? = null
     private var riskSpokenAt = 0L
     private var aircraftAt = 0L
+    /** When the aircraft service last answered: an old sighting isn't "nearby" for long. */
+    private var aircraftSeenAt = 0L
     private var aircraftLoading = false
     private val spokenAircraft = mutableSetOf<String>()
     private var tracedAt = 0L
@@ -342,18 +346,25 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     private fun checkCameras(p: RouteTracker.Progress) {
         if (demoAlerts) return
         val meters = routeCameras.map { it.along }
+        // Keep the card up, counting down, until its own camera is passed.
         cameraAhead?.let { ahead ->
-            val next = meters.firstOrNull { it > p.alongMeters }
-            cameraAhead = if (next != null && next - p.alongMeters < CameraAlerts.maxLead) ahead.copy(meters = next - p.alongMeters) else null
+            val left = cameraAheadAt - p.alongMeters
+            cameraAhead = if (left > 0 && left < CameraAlerts.maxLead) ahead.copy(meters = left) else null
         }
         val spoken = routeCameras.indices.filter { spokenCameras.contains(routeCameras[it].camera.id) }.toSet()
         val i = CameraAlerts.due(meters, p.alongMeters, speedMps, spoken) ?: return
         val cam = routeCameras[i].camera
+        // A speed camera's card stays up until it's passed: a plate camera just after it waits its turn.
+        if (cam.kind != RoadCamera.Kind.SPEED && cameraAhead?.kind == RoadCamera.Kind.SPEED) return
         if (cam.quiet) spokenCameras.add(cam.id)
-        else meters.forEachIndexed { j, m -> if (m >= meters[i] && m - meters[i] < 200) spokenCameras.add(routeCameras[j].camera.id) }
+        // Only the same kind, though: a number plate camera just before a speed camera mustn't use up its warning.
+        else meters.forEachIndexed { j, m ->
+            if (m >= meters[i] && m - meters[i] < 200 && routeCameras[j].camera.kind == cam.kind) spokenCameras.add(routeCameras[j].camera.id)
+        }
         val ahead = meters[i] - p.alongMeters
         val limit = if (cam.kind == RoadCamera.Kind.SPEED) (cam.maxspeedKmh ?: route.speedLimit(meters[i])) else null
         cameraAhead = CameraAlert(cam.kind, ahead, max(ahead, 1.0), limit)
+        cameraAheadAt = meters[i]
         val repeatRun = since(cameraSpokenAt) < 150 && limit == cameraSpokenLimit
         if (AppSettings.cameraWarnings && cam.kind == RoadCamera.Kind.SPEED && !cam.quiet) {
             chime()
@@ -412,7 +423,10 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         val next = routeWaze.firstOrNull {
             !spokenWaze.contains(it.alert.id) && s.shows(it.alert) && it.along > p.alongMeters && it.along - p.alongMeters <= lead
         } ?: return
-        for (w in routeWaze) if (abs(w.along - next.along) < 60 || (w.alert.kind == next.alert.kind && abs(w.along - next.along) < 400)) spokenWaze.add(w.alert.id)
+        // A police car or a crash is never folded into a lesser report next to it, though.
+        val major = setOf(WazeAlert.Kind.POLICE, WazeAlert.Kind.ACCIDENT)
+        for (w in routeWaze) if ((abs(w.along - next.along) < 60 && (w.alert.kind == next.alert.kind || w.alert.kind !in major)) ||
+            (w.alert.kind == next.alert.kind && abs(w.along - next.along) < 400)) spokenWaze.add(w.alert.id)
         val ahead = next.along - p.alongMeters
         wazeAhead = WazeAhead(next.alert, ahead, max(ahead, 1.0))
         wazeWarned++
@@ -450,7 +464,11 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         if (demoAlerts) return
         if (route.mode != TravelMode.DRIVE || !AppSettings.policeAircraft) { aircraftNear = null; return }
         val here = loc.coord
-        aircraftNear?.let { aircraftNear = it.copy(meters = it.aircraft.location.distanceTo(here)) }
+        aircraftNear?.let {
+            val d = it.aircraft.location.distanceTo(here)
+            // No answer for two minutes (no signal), or 10 km past where it was: it's no longer nearby.
+            aircraftNear = if (d < 10_000 && since(aircraftSeenAt) < 120) it.copy(meters = d) else null
+        }
         if (aircraftLoading || since(aircraftAt) <= 30) return
         aircraftLoading = true
         aircraftAt = now()
@@ -458,6 +476,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             val found = runCatching { Aircraft.police(here, 10) }.getOrNull()
             aircraftLoading = false
             if (found == null || stopped) return@launch
+            aircraftSeenAt = now()
             val me = lastFix?.coord ?: here
             val nearest = found.map { it to it.location.distanceTo(me) }.filter { it.second < 10_000 }.minByOrNull { it.second }
             aircraftNear = nearest?.let { AircraftNear(it.first, it.second) }
