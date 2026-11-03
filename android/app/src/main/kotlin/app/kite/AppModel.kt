@@ -372,17 +372,20 @@ class AppModel {
     fun perform(kind: LaunchKind) {
         scope.launch {
             repeat(20) { if (userLatLng == null) delay(250) }
-            if (nav != null) endNavigation()
             val target = when (kind) {
                 LaunchKind.HOME -> settings.home
                 LaunchKind.WORK -> settings.work
                 LaunchKind.CAR -> settings.parking
             }
             if (target == null) {
-                if (kind == LaunchKind.CAR) notice = "No parking spot saved yet. Tap P on the map when you park."
+                if (kind == LaunchKind.CAR) { nav?.say("No parking spot saved yet.") ?: run { notice = "No parking spot saved yet. Tap P on the map when you park." } }
+                // Mid-drive, keep the trip going: a picker on top of it, cancelled, would lose it.
+                else if (nav != null) nav?.say("No ${if (kind == LaunchKind.HOME) "home" else "work"} address saved yet. Set it in Saved after this drive.")
                 else picking = if (kind == LaunchKind.HOME) PickKind.HOME else PickKind.WORK
                 return@launch
             }
+            // Only now that there's somewhere to go does the current drive end.
+            if (nav != null) endNavigation()
             openDirections(target)
             if (kind == LaunchKind.CAR) edit { it.copy(mode = TravelMode.WALK) }
         }

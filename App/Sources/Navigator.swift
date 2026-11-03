@@ -846,6 +846,9 @@ final class Navigator: ObservableObject {
         if let fix = lastFix { handle(fix) }
     }
 
+    /** Something the app needs to tell the driver mid-drive, where a notice wouldn't be seen. */
+    func say(_ text: String) { speak(text) }
+
     private func speak(_ text: String, urgent: Bool = false) {
         guard !muted, !stopped else { return }
         if urgent && speech.isSpeaking { speech.stopSpeaking(at: .word) }

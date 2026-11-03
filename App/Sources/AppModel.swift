@@ -406,7 +406,6 @@ final class AppModel: ObservableObject {
     func perform(_ kind: LaunchAction.Kind) async {
         // At a cold start, give location a few seconds to come in first.
         for _ in 0..<20 where userLatLng == nil { try? await Task.sleep(nanoseconds: 250_000_000) }
-        if nav != nil { endNavigation() }
         let target: Place?
         switch kind {
         case .home: target = settings.home
@@ -414,10 +413,16 @@ final class AppModel: ObservableObject {
         case .car: target = settings.parking
         }
         guard let target else {
-            if kind == .car { notice = "No parking spot saved yet. Tap P on the map when you park." }
+            if kind == .car {
+                if let nav { nav.say("No parking spot saved yet.") } else { notice = "No parking spot saved yet. Tap P on the map when you park." }
+            }
+            // Mid-drive, keep the trip going: a picker on top of it, cancelled, would lose it.
+            else if let nav { nav.say("No \(kind == .home ? "home" : "work") address saved yet. Set it in Saved after this drive.") }
             else { picking = kind == .home ? .home : .work }
             return
         }
+        // Only now that there's somewhere to go does the current drive end.
+        if nav != nil { endNavigation() }
         openDirections(to: target)
         if kind == .car { directions?.mode = .walk }
     }

@@ -728,6 +728,9 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         lastFix?.let { handle(it) }
     }
 
+    /** Something the app needs to tell the driver mid-drive, where a notice wouldn't be seen. */
+    fun say(text: String) = speak(text)
+
     private fun speak(text: String, urgent: Boolean = false) {
         if (muted || stopped) return
         Voice.say(text, urgent)
