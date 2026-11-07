@@ -561,7 +561,9 @@ fun LayersSheet(close: () -> Unit) {
             tiles += { LayerTile("Surveillance", s.surveillanceCameras, { ic(Icons.Filled.Videocam) }) { s.surveillanceCameras = !s.surveillanceCameras } }
             tiles += {
                 LayerTile("Live cameras", s.liveCams && (s.liveRoadCams || s.showsWebcams), { ic(Icons.Filled.Videocam) }) {
-                    if (s.liveCams) s.liveCams = false else { s.liveCams = true; s.liveRoadCams = true }
+                    // On turns road cameras and webcams both back on, even if one was switched off in Settings.
+                    if (s.liveCams && (s.liveRoadCams || s.showsWebcams)) s.liveCams = false
+                    else { s.liveCams = true; s.liveRoadCams = true; s.liveWebcams = true }
                 }
             }
             tiles += {

@@ -30,7 +30,9 @@ struct LayersSheet: View {
                     if settings.waze && settings.wazeOnMap { settings.wazeOnMap = false } else { settings.waze = true; settings.wazeOnMap = true }
                 }
                 tile("Live cameras", icon: "web.camera.fill", on: settings.liveCams && (settings.liveRoadCams || settings.showsWebcams)) {
-                    if settings.liveCams { settings.liveCams = false } else { settings.liveCams = true; settings.liveRoadCams = true }
+                    // On turns road cameras and webcams both back on, even if one was switched off in Settings.
+                    if settings.liveCams && (settings.liveRoadCams || settings.showsWebcams) { settings.liveCams = false }
+                    else { settings.liveCams = true; settings.liveRoadCams = true; settings.liveWebcams = true }
                 }
                 if Waze.shares.contains(.police) {
                     tile("Police heat map", icon: "flame.fill", on: settings.wazeOn && settings.wazeHeatmap) {

@@ -156,6 +156,59 @@ object LiveCamStore {
         }
     }
 
+    /** The route last asked about, so reopening the same route asks Windy nothing new. */
+    private var windyRouteKey: String? = null
+    private var windyRouteFetch: Job? = null
+
+    /** Every Windy webcam seen in the last while (their photo links are renewed when opened). */
+    val webcams: List<LiveCam> get() = windy.values.map { it.first }
+
+    /**
+     * Before you go: ask Windy about the webcams along a route, a few circles spread along it,
+     * once per route. Stretches already asked about in the last 10 minutes are skipped.
+     */
+    fun loadWindyRoute(key: String, line: List<LatLng>) {
+        if (!WindyKey.present || line.size < 2 || key == windyRouteKey) return
+        if (System.currentTimeMillis() - windyFailedAt < 60_000) return
+        windyRouteKey = key
+        windyRouteFetch?.cancel()
+        windyRouteFetch = scope.launch {
+            val cum = Geo.cumulative(line)
+            val queue = ArrayDeque(LiveCams.windyRouteAsks(line))
+            // A full answer (Windy's 50 limit) is split into halves and asked again, up to this many asks in all.
+            var budget = 16
+            while (queue.isNotEmpty() && budget > 0) {
+                val ask = queue.removeFirst()
+                val radius = ask.radiusKm.toDouble()
+                val now = System.currentTimeMillis()
+                windyAsked.removeAll { now - it.at >= 600_000 }
+                when (val plan = LiveCams.windyPlan(ask, windyAsked.map { LiveCams.WindyAsked(it.center, it.km, it.minReach) }, line, cum)) {
+                    LiveCams.WindyPlan.Skip -> continue
+                    is LiveCams.WindyPlan.Closer -> { queue.addAll(plan.asks); continue }
+                    LiveCams.WindyPlan.Fetch -> {}
+                }
+                budget--
+                val data = withContext(Dispatchers.IO) { get(LiveCams.windyNearbyUrl(ask.center, ask.radiusKm), mapOf("x-windy-api-key" to WindyKey.VALUE)) }
+                val cams = data?.let { LiveCams.parseWindy(it) }
+                if (data == null || cams == null) {
+                    // Asked again next time the route is shown, after the minute's pause.
+                    windyFailedAt = System.currentTimeMillis()
+                    windyRouteKey = null
+                    return@launch
+                }
+                val t = System.currentTimeMillis()
+                val full = LiveCams.windyListed(data) >= 50
+                windyAsked += Asked(ask.center, radius, t, if (full) radius * 0.8 else 0.0)
+                cams.forEach { windy[it.id] = it to t }
+                if (full) LiveCams.windySplit(ask, line, cum)?.let { queue.addAll(it) }
+                // Shown as each stretch arrives.
+                bump()
+            }
+            // Out of asks with stretches still to look at: carry on the next time this route is shown.
+            if (queue.isNotEmpty() && isActive) windyRouteKey = null
+        }
+    }
+
     /** The cameras to draw in a box, as the settings want them. */
     fun cams(south: Double, west: Double, north: Double, east: Double, road: Boolean, webcams: Boolean): List<LiveCam> {
         fun inside(p: LatLng) = p.lat in south..north && p.lng in west..east

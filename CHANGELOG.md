@@ -3,6 +3,17 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.10 (iPhone and Android)
+
+Live cameras, finished off after checking them against the request (GitHub #15).
+
+- **Webcams on your route:** "Cameras on your route" now shows Windy's webcams in the towns you
+  drive through, not just UK road cameras, so it works anywhere in the world.
+- **Webcams when zoomed out:** the violet webcam dots now show from a whole-region view, like
+  Windy. Road cameras still show from a city view, so the map stays clean.
+- **Layers button:** turning Live cameras on now brings back both road cameras and webcams, even
+  if one of them was switched off in Settings.
+
 ## 0.7.9 (iPhone and Android)
 
 A check of the basics on both phones, with the bugs it found fixed. Nothing looks different.

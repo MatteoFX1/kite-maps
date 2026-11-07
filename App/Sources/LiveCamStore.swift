@@ -167,6 +167,60 @@ final class LiveCamStore: ObservableObject {
         }
     }
 
+    /** The route last asked about, so reopening the same route asks Windy nothing new. */
+    private var windyRouteKey: String?
+    private var windyRouteFetch: Task<Void, Never>?
+
+    /** Every Windy webcam seen in the last while (their photo links are renewed when opened). */
+    var webcams: [LiveCam] { windy.values.map(\.cam) }
+
+    /**
+     * Before you go: ask Windy about the webcams along a route, a few circles spread along it,
+     * once per route. Stretches already asked about in the last 10 minutes are skipped.
+     */
+    func loadWindyRoute(_ key: String, line: [LatLng]) {
+        guard WindyKey.present, line.count >= 2, key != windyRouteKey,
+              Date().timeIntervalSince(windyFailedAt) > 60 else { return }
+        windyRouteKey = key
+        windyRouteFetch?.cancel()
+        windyRouteFetch = Task { [weak self] in
+            let cum = Geo.cumulative(line)
+            var queue = LiveCams.windyRouteAsks(line)
+            // A full answer (Windy's 50 limit) is split into halves and asked again, up to this many asks in all.
+            var budget = 16
+            while !queue.isEmpty, budget > 0 {
+                let ask = queue.removeFirst()
+                guard let self, !Task.isCancelled else { return }
+                let radius = Double(ask.radiusKm)
+                let now = Date()
+                self.windyAsked.removeAll { now.timeIntervalSince($0.at) >= 600 }
+                switch LiveCams.windyPlan(ask, asked: self.windyAsked.map { ($0.center, $0.km, $0.minReach) }, line: line, cumulative: cum) {
+                case .skip: continue
+                case .closer(let halves): queue += halves; continue
+                case .fetch: break
+                }
+                budget -= 1
+                let data = await Self.get(LiveCams.windyNearbyURL(ask.center, radiusKm: ask.radiusKm), headers: ["x-windy-api-key": WindyKey.value])
+                guard !Task.isCancelled else { return }
+                guard let data, let cams = LiveCams.parseWindy(data) else {
+                    // Asked again next time the route is shown, after the minute's pause.
+                    self.windyFailedAt = Date()
+                    self.windyRouteKey = nil
+                    return
+                }
+                let t = Date()
+                let full = LiveCams.windyListed(data) >= 50
+                self.windyAsked.append((ask.center, radius, t, full ? radius * 0.8 : 0))
+                for c in cams { self.windy[c.id] = (c, t) }
+                if full, let halves = LiveCams.windySplit(ask, line: line, cumulative: cum) { queue += halves }
+                // Shown as each stretch arrives.
+                self.version += 1
+            }
+            // Out of asks with stretches still to look at: carry on the next time this route is shown.
+            if !queue.isEmpty, let self, !Task.isCancelled { self.windyRouteKey = nil }
+        }
+    }
+
     /** The cameras to draw in a box, as the settings want them. */
     func cams(south: Double, west: Double, north: Double, east: Double, road showRoad: Bool, webcams: Bool) -> [LiveCam] {
         var out: [LiveCam] = []

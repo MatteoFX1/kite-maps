@@ -278,12 +278,13 @@ class KiteMap(private val model: AppModel, private val context: Context) {
             iconImage("traffic-light"), iconAllowOverlap(true), iconAnchor(Property.ICON_ANCHOR_BOTTOM),
             iconSize(interpolate(linear(), zoom(), stop(14, 0.75f), stop(17, 1.0f)))).apply { minZoom = 14f })
 
-        // Live camera photos (road cameras and Windy webcams), from zoom 9 in, under the speed cameras.
-        // Overlapping dots hide each other, so a city full of cameras stays readable when zoomed out.
+        // Live camera photos, under the speed cameras: Windy webcams from zoom 6 (a region), road
+        // cameras from zoom 9 (a city). Overlapping dots hide each other, so zoomed out stays readable.
         src("vela-livecams")
         style.addLayer(SymbolLayer("vela-livecams", "vela-livecams").withProperties(
             iconImage(get("icon")), iconAllowOverlap(false), iconPadding(2f),
-            iconSize(interpolate(linear(), zoom(), stop(9, 0.7f), stop(13, 0.9f), stop(16, 1.05f)))).apply { minZoom = 9f })
+            iconSize(interpolate(linear(), zoom(), stop(6, 0.6f), stop(9, 0.7f), stop(13, 0.9f), stop(16, 1.05f))))
+            .apply { minZoom = LiveCams.WEBCAM_MIN_ZOOM.toFloat() })
 
         src("vela-cameras")
         val big = eq(get("big"), literal(1))
@@ -721,20 +722,24 @@ class KiteMap(private val model: AppModel, private val context: Context) {
     /** Live camera dots for what's on screen (plus a margin), never while driving. */
     private fun renderLiveCams(m: MapLibreMap, style: Style) {
         val s = model.settings
-        val on = model.nav == null && m.cameraPosition.zoom >= 9 && (s.showsRoadCams || s.showsWebcams)
+        // Road cameras only from a city's zoom (there are thousands); webcams from a region's.
+        val zoom = m.cameraPosition.zoom
+        val roadNow = s.showsRoadCams && zoom >= LiveCams.ROAD_MIN_ZOOM
+        val webNow = s.showsWebcams && zoom >= LiveCams.WEBCAM_MIN_ZOOM
+        val on = model.nav == null && (roadNow || webNow)
         val b = m.projection.visibleRegion.latLngBounds
         val dLat = (b.latitudeNorth - b.latitudeSouth) * 0.5
         val dLng = (b.longitudeEast - b.longitudeWest) * 0.5
         val inside = liveCamBox?.let { b.latitudeSouth >= it.s && b.latitudeNorth <= it.n && b.longitudeWest >= it.w && b.longitudeEast <= it.e } ?: false
         // Switched on from Layers or Settings: ask for the cameras now, not only after the next pan.
         if (on) loadLiveCams(m)
-        val key = "$on${s.showsRoadCams}${s.showsWebcams}${LiveCamStore.version}"
+        val key = "$on$roadNow$webNow${LiveCamStore.version}"
         if (key == lastLiveKey && (!on || inside)) return
         lastLiveKey = key
         liveCamBox = if (on) Box(b.latitudeSouth - dLat, b.longitudeWest - dLng, b.latitudeNorth + dLat, b.longitudeEast + dLng) else null
         val lb = liveCamBox
         val features = if (lb == null) emptyList() else
-            LiveCamStore.cams(lb.s, lb.w, lb.n, lb.e, s.showsRoadCams, s.showsWebcams).map { c ->
+            LiveCamStore.cams(lb.s, lb.w, lb.n, lb.e, roadNow, webNow).map { c ->
                 point(c.location, mapOf("id" to c.id, "icon" to if (c.source.isRoad) "livecam-road" else "livecam-web"))
             }
         setShape(style, "vela-livecams", features)
@@ -745,7 +750,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
         val s = model.settings
         if (model.nav != null || !s.liveCams) return
         if (s.showsRoadCams || s.liveCamsOnRoute) LiveCamStore.ensureLoaded()
-        if (!s.showsWebcams || m.cameraPosition.zoom < 8) return
+        if (!s.showsWebcams || m.cameraPosition.zoom < LiveCams.WEBCAM_MIN_ZOOM) return
         val b = m.projection.visibleRegion.latLngBounds
         val c = LatLng((b.latitudeSouth + b.latitudeNorth) / 2, (b.longitudeWest + b.longitudeEast) / 2)
         val span = LatLng(b.latitudeSouth, b.longitudeWest).distanceTo(LatLng(b.latitudeNorth, b.longitudeEast)) / 1000

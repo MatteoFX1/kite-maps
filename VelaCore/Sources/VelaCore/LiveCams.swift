@@ -63,6 +63,11 @@ public struct LiveCam: Hashable, Codable, Sendable, Identifiable {
 /** Reading the camera lists, and which cameras belong on a route. */
 public enum LiveCams {
     public static let openHighwaysURL = URL(string: "https://openhighways.uk/api/cameras")!
+    /** Map zoom from which road cameras show (a city: there are thousands) and webcams (a region). */
+    public static let roadMinZoom = 9.0
+    public static let webcamMinZoom = 6.0
+    /** How far off the route a webcam can be and still count as on it: one in a town you drive through. */
+    public static let webcamRouteOffset = 2500.0
     public static let tflURL = URL(string: "https://api.tfl.gov.uk/Place/Type/JamCam")!
 
     /**
@@ -162,24 +167,29 @@ public enum LiveCams {
     }
 
     /**
-     * The cameras along [line], in the order you'd pass them, at most [limit]: within [maxOffset]
-     * meters of the route, and not two within [spacing] meters of each other along it (a junction
-     * often has four cameras looking at the same traffic).
+     * The cameras along [line], in the order you'd pass them, at most [limit]: road cameras within
+     * [maxOffset] meters of the route, webcams within [webcamOffset] (0 leaves them out: they look
+     * at a town or a view, not at the road), and not two within [spacing] meters of each other
+     * along it (a junction often has four cameras looking at the same traffic).
      */
-    public static func along(_ cams: [LiveCam], line: [LatLng], maxOffset: Double = 120, spacing: Double = 1500,
-                             limit: Int = 12) -> [(cam: LiveCam, along: Double)] {
+    public static func along(_ cams: [LiveCam], line: [LatLng], maxOffset: Double = 120, webcamOffset: Double = 0,
+                             spacing: Double = 1500, limit: Int = 12) -> [(cam: LiveCam, along: Double)] {
         guard line.count >= 2 else { return [] }
         // A cheap box test first: a whole country of cameras against a long route.
         var s = 90.0, n = -90.0, w = 180.0, e = -180.0
         for p in line { s = min(s, p.lat); n = max(n, p.lat); w = min(w, p.lng); e = max(e, p.lng) }
-        let pad = 0.01
+        // Wide enough for the farthest camera allowed; a degree of longitude shrinks toward the poles.
+        let latPad = max(0.01, max(maxOffset, webcamOffset) / 110_000 * 1.2)
+        let lngPad = latPad / max(cos(max(abs(s), abs(n)) * .pi / 180), 0.05)
         let cum = Geo.cumulative(line)
         var hits: [(LiveCam, Double)] = []
-        for c in cams where c.source.isRoad {
+        for c in cams {
+            let limitOff = c.source.isRoad ? maxOffset : webcamOffset
+            guard limitOff > 0 else { continue }
             let p = c.location
-            guard p.lat >= s - pad, p.lat <= n + pad, p.lng >= w - pad, p.lng <= e + pad else { continue }
+            guard p.lat >= s - latPad, p.lat <= n + latPad, p.lng >= w - lngPad, p.lng <= e + lngPad else { continue }
             let pr = Geo.project(p, on: line, cumulative: cum)
-            if pr.offset <= maxOffset { hits.append((c, pr.along)) }
+            if pr.offset <= limitOff { hits.append((c, pr.along)) }
         }
         hits.sort { $0.1 < $1.1 }
         var out: [(cam: LiveCam, along: Double)] = []
@@ -189,6 +199,80 @@ public enum LiveCams {
             if out.count >= limit { break }
         }
         return out
+    }
+
+    /** One Windy "nearby" ask along a route: the stretch [from]..[to] meters, and the circle that covers it. */
+    public struct WindyRouteAsk: Equatable, Sendable {
+        public var from: Double
+        public var to: Double
+        public var center: LatLng
+        public var radiusKm: Int
+    }
+
+    /**
+     * The circle around one stretch of [line]: centered halfway along it, wide enough for the whole
+     * stretch (no point on it is farther from its middle than half its length) plus a webcam's
+     * distance off the road.
+     */
+    public static func windyRouteAsk(_ line: [LatLng], cumulative cum: [Double], from: Double, to: Double) -> WindyRouteAsk {
+        let center = Geo.point(along: line, meters: (from + to) / 2, cumulative: cum)
+        let radius = min(250, max(10, Int(((to - from) / 2 / 1000).rounded(.up)) + 5))
+        return WindyRouteAsk(from: from, to: to, center: center, radiusKm: radius)
+    }
+
+    /**
+     * Where to ask Windy about the webcams along [line]: stretches of about 40 km, at most
+     * [maxAsks] (longer stretches on a long trip). Short routes get one ask.
+     */
+    public static func windyRouteAsks(_ line: [LatLng], maxAsks: Int = 8) -> [WindyRouteAsk] {
+        guard line.count >= 2, maxAsks > 0 else { return [] }
+        let cum = Geo.cumulative(line)
+        let total = cum.last ?? 0
+        let count = min(maxAsks, max(1, Int((total / 40_000).rounded(.up))))
+        let step = total / Double(count)
+        return (0..<count).map { windyRouteAsk(line, cumulative: cum, from: step * Double($0), to: step * Double($0 + 1)) }
+    }
+
+    /**
+     * An ask whose answer hit Windy's 50-webcam limit, split into its two halves so the webcams it
+     * left out can be found. Nil when it's already small (about 10 km across), as far as it's worth going.
+     */
+    public static func windySplit(_ ask: WindyRouteAsk, line: [LatLng], cumulative cum: [Double]) -> [WindyRouteAsk]? {
+        guard ask.to - ask.from > 10_000 else { return nil }
+        let mid = (ask.from + ask.to) / 2
+        return [windyRouteAsk(line, cumulative: cum, from: ask.from, to: mid),
+                windyRouteAsk(line, cumulative: cum, from: mid, to: ask.to)]
+    }
+
+    /** What to do with one route ask, given what Windy was already asked in the last few minutes. */
+    public enum WindyPlan: Equatable, Sendable {
+        /** Not asked yet: ask Windy. */
+        case fetch
+        /** Already covered by an answer that had room for every webcam there. */
+        case skip
+        /** Covered, but by an answer that hit the 50 limit: look at these smaller stretches instead. */
+        case closer([WindyRouteAsk])
+    }
+
+    /**
+     * Whether [ask] needs asking: [asked] are earlier asks (center, radius km, and [minReach] > 0
+     * when that answer was full). A full earlier answer still sends the ask's halves on, so a look
+     * that was cut short (another route opened, or the budget ran out) carries on next time.
+     */
+    public static func windyPlan(_ ask: WindyRouteAsk, asked: [(center: LatLng, km: Double, minReach: Double)],
+                                 line: [LatLng], cumulative cum: [Double]) -> WindyPlan {
+        let r = Double(ask.radiusKm)
+        // The same circle, give or take a few meters (a slightly different route there): asked already.
+        func same(_ a: (center: LatLng, km: Double, minReach: Double)) -> Bool {
+            a.center.distance(to: ask.center) < 100 && abs(a.km - r) < 0.5
+        }
+        let covering = asked.filter { ($0.center.distance(to: ask.center) / 1000 + r <= $0.km && r >= $0.minReach) || same($0) }
+        if covering.isEmpty { return .fetch }
+        if covering.contains(where: { $0.minReach == 0 }) { return .skip }
+        if let halves = windySplit(ask, line: line, cumulative: cum) { return .closer(halves) }
+        // As small as it goes: a wider full answer may have left this stretch out, so it's asked
+        // once itself, unless this circle was asked already.
+        return covering.contains(where: same) ? .skip : .fetch
     }
 
     // MARK: Helpers
