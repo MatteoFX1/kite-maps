@@ -228,16 +228,23 @@ fun LiveCamFullScreen(cam: LiveCam, state: LiveCamPhotoState, close: () -> Unit)
 }
 
 /**
- * Before pressing Go: the road cameras along the route, in the order you'll pass them, so you can
- * see the traffic, rain or snow ahead. Hidden when there are none (most routes outside the UK).
+ * Before pressing Go: the road cameras and webcams along the route, in the order you'll pass them,
+ * so you can see the traffic, rain or snow ahead. Hidden when there are none.
  */
 @Composable
 fun RouteLiveCams(model: AppModel, route: Route) {
     val s = AppSettings
     if (!s.liveCams || !s.liveCamsOnRoute) return
-    LaunchedEffect(Unit) { LiveCamStore.ensureLoaded() }
+    val webcams = s.showsWebcams
+    LaunchedEffect(route.id, webcams) {
+        LiveCamStore.ensureLoaded()
+        if (webcams) LiveCamStore.loadWindyRoute(route.id, route.polyline)
+    }
     val version = LiveCamStore.version
-    val list = remember(route.id, version) { LiveCams.along(LiveCamStore.road, route.polyline) }
+    val list = remember(route.id, version, webcams) {
+        val web = if (webcams) LiveCamStore.webcams else emptyList()
+        LiveCams.along(LiveCamStore.road + web, route.polyline, webcamOffset = if (web.isEmpty()) 0.0 else LiveCams.WEBCAM_ROUTE_OFFSET)
+    }
     if (list.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -156,6 +156,46 @@ object LiveCamStore {
         }
     }
 
+    /** The route last asked about, so reopening the same route asks Windy nothing new. */
+    private var windyRouteKey: String? = null
+    private var windyRouteFetch: Job? = null
+
+    /** Every Windy webcam seen in the last while (their photo links are renewed when opened). */
+    val webcams: List<LiveCam> get() = windy.values.map { it.first }
+
+    /**
+     * Before you go: ask Windy about the webcams along a route, a few circles spread along it,
+     * once per route. Stretches already asked about in the last 10 minutes are skipped.
+     */
+    fun loadWindyRoute(key: String, line: List<LatLng>) {
+        if (!WindyKey.present || line.size < 2 || key == windyRouteKey) return
+        if (System.currentTimeMillis() - windyFailedAt < 60_000) return
+        windyRouteKey = key
+        windyRouteFetch?.cancel()
+        val asks = LiveCams.windyRouteAsks(line)
+        val radius = asks.radiusKm.toDouble()
+        windyRouteFetch = scope.launch {
+            for (p in asks.points) {
+                val now = System.currentTimeMillis()
+                windyAsked.removeAll { now - it.at >= 600_000 }
+                if (windyAsked.any { it.center.distanceTo(p) / 1000 + radius <= it.km && radius >= it.minReach }) continue
+                val data = withContext(Dispatchers.IO) { get(LiveCams.windyNearbyUrl(p, asks.radiusKm), mapOf("x-windy-api-key" to WindyKey.VALUE)) }
+                val cams = data?.let { LiveCams.parseWindy(it) }
+                if (data == null || cams == null) {
+                    // Asked again next time the route is shown, after the minute's pause.
+                    windyFailedAt = System.currentTimeMillis()
+                    windyRouteKey = null
+                    return@launch
+                }
+                val t = System.currentTimeMillis()
+                windyAsked += Asked(p, radius, t, if (LiveCams.windyListed(data) >= 50) radius * 0.8 else 0.0)
+                cams.forEach { windy[it.id] = it to t }
+                // Shown as each stretch arrives.
+                bump()
+            }
+        }
+    }
+
     /** The cameras to draw in a box, as the settings want them. */
     fun cams(south: Double, west: Double, north: Double, east: Double, road: Boolean, webcams: Boolean): List<LiveCam> {
         fun inside(p: LatLng) = p.lat in south..north && p.lng in west..east

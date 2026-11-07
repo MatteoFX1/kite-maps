@@ -63,6 +63,11 @@ public struct LiveCam: Hashable, Codable, Sendable, Identifiable {
 /** Reading the camera lists, and which cameras belong on a route. */
 public enum LiveCams {
     public static let openHighwaysURL = URL(string: "https://openhighways.uk/api/cameras")!
+    /** Map zoom from which road cameras show (a city: there are thousands) and webcams (a region). */
+    public static let roadMinZoom = 9.0
+    public static let webcamMinZoom = 6.0
+    /** How far off the route a webcam can be and still count as on it: one in a town you drive through. */
+    public static let webcamRouteOffset = 2500.0
     public static let tflURL = URL(string: "https://api.tfl.gov.uk/Place/Type/JamCam")!
 
     /**
@@ -162,24 +167,28 @@ public enum LiveCams {
     }
 
     /**
-     * The cameras along [line], in the order you'd pass them, at most [limit]: within [maxOffset]
-     * meters of the route, and not two within [spacing] meters of each other along it (a junction
-     * often has four cameras looking at the same traffic).
+     * The cameras along [line], in the order you'd pass them, at most [limit]: road cameras within
+     * [maxOffset] meters of the route, webcams within [webcamOffset] (0 leaves them out: they look
+     * at a town or a view, not at the road), and not two within [spacing] meters of each other
+     * along it (a junction often has four cameras looking at the same traffic).
      */
-    public static func along(_ cams: [LiveCam], line: [LatLng], maxOffset: Double = 120, spacing: Double = 1500,
-                             limit: Int = 12) -> [(cam: LiveCam, along: Double)] {
+    public static func along(_ cams: [LiveCam], line: [LatLng], maxOffset: Double = 120, webcamOffset: Double = 0,
+                             spacing: Double = 1500, limit: Int = 12) -> [(cam: LiveCam, along: Double)] {
         guard line.count >= 2 else { return [] }
         // A cheap box test first: a whole country of cameras against a long route.
         var s = 90.0, n = -90.0, w = 180.0, e = -180.0
         for p in line { s = min(s, p.lat); n = max(n, p.lat); w = min(w, p.lng); e = max(e, p.lng) }
-        let pad = 0.01
+        // Wide enough for the farthest camera allowed, even where a degree of longitude is short.
+        let pad = max(0.01, max(maxOffset, webcamOffset) / 111_000 * 2)
         let cum = Geo.cumulative(line)
         var hits: [(LiveCam, Double)] = []
-        for c in cams where c.source.isRoad {
+        for c in cams {
+            let limitOff = c.source.isRoad ? maxOffset : webcamOffset
+            guard limitOff > 0 else { continue }
             let p = c.location
             guard p.lat >= s - pad, p.lat <= n + pad, p.lng >= w - pad, p.lng <= e + pad else { continue }
             let pr = Geo.project(p, on: line, cumulative: cum)
-            if pr.offset <= maxOffset { hits.append((c, pr.along)) }
+            if pr.offset <= limitOff { hits.append((c, pr.along)) }
         }
         hits.sort { $0.1 < $1.1 }
         var out: [(cam: LiveCam, along: Double)] = []
@@ -189,6 +198,22 @@ public enum LiveCams {
             if out.count >= limit { break }
         }
         return out
+    }
+
+    /**
+     * Where to ask Windy about the webcams along [line]: points spread evenly along it, at most
+     * [maxAsks], and one radius (km) wide enough that the circles touch. Short routes get one ask.
+     */
+    public static func windyRouteAsks(_ line: [LatLng], maxAsks: Int = 8) -> (points: [LatLng], radiusKm: Int) {
+        guard line.count >= 2, maxAsks > 0 else { return ([], 0) }
+        let cum = Geo.cumulative(line)
+        let total = cum.last ?? 0
+        // One ask every 40 km or so, fewer and wider on a long trip.
+        let count = min(maxAsks, max(1, Int((total / 40_000).rounded(.up))))
+        let step = total / Double(count)
+        let points = (0..<count).map { Geo.point(along: line, meters: step * (Double($0) + 0.5), cumulative: cum) }
+        let radius = min(250, max(10, Int((step / 2 / 1000).rounded(.up)) + 5))
+        return (points, radius)
     }
 
     // MARK: Helpers

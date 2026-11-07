@@ -64,6 +64,31 @@ class LiveCamsTests {
         assertEquals(listOf("a", "b", "c"), LiveCams.along(cams, line).map { it.cam.id })
     }
 
+    @Test fun alongRouteAddsWebcamsWhenAsked() {
+        val line = listOf(LatLng(51.0, -1.0), LatLng(51.1, -1.0))
+        fun cam(id: String, lat: Double, lng: Double, s: LiveCam.Source = LiveCam.Source.NATIONAL_HIGHWAYS) =
+            LiveCam(id, s, id, location = LatLng(lat, lng), imageUrl = "https://x/$id.jpg")
+        // "town" is about 1.4 km off the road, "hill" about 7 km off.
+        val cams = listOf(cam("a", 51.01, -1.0), cam("town", 51.05, -0.98, LiveCam.Source.WINDY),
+            cam("hill", 51.08, -0.9, LiveCam.Source.WINDY), cam("c", 51.09, -1.0))
+        assertEquals(listOf("a", "c"), LiveCams.along(cams, line).map { it.cam.id })
+        assertEquals(listOf("a", "town", "c"), LiveCams.along(cams, line, webcamOffset = LiveCams.WEBCAM_ROUTE_OFFSET).map { it.cam.id })
+    }
+
+    @Test fun windyRouteAsksCoverTheRoute() {
+        // About 11 km: one ask in the middle.
+        val short = LiveCams.windyRouteAsks(listOf(LatLng(51.0, -1.0), LatLng(51.1, -1.0)))
+        assertEquals(1, short.points.size)
+        assertTrue(short.radiusKm >= 6)
+        // About 555 km: capped at 8 asks, circles wide enough to touch.
+        val long = LiveCams.windyRouteAsks(listOf(LatLng(50.0, -1.0), LatLng(55.0, -1.0)))
+        assertEquals(8, long.points.size)
+        val gap = long.points[0].distanceTo(long.points[1]) / 1000
+        assertTrue(long.radiusKm * 2 >= gap)
+        assertTrue(long.radiusKm <= 250)
+        assertTrue(LiveCams.windyRouteAsks(listOf(LatLng(51.0, -1.0))).points.isEmpty())
+    }
+
     @Test fun tidyKeepsRoadNumbers() {
         assertEquals("A406 Billet Upass E", LiveCams.tidy("A406 BILLET UPASS E"))
         assertEquals("Romford Rd / Tennyson Rd", LiveCams.tidy("Romford Rd / Tennyson Rd"))

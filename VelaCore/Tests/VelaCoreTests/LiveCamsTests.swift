@@ -66,6 +66,32 @@ final class LiveCamsTests: XCTestCase {
         XCTAssertEqual(got, ["a", "b", "c"])
     }
 
+    func testAlongRouteAddsWebcamsWhenAsked() {
+        let line = [LatLng(51.0, -1.0), LatLng(51.1, -1.0)]
+        func cam(_ id: String, _ lat: Double, _ lng: Double, _ s: LiveCam.Source = .nationalHighways) -> LiveCam {
+            LiveCam(id: id, source: s, name: id, location: LatLng(lat, lng), imageURL: URL(string: "https://x/\(id).jpg")!)
+        }
+        // "town" is about 1.4 km off the road, "hill" about 7 km off.
+        let cams = [cam("a", 51.01, -1.0), cam("town", 51.05, -0.98, .windy), cam("hill", 51.08, -0.9, .windy), cam("c", 51.09, -1.0)]
+        XCTAssertEqual(LiveCams.along(cams, line: line).map(\.cam.id), ["a", "c"])
+        XCTAssertEqual(LiveCams.along(cams, line: line, webcamOffset: LiveCams.webcamRouteOffset).map(\.cam.id), ["a", "town", "c"])
+    }
+
+    func testWindyRouteAsksCoverTheRoute() {
+        // About 11 km: one ask in the middle.
+        let short = LiveCams.windyRouteAsks([LatLng(51.0, -1.0), LatLng(51.1, -1.0)])
+        XCTAssertEqual(short.points.count, 1)
+        XCTAssertGreaterThanOrEqual(Double(short.radiusKm), 6)
+        // About 555 km: capped at 8 asks, circles wide enough to touch.
+        let line = [LatLng(50.0, -1.0), LatLng(55.0, -1.0)]
+        let long = LiveCams.windyRouteAsks(line)
+        XCTAssertEqual(long.points.count, 8)
+        let gap = long.points[0].distance(to: long.points[1]) / 1000
+        XCTAssertGreaterThanOrEqual(Double(long.radiusKm) * 2, gap)
+        XCTAssertLessThanOrEqual(long.radiusKm, 250)
+        XCTAssertTrue(LiveCams.windyRouteAsks([LatLng(51, -1)]).points.isEmpty)
+    }
+
     func testTidyKeepsRoadNumbers() {
         XCTAssertEqual(LiveCams.tidy("A406 BILLET UPASS E"), "A406 Billet Upass E")
         XCTAssertEqual(LiveCams.tidy("Romford Rd / Tennyson Rd"), "Romford Rd / Tennyson Rd")

@@ -2,6 +2,7 @@ package app.kite.core
 
 import java.time.Instant
 import java.util.Locale
+import kotlin.math.ceil
 
 /**
  * A camera that shows a live photo: a road traffic camera (UK) or a scenic webcam (Windy).
@@ -145,26 +146,37 @@ object LiveCams {
     fun windyOneUrl(id: String): String? =
         if (id.startsWith("windy:")) "https://api.windy.com/webcams/api/v3/webcams/${id.removePrefix("windy:")}?include=images,location,urls" else null
 
+    /** Map zoom from which road cameras show (a city: there are thousands) and webcams (a region). */
+    const val ROAD_MIN_ZOOM = 9.0
+    const val WEBCAM_MIN_ZOOM = 6.0
+
+    /** How far off the route a webcam can be and still count as on it: one in a town you drive through. */
+    const val WEBCAM_ROUTE_OFFSET = 2500.0
+
     /** A camera along a route, [along] meters from the start. */
     data class OnRoute(val cam: LiveCam, val along: Double)
 
     /**
-     * The cameras along [line], in the order you'd pass them, at most [limit]: within [maxOffset]
-     * meters of the route, and not two within [spacing] meters of each other along it.
+     * The cameras along [line], in the order you'd pass them, at most [limit]: road cameras within
+     * [maxOffset] meters of the route, webcams within [webcamOffset] (0 leaves them out), and not
+     * two within [spacing] meters of each other along it.
      */
-    fun along(cams: List<LiveCam>, line: List<LatLng>, maxOffset: Double = 120.0, spacing: Double = 1500.0, limit: Int = 12): List<OnRoute> {
+    fun along(cams: List<LiveCam>, line: List<LatLng>, maxOffset: Double = 120.0, webcamOffset: Double = 0.0,
+              spacing: Double = 1500.0, limit: Int = 12): List<OnRoute> {
         if (line.size < 2) return emptyList()
         var s = 90.0; var n = -90.0; var w = 180.0; var e = -180.0
         for (p in line) { s = minOf(s, p.lat); n = maxOf(n, p.lat); w = minOf(w, p.lng); e = maxOf(e, p.lng) }
-        val pad = 0.01
+        // Wide enough for the farthest camera allowed, even where a degree of longitude is short.
+        val pad = maxOf(0.01, maxOf(maxOffset, webcamOffset) / 111_000 * 2)
         val cum = Geo.cumulative(line)
         val hits = ArrayList<OnRoute>()
         for (c in cams) {
-            if (!c.source.isRoad) continue
+            val limitOff = if (c.source.isRoad) maxOffset else webcamOffset
+            if (limitOff <= 0) continue
             val p = c.location
             if (p.lat < s - pad || p.lat > n + pad || p.lng < w - pad || p.lng > e + pad) continue
             val pr = Geo.project(p, line, cum)
-            if (pr.offset <= maxOffset) hits += OnRoute(c, pr.along)
+            if (pr.offset <= limitOff) hits += OnRoute(c, pr.along)
         }
         hits.sortBy { it.along }
         val out = ArrayList<OnRoute>()
@@ -175,6 +187,25 @@ object LiveCams {
             if (out.size >= limit) break
         }
         return out
+    }
+
+    /** Where to ask Windy about the webcams along a route: points spread along it, and one radius (km) that joins them up. */
+    data class RouteAsks(val points: List<LatLng>, val radiusKm: Int)
+
+    /**
+     * Where to ask Windy about the webcams along [line]: points spread evenly along it, at most
+     * [maxAsks], and one radius (km) wide enough that the circles touch. Short routes get one ask.
+     */
+    fun windyRouteAsks(line: List<LatLng>, maxAsks: Int = 8): RouteAsks {
+        if (line.size < 2 || maxAsks <= 0) return RouteAsks(emptyList(), 0)
+        val cum = Geo.cumulative(line)
+        val total = cum.last()
+        // One ask every 40 km or so, fewer and wider on a long trip.
+        val count = minOf(maxAsks, maxOf(1, ceil(total / 40_000).toInt()))
+        val step = total / count
+        val points = (0 until count).map { Geo.point(line, step * (it + 0.5), cum) }
+        val radius = minOf(250, maxOf(10, ceil(step / 2 / 1000).toInt() + 5))
+        return RouteAsks(points, radius)
     }
 
     internal fun valid(lat: Double, lng: Double) = lat in -90.0..90.0 && lng in -180.0..180.0 && !(lat == 0.0 && lng == 0.0)

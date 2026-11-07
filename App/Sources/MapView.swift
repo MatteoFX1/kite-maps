@@ -286,16 +286,16 @@ struct VelaMapView: UIViewRepresentable {
             sigs.minimumZoomLevel = 14
             style.addLayer(sigs)
 
-            // Live camera photos (road cameras and Windy webcams), from zoom 9 in, under the speed cameras.
-            // Overlapping dots hide each other, so a city full of cameras stays readable when zoomed out.
+            // Live camera photos, under the speed cameras: Windy webcams from zoom 6 (a region), road
+            // cameras from zoom 9 (a city). Overlapping dots hide each other, so zoomed out stays readable.
             let liveSrc = MLNShapeSource(identifier: "vela-livecams", shape: nil, options: nil)
             style.addSource(liveSrc)
             let live = MLNSymbolStyleLayer(identifier: "vela-livecams", source: liveSrc)
             live.iconImageName = NSExpression(forKeyPath: "icon")
             live.iconAllowsOverlap = NSExpression(forConstantValue: false)
             live.iconPadding = NSExpression(forConstantValue: 2)
-            live.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 9, 0.7, 13, 0.9, 16, 1.05])
-            live.minimumZoomLevel = 9
+            live.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 6, 0.6, 9, 0.7, 13, 0.9, 16, 1.05])
+            live.minimumZoomLevel = Float(LiveCams.webcamMinZoom)
             style.addLayer(live)
 
             // Speed cameras and plate readers, from zoom 12 in.
@@ -538,19 +538,22 @@ struct VelaMapView: UIViewRepresentable {
         private func renderLiveCams(_ map: MLNMapView, _ style: MLNStyle) {
             let s = model.settings
             let store = LiveCamStore.shared
-            let on = model.nav == nil && map.zoomLevel >= 9 && (s.showsRoadCams || s.showsWebcams)
+            // Road cameras only from a city's zoom (there are thousands); webcams from a region's.
+            let roadNow = s.showsRoadCams && map.zoomLevel >= LiveCams.roadMinZoom
+            let webNow = s.showsWebcams && map.zoomLevel >= LiveCams.webcamMinZoom
+            let on = model.nav == nil && (roadNow || webNow)
             let b = map.visibleCoordinateBounds
             let dLat = (b.ne.latitude - b.sw.latitude) * 0.25, dLng = (b.ne.longitude - b.sw.longitude) * 0.25
             // Redrawn when the list changes, or the map leaves the box drawn last time.
             let box = (s: b.sw.latitude - dLat, w: b.sw.longitude - dLng, n: b.ne.latitude + dLat, e: b.ne.longitude + dLng)
             let inside = liveBox.map { b.sw.latitude >= $0.s && b.ne.latitude <= $0.n && b.sw.longitude >= $0.w && b.ne.longitude <= $0.e } ?? false
-            let key = "\(on)\(s.showsRoadCams)\(s.showsWebcams)\(store.version)"
+            let key = "\(on)\(roadNow)\(webNow)\(store.version)"
             guard key != lastLiveKey || (on && !inside) else { return }
             lastLiveKey = key
             liveBox = on ? (box.s - dLat, box.w - dLng, box.n + dLat, box.e + dLng) : nil
             var features: [MLNPointFeature] = []
             if on, let lb = liveBox {
-                for c in store.cams(south: lb.s, west: lb.w, north: lb.n, east: lb.e, road: s.showsRoadCams, webcams: s.showsWebcams) {
+                for c in store.cams(south: lb.s, west: lb.w, north: lb.n, east: lb.e, road: roadNow, webcams: webNow) {
                     let f = MLNPointFeature()
                     f.coordinate = CLLocationCoordinate2D(latitude: c.location.lat, longitude: c.location.lng)
                     f.attributes = ["id": c.id, "icon": c.source.isRoad ? "livecam-road" : "livecam-web"]
@@ -565,7 +568,7 @@ struct VelaMapView: UIViewRepresentable {
             let s = model.settings
             guard model.nav == nil, s.liveCams else { return }
             if s.showsRoadCams || s.liveCamsOnRoute { LiveCamStore.shared.ensureLoaded() }
-            guard s.showsWebcams, map.zoomLevel >= 8 else { return }
+            guard s.showsWebcams, map.zoomLevel >= LiveCams.webcamMinZoom else { return }
             let b = map.visibleCoordinateBounds
             let c = LatLng((b.sw.latitude + b.ne.latitude) / 2, (b.sw.longitude + b.ne.longitude) / 2)
             let span = LatLng(b.sw.latitude, b.sw.longitude).distance(to: LatLng(b.ne.latitude, b.ne.longitude)) / 1000
