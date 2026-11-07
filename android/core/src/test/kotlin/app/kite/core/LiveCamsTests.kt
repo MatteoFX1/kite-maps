@@ -136,6 +136,14 @@ class LiveCamsTests {
         // Then not again, even though its own answer was full too.
         asked += LiveCams.WindyAsked(ask.center, ask.radiusKm.toDouble(), ask.radiusKm * 0.8)
         assertEquals(LiveCams.WindyPlan.Skip, LiveCams.windyPlan(ask, asked, line, cum))
+        // A reroute 50 m over makes nearly the same circle: not asked again.
+        val shifted = line.map { LatLng(it.lat, it.lng + 0.0007) }
+        val again = LiveCams.windyRouteAsks(shifted)[0]
+        assertTrue(again.center.distanceTo(ask.center) > 30)
+        assertEquals(LiveCams.WindyPlan.Skip, LiveCams.windyPlan(again, asked, shifted, Geo.cumulative(shifted)))
+        // Nor when the earlier answer had room to spare.
+        assertEquals(LiveCams.WindyPlan.Skip, LiveCams.windyPlan(again, listOf(LiveCams.WindyAsked(ask.center, ask.radiusKm.toDouble(), 0.0)),
+            shifted, Geo.cumulative(shifted)))
     }
 
     @Test fun alongRouteFindsWebcamsFarNorth() {

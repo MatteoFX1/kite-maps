@@ -138,6 +138,14 @@ final class LiveCamsTests: XCTestCase {
         // Then not again, even though its own answer was full too.
         asked.append((ask.center, Double(ask.radiusKm), Double(ask.radiusKm) * 0.8))
         XCTAssertEqual(LiveCams.windyPlan(ask, asked: asked, line: line, cumulative: cum), .skip)
+        // A reroute 50 m over makes nearly the same circle: not asked again.
+        let shifted = line.map { LatLng($0.lat, $0.lng + 0.0007) }
+        let again = LiveCams.windyRouteAsks(shifted)[0]
+        XCTAssertGreaterThan(again.center.distance(to: ask.center), 30)
+        XCTAssertEqual(LiveCams.windyPlan(again, asked: asked, line: shifted, cumulative: Geo.cumulative(shifted)), .skip)
+        // Nor when the earlier answer had room to spare.
+        XCTAssertEqual(LiveCams.windyPlan(again, asked: [(ask.center, Double(ask.radiusKm), 0)], line: shifted,
+                                          cumulative: Geo.cumulative(shifted)), .skip)
     }
 
     func testAlongRouteFindsWebcamsFarNorth() {

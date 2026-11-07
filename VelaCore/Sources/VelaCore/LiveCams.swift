@@ -262,14 +262,17 @@ public enum LiveCams {
     public static func windyPlan(_ ask: WindyRouteAsk, asked: [(center: LatLng, km: Double, minReach: Double)],
                                  line: [LatLng], cumulative cum: [Double]) -> WindyPlan {
         let r = Double(ask.radiusKm)
-        let covering = asked.filter { $0.center.distance(to: ask.center) / 1000 + r <= $0.km && r >= $0.minReach }
+        // The same circle, give or take a few meters (a slightly different route there): asked already.
+        func same(_ a: (center: LatLng, km: Double, minReach: Double)) -> Bool {
+            a.center.distance(to: ask.center) < 100 && abs(a.km - r) < 0.5
+        }
+        let covering = asked.filter { ($0.center.distance(to: ask.center) / 1000 + r <= $0.km && r >= $0.minReach) || same($0) }
         if covering.isEmpty { return .fetch }
         if covering.contains(where: { $0.minReach == 0 }) { return .skip }
         if let halves = windySplit(ask, line: line, cumulative: cum) { return .closer(halves) }
         // As small as it goes: a wider full answer may have left this stretch out, so it's asked
-        // once itself, unless this very ask was made already.
-        let asked = covering.contains { $0.center.distance(to: ask.center) < 100 && abs($0.km - r) < 0.5 }
-        return asked ? .skip : .fetch
+        // once itself, unless this circle was asked already.
+        return covering.contains(where: same) ? .skip : .fetch
     }
 
     // MARK: Helpers
