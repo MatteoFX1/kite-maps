@@ -66,6 +66,96 @@ final class LiveCamsTests: XCTestCase {
         XCTAssertEqual(got, ["a", "b", "c"])
     }
 
+    func testAlongRouteAddsWebcamsWhenAsked() {
+        let line = [LatLng(51.0, -1.0), LatLng(51.1, -1.0)]
+        func cam(_ id: String, _ lat: Double, _ lng: Double, _ s: LiveCam.Source = .nationalHighways) -> LiveCam {
+            LiveCam(id: id, source: s, name: id, location: LatLng(lat, lng), imageURL: URL(string: "https://x/\(id).jpg")!)
+        }
+        // "town" is about 1.4 km off the road, "hill" about 7 km off.
+        let cams = [cam("a", 51.01, -1.0), cam("town", 51.05, -0.98, .windy), cam("hill", 51.08, -0.9, .windy), cam("c", 51.09, -1.0)]
+        XCTAssertEqual(LiveCams.along(cams, line: line).map(\.cam.id), ["a", "c"])
+        XCTAssertEqual(LiveCams.along(cams, line: line, webcamOffset: LiveCams.webcamRouteOffset).map(\.cam.id), ["a", "town", "c"])
+    }
+
+    func testWindyRouteAsksCoverTheRoute() {
+        // About 11 km: one ask in the middle.
+        let short = LiveCams.windyRouteAsks([LatLng(51.0, -1.0), LatLng(51.1, -1.0)])
+        XCTAssertEqual(short.count, 1)
+        XCTAssertGreaterThanOrEqual(Double(short[0].radiusKm), 6)
+        // About 555 km: capped at 8 asks, end to end, each circle wide enough for its stretch.
+        let line = [LatLng(50.0, -1.0), LatLng(55.0, -1.0)]
+        let long = LiveCams.windyRouteAsks(line)
+        XCTAssertEqual(long.count, 8)
+        XCTAssertEqual(long.first?.from, 0)
+        XCTAssertEqual(long.last?.to ?? 0, Geo.length(line), accuracy: 1)
+        for a in long {
+            XCTAssertGreaterThanOrEqual(Double(a.radiusKm) * 1000, a.center.distance(to: Geo.point(along: line, meters: a.from)))
+            XCTAssertLessThanOrEqual(a.radiusKm, 250)
+        }
+        XCTAssertTrue(LiveCams.windyRouteAsks([LatLng(51, -1)]).isEmpty)
+    }
+
+    func testWindySplitHalvesAFullAsk() {
+        let line = [LatLng(50.0, -1.0), LatLng(51.0, -1.0)]
+        let cum = Geo.cumulative(line)
+        let ask = LiveCams.windyRouteAsks(line)[0]
+        let halves = LiveCams.windySplit(ask, line: line, cumulative: cum)!
+        XCTAssertEqual(halves.count, 2)
+        XCTAssertEqual(halves[0].to, halves[1].from)
+        XCTAssertLessThan(halves[0].radiusKm, ask.radiusKm)
+        // Small enough already: not split again.
+        XCTAssertNil(LiveCams.windySplit(LiveCams.windyRouteAsk(line, cumulative: cum, from: 0, to: 8000), line: line, cumulative: cum))
+    }
+
+    func testWindyPlanCarriesOnAfterAnInterruptedLook() {
+        let line = [LatLng(50.0, -1.0), LatLng(50.36, -1.0)]
+        let cum = Geo.cumulative(line)
+        let parent = LiveCams.windyRouteAsks(line)[0]
+        var asked: [(center: LatLng, km: Double, minReach: Double)] = []
+        XCTAssertEqual(LiveCams.windyPlan(parent, asked: asked, line: line, cumulative: cum), .fetch)
+        // Its answer was full; then the look was cut short before the halves were asked.
+        asked.append((parent.center, Double(parent.radiusKm), Double(parent.radiusKm) * 0.8))
+        // Shown again: the full answer sends its halves on instead of counting as done.
+        guard case .closer(let halves) = LiveCams.windyPlan(parent, asked: asked, line: line, cumulative: cum) else {
+            return XCTFail("a full answer should send its halves on")
+        }
+        XCTAssertEqual(halves.count, 2)
+        XCTAssertEqual(LiveCams.windyPlan(halves[0], asked: asked, line: line, cumulative: cum), .fetch)
+        // Once a half has its own answer with room to spare, it's done.
+        asked.append((halves[0].center, Double(halves[0].radiusKm), 0))
+        XCTAssertEqual(LiveCams.windyPlan(halves[0], asked: asked, line: line, cumulative: cum), .skip)
+        XCTAssertEqual(LiveCams.windyPlan(halves[1], asked: asked, line: line, cumulative: cum), .fetch)
+    }
+
+    func testWindyPlanAsksASmallStretchAWiderFullAnswerCovered() {
+        // An 8 km route inside a full 15 km map answer: too small to split, so it's asked once itself.
+        let line = [LatLng(51.0, -1.0), LatLng(51.072, -1.0)]
+        let cum = Geo.cumulative(line)
+        let ask = LiveCams.windyRouteAsks(line)[0]
+        var asked: [(center: LatLng, km: Double, minReach: Double)] = [(ask.center, 15, 8)]
+        XCTAssertNil(LiveCams.windySplit(ask, line: line, cumulative: cum))
+        XCTAssertEqual(LiveCams.windyPlan(ask, asked: asked, line: line, cumulative: cum), .fetch)
+        // Then not again, even though its own answer was full too.
+        asked.append((ask.center, Double(ask.radiusKm), Double(ask.radiusKm) * 0.8))
+        XCTAssertEqual(LiveCams.windyPlan(ask, asked: asked, line: line, cumulative: cum), .skip)
+        // A reroute 50 m over makes nearly the same circle: not asked again.
+        let shifted = line.map { LatLng($0.lat, $0.lng + 0.0007) }
+        let again = LiveCams.windyRouteAsks(shifted)[0]
+        XCTAssertGreaterThan(again.center.distance(to: ask.center), 30)
+        XCTAssertEqual(LiveCams.windyPlan(again, asked: asked, line: shifted, cumulative: Geo.cumulative(shifted)), .skip)
+        // Nor when the earlier answer had room to spare.
+        XCTAssertEqual(LiveCams.windyPlan(again, asked: [(ask.center, Double(ask.radiusKm), 0)], line: shifted,
+                                          cumulative: Geo.cumulative(shifted)), .skip)
+    }
+
+    func testAlongRouteFindsWebcamsFarNorth() {
+        // Shetland, 60.5°N: a webcam 2.4 km east of a road running north.
+        let line = [LatLng(60.4, -1.2), LatLng(60.6, -1.2)]
+        let east = -1.2 + 2400 / (111_320 * cos(60.5 * Double.pi / 180))
+        let cams = [LiveCam(id: "w", source: .windy, name: "w", location: LatLng(60.5, east), imageURL: URL(string: "https://x/w.jpg")!)]
+        XCTAssertEqual(LiveCams.along(cams, line: line, webcamOffset: LiveCams.webcamRouteOffset).map(\.cam.id), ["w"])
+    }
+
     func testTidyKeepsRoadNumbers() {
         XCTAssertEqual(LiveCams.tidy("A406 BILLET UPASS E"), "A406 Billet Upass E")
         XCTAssertEqual(LiveCams.tidy("Romford Rd / Tennyson Rd"), "Romford Rd / Tennyson Rd")

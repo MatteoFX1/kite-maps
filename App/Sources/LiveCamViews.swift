@@ -262,8 +262,8 @@ struct LiveCamFullScreen: View {
 }
 
 /**
- * Before pressing Go: the road cameras along the route, in the order you'll pass them, so you can
- * see the traffic, rain or snow ahead. Hidden when there are none (most routes outside the UK).
+ * Before pressing Go: the road cameras and webcams along the route, in the order you'll pass them,
+ * so you can see the traffic, rain or snow ahead. Hidden when there are none.
  */
 struct RouteLiveCams: View {
     @ObservedObject var model: AppModel
@@ -275,7 +275,8 @@ struct RouteLiveCams: View {
     private var cams: [(cam: LiveCam, along: Double)] {
         guard settings.liveCams, settings.liveCamsOnRoute else { return [] }
         _ = store.version
-        return LiveCams.along(store.road, line: route.polyline)
+        let web = settings.showsWebcams ? store.webcams : []
+        return LiveCams.along(store.road + web, line: route.polyline, webcamOffset: web.isEmpty ? 0 : LiveCams.webcamRouteOffset)
     }
 
     var body: some View {
@@ -304,7 +305,12 @@ struct RouteLiveCams: View {
                 }
             }
         }
-        .onAppear { if settings.liveCams && settings.liveCamsOnRoute { store.ensureLoaded() } }
+        // Asked again when the route changes, or a setting it depends on is switched on.
+        .task(id: "\(route.id)|\(settings.liveCams)|\(settings.liveCamsOnRoute)|\(settings.showsWebcams)") {
+            guard settings.liveCams && settings.liveCamsOnRoute else { return }
+            store.ensureLoaded()
+            if settings.showsWebcams { store.loadWindyRoute(route.id.uuidString, line: route.polyline) }
+        }
     }
 }
 

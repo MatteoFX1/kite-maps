@@ -2,6 +2,10 @@ package app.kite.core
 
 import java.time.Instant
 import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.cos
 
 /**
  * A camera that shows a live photo: a road traffic camera (UK) or a scenic webcam (Windy).
@@ -145,26 +149,38 @@ object LiveCams {
     fun windyOneUrl(id: String): String? =
         if (id.startsWith("windy:")) "https://api.windy.com/webcams/api/v3/webcams/${id.removePrefix("windy:")}?include=images,location,urls" else null
 
+    /** Map zoom from which road cameras show (a city: there are thousands) and webcams (a region). */
+    const val ROAD_MIN_ZOOM = 9.0
+    const val WEBCAM_MIN_ZOOM = 6.0
+
+    /** How far off the route a webcam can be and still count as on it: one in a town you drive through. */
+    const val WEBCAM_ROUTE_OFFSET = 2500.0
+
     /** A camera along a route, [along] meters from the start. */
     data class OnRoute(val cam: LiveCam, val along: Double)
 
     /**
-     * The cameras along [line], in the order you'd pass them, at most [limit]: within [maxOffset]
-     * meters of the route, and not two within [spacing] meters of each other along it.
+     * The cameras along [line], in the order you'd pass them, at most [limit]: road cameras within
+     * [maxOffset] meters of the route, webcams within [webcamOffset] (0 leaves them out), and not
+     * two within [spacing] meters of each other along it.
      */
-    fun along(cams: List<LiveCam>, line: List<LatLng>, maxOffset: Double = 120.0, spacing: Double = 1500.0, limit: Int = 12): List<OnRoute> {
+    fun along(cams: List<LiveCam>, line: List<LatLng>, maxOffset: Double = 120.0, webcamOffset: Double = 0.0,
+              spacing: Double = 1500.0, limit: Int = 12): List<OnRoute> {
         if (line.size < 2) return emptyList()
         var s = 90.0; var n = -90.0; var w = 180.0; var e = -180.0
         for (p in line) { s = minOf(s, p.lat); n = maxOf(n, p.lat); w = minOf(w, p.lng); e = maxOf(e, p.lng) }
-        val pad = 0.01
+        // Wide enough for the farthest camera allowed; a degree of longitude shrinks toward the poles.
+        val latPad = maxOf(0.01, maxOf(maxOffset, webcamOffset) / 110_000 * 1.2)
+        val lngPad = latPad / maxOf(cos(maxOf(abs(s), abs(n)) * PI / 180), 0.05)
         val cum = Geo.cumulative(line)
         val hits = ArrayList<OnRoute>()
         for (c in cams) {
-            if (!c.source.isRoad) continue
+            val limitOff = if (c.source.isRoad) maxOffset else webcamOffset
+            if (limitOff <= 0) continue
             val p = c.location
-            if (p.lat < s - pad || p.lat > n + pad || p.lng < w - pad || p.lng > e + pad) continue
+            if (p.lat < s - latPad || p.lat > n + latPad || p.lng < w - lngPad || p.lng > e + lngPad) continue
             val pr = Geo.project(p, line, cum)
-            if (pr.offset <= maxOffset) hits += OnRoute(c, pr.along)
+            if (pr.offset <= limitOff) hits += OnRoute(c, pr.along)
         }
         hits.sortBy { it.along }
         val out = ArrayList<OnRoute>()
@@ -175,6 +191,74 @@ object LiveCams {
             if (out.size >= limit) break
         }
         return out
+    }
+
+    /** One Windy "nearby" ask along a route: the stretch [from]..[to] meters, and the circle that covers it. */
+    data class WindyRouteAsk(val from: Double, val to: Double, val center: LatLng, val radiusKm: Int)
+
+    /**
+     * The circle around one stretch of [line]: centered halfway along it, wide enough for the whole
+     * stretch (no point on it is farther from its middle than half its length) plus a webcam's
+     * distance off the road.
+     */
+    fun windyRouteAsk(line: List<LatLng>, cum: DoubleArray, from: Double, to: Double): WindyRouteAsk {
+        val center = Geo.point(line, (from + to) / 2, cum)
+        val radius = minOf(250, maxOf(10, ceil((to - from) / 2 / 1000).toInt() + 5))
+        return WindyRouteAsk(from, to, center, radius)
+    }
+
+    /**
+     * Where to ask Windy about the webcams along [line]: stretches of about 40 km, at most
+     * [maxAsks] (longer stretches on a long trip). Short routes get one ask.
+     */
+    fun windyRouteAsks(line: List<LatLng>, maxAsks: Int = 8): List<WindyRouteAsk> {
+        if (line.size < 2 || maxAsks <= 0) return emptyList()
+        val cum = Geo.cumulative(line)
+        val total = cum.last()
+        val count = minOf(maxAsks, maxOf(1, ceil(total / 40_000).toInt()))
+        val step = total / count
+        return (0 until count).map { windyRouteAsk(line, cum, step * it, step * (it + 1)) }
+    }
+
+    /**
+     * An ask whose answer hit Windy's 50-webcam limit, split into its two halves so the webcams it
+     * left out can be found. Null when it's already small (about 10 km across), as far as it's worth going.
+     */
+    fun windySplit(ask: WindyRouteAsk, line: List<LatLng>, cum: DoubleArray): List<WindyRouteAsk>? {
+        if (ask.to - ask.from <= 10_000) return null
+        val mid = (ask.from + ask.to) / 2
+        return listOf(windyRouteAsk(line, cum, ask.from, mid), windyRouteAsk(line, cum, mid, ask.to))
+    }
+
+    /** An earlier Windy ask: its circle, and [minReach] > 0 when its answer was full (the 50 limit). */
+    data class WindyAsked(val center: LatLng, val km: Double, val minReach: Double)
+
+    /** What to do with one route ask, given what Windy was already asked in the last few minutes. */
+    sealed class WindyPlan {
+        /** Not asked yet: ask Windy. */
+        object Fetch : WindyPlan()
+        /** Already covered by an answer that had room for every webcam there. */
+        object Skip : WindyPlan()
+        /** Covered, but by an answer that hit the 50 limit: look at these smaller stretches instead. */
+        data class Closer(val asks: List<WindyRouteAsk>) : WindyPlan()
+    }
+
+    /**
+     * Whether [ask] needs asking, given the [asked] circles. A full earlier answer still sends the
+     * ask's halves on, so a look that was cut short (another route opened, or the budget ran out)
+     * carries on next time.
+     */
+    fun windyPlan(ask: WindyRouteAsk, asked: List<WindyAsked>, line: List<LatLng>, cum: DoubleArray): WindyPlan {
+        val r = ask.radiusKm.toDouble()
+        // The same circle, give or take a few meters (a slightly different route there): asked already.
+        fun same(a: WindyAsked) = a.center.distanceTo(ask.center) < 100 && abs(a.km - r) < 0.5
+        val covering = asked.filter { (it.center.distanceTo(ask.center) / 1000 + r <= it.km && r >= it.minReach) || same(it) }
+        if (covering.isEmpty()) return WindyPlan.Fetch
+        if (covering.any { it.minReach == 0.0 }) return WindyPlan.Skip
+        windySplit(ask, line, cum)?.let { return WindyPlan.Closer(it) }
+        // As small as it goes: a wider full answer may have left this stretch out, so it's asked
+        // once itself, unless this circle was asked already.
+        return if (covering.any { same(it) }) WindyPlan.Skip else WindyPlan.Fetch
     }
 
     internal fun valid(lat: Double, lng: Double) = lat in -90.0..90.0 && lng in -180.0..180.0 && !(lat == 0.0 && lng == 0.0)
