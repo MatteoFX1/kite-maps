@@ -183,15 +183,20 @@ final class LiveCamStore: ObservableObject {
               Date().timeIntervalSince(windyFailedAt) > 60 else { return }
         windyRouteKey = key
         windyRouteFetch?.cancel()
-        let asks = LiveCams.windyRouteAsks(line)
-        let radius = Double(asks.radiusKm)
         windyRouteFetch = Task { [weak self] in
-            for p in asks.points {
+            let cum = Geo.cumulative(line)
+            var queue = LiveCams.windyRouteAsks(line)
+            // A full answer (Windy's 50 limit) is split into halves and asked again, up to this many asks in all.
+            var budget = 16
+            while !queue.isEmpty, budget > 0 {
+                let ask = queue.removeFirst()
                 guard let self, !Task.isCancelled else { return }
+                let radius = Double(ask.radiusKm)
                 let now = Date()
                 self.windyAsked.removeAll { now.timeIntervalSince($0.at) >= 600 }
-                if self.windyAsked.contains(where: { $0.center.distance(to: p) / 1000 + radius <= $0.km && radius >= $0.minReach }) { continue }
-                let data = await Self.get(LiveCams.windyNearbyURL(p, radiusKm: asks.radiusKm), headers: ["x-windy-api-key": WindyKey.value])
+                if self.windyAsked.contains(where: { $0.center.distance(to: ask.center) / 1000 + radius <= $0.km && radius >= $0.minReach }) { continue }
+                budget -= 1
+                let data = await Self.get(LiveCams.windyNearbyURL(ask.center, radiusKm: ask.radiusKm), headers: ["x-windy-api-key": WindyKey.value])
                 guard !Task.isCancelled else { return }
                 guard let data, let cams = LiveCams.parseWindy(data) else {
                     // Asked again next time the route is shown, after the minute's pause.
@@ -200,8 +205,10 @@ final class LiveCamStore: ObservableObject {
                     return
                 }
                 let t = Date()
-                self.windyAsked.append((p, radius, t, LiveCams.windyListed(data) >= 50 ? radius * 0.8 : 0))
+                let full = LiveCams.windyListed(data) >= 50
+                self.windyAsked.append((ask.center, radius, t, full ? radius * 0.8 : 0))
                 for c in cams { self.windy[c.id] = (c, t) }
+                if full, let halves = LiveCams.windySplit(ask, line: line, cumulative: cum) { queue += halves }
                 // Shown as each stretch arrives.
                 self.version += 1
             }

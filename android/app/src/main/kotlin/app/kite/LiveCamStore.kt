@@ -172,14 +172,19 @@ object LiveCamStore {
         if (System.currentTimeMillis() - windyFailedAt < 60_000) return
         windyRouteKey = key
         windyRouteFetch?.cancel()
-        val asks = LiveCams.windyRouteAsks(line)
-        val radius = asks.radiusKm.toDouble()
         windyRouteFetch = scope.launch {
-            for (p in asks.points) {
+            val cum = Geo.cumulative(line)
+            val queue = ArrayDeque(LiveCams.windyRouteAsks(line))
+            // A full answer (Windy's 50 limit) is split into halves and asked again, up to this many asks in all.
+            var budget = 16
+            while (queue.isNotEmpty() && budget > 0) {
+                val ask = queue.removeFirst()
+                val radius = ask.radiusKm.toDouble()
                 val now = System.currentTimeMillis()
                 windyAsked.removeAll { now - it.at >= 600_000 }
-                if (windyAsked.any { it.center.distanceTo(p) / 1000 + radius <= it.km && radius >= it.minReach }) continue
-                val data = withContext(Dispatchers.IO) { get(LiveCams.windyNearbyUrl(p, asks.radiusKm), mapOf("x-windy-api-key" to WindyKey.VALUE)) }
+                if (windyAsked.any { it.center.distanceTo(ask.center) / 1000 + radius <= it.km && radius >= it.minReach }) continue
+                budget--
+                val data = withContext(Dispatchers.IO) { get(LiveCams.windyNearbyUrl(ask.center, ask.radiusKm), mapOf("x-windy-api-key" to WindyKey.VALUE)) }
                 val cams = data?.let { LiveCams.parseWindy(it) }
                 if (data == null || cams == null) {
                     // Asked again next time the route is shown, after the minute's pause.
@@ -188,8 +193,10 @@ object LiveCamStore {
                     return@launch
                 }
                 val t = System.currentTimeMillis()
-                windyAsked += Asked(p, radius, t, if (LiveCams.windyListed(data) >= 50) radius * 0.8 else 0.0)
+                val full = LiveCams.windyListed(data) >= 50
+                windyAsked += Asked(ask.center, radius, t, if (full) radius * 0.8 else 0.0)
                 cams.forEach { windy[it.id] = it to t }
+                if (full) LiveCams.windySplit(ask, line, cum)?.let { queue.addAll(it) }
                 // Shown as each stretch arrives.
                 bump()
             }

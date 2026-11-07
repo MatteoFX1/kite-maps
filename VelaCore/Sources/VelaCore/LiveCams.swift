@@ -178,15 +178,16 @@ public enum LiveCams {
         // A cheap box test first: a whole country of cameras against a long route.
         var s = 90.0, n = -90.0, w = 180.0, e = -180.0
         for p in line { s = min(s, p.lat); n = max(n, p.lat); w = min(w, p.lng); e = max(e, p.lng) }
-        // Wide enough for the farthest camera allowed, even where a degree of longitude is short.
-        let pad = max(0.01, max(maxOffset, webcamOffset) / 111_000 * 2)
+        // Wide enough for the farthest camera allowed; a degree of longitude shrinks toward the poles.
+        let latPad = max(0.01, max(maxOffset, webcamOffset) / 110_000 * 1.2)
+        let lngPad = latPad / max(cos(max(abs(s), abs(n)) * .pi / 180), 0.05)
         let cum = Geo.cumulative(line)
         var hits: [(LiveCam, Double)] = []
         for c in cams {
             let limitOff = c.source.isRoad ? maxOffset : webcamOffset
             guard limitOff > 0 else { continue }
             let p = c.location
-            guard p.lat >= s - pad, p.lat <= n + pad, p.lng >= w - pad, p.lng <= e + pad else { continue }
+            guard p.lat >= s - latPad, p.lat <= n + latPad, p.lng >= w - lngPad, p.lng <= e + lngPad else { continue }
             let pr = Geo.project(p, on: line, cumulative: cum)
             if pr.offset <= limitOff { hits.append((c, pr.along)) }
         }
@@ -200,20 +201,47 @@ public enum LiveCams {
         return out
     }
 
+    /** One Windy "nearby" ask along a route: the stretch [from]..[to] meters, and the circle that covers it. */
+    public struct WindyRouteAsk: Equatable, Sendable {
+        public var from: Double
+        public var to: Double
+        public var center: LatLng
+        public var radiusKm: Int
+    }
+
     /**
-     * Where to ask Windy about the webcams along [line]: points spread evenly along it, at most
-     * [maxAsks], and one radius (km) wide enough that the circles touch. Short routes get one ask.
+     * The circle around one stretch of [line]: centered halfway along it, wide enough for the whole
+     * stretch (no point on it is farther from its middle than half its length) plus a webcam's
+     * distance off the road.
      */
-    public static func windyRouteAsks(_ line: [LatLng], maxAsks: Int = 8) -> (points: [LatLng], radiusKm: Int) {
-        guard line.count >= 2, maxAsks > 0 else { return ([], 0) }
+    public static func windyRouteAsk(_ line: [LatLng], cumulative cum: [Double], from: Double, to: Double) -> WindyRouteAsk {
+        let center = Geo.point(along: line, meters: (from + to) / 2, cumulative: cum)
+        let radius = min(250, max(10, Int(((to - from) / 2 / 1000).rounded(.up)) + 5))
+        return WindyRouteAsk(from: from, to: to, center: center, radiusKm: radius)
+    }
+
+    /**
+     * Where to ask Windy about the webcams along [line]: stretches of about 40 km, at most
+     * [maxAsks] (longer stretches on a long trip). Short routes get one ask.
+     */
+    public static func windyRouteAsks(_ line: [LatLng], maxAsks: Int = 8) -> [WindyRouteAsk] {
+        guard line.count >= 2, maxAsks > 0 else { return [] }
         let cum = Geo.cumulative(line)
         let total = cum.last ?? 0
-        // One ask every 40 km or so, fewer and wider on a long trip.
         let count = min(maxAsks, max(1, Int((total / 40_000).rounded(.up))))
         let step = total / Double(count)
-        let points = (0..<count).map { Geo.point(along: line, meters: step * (Double($0) + 0.5), cumulative: cum) }
-        let radius = min(250, max(10, Int((step / 2 / 1000).rounded(.up)) + 5))
-        return (points, radius)
+        return (0..<count).map { windyRouteAsk(line, cumulative: cum, from: step * Double($0), to: step * Double($0 + 1)) }
+    }
+
+    /**
+     * An ask whose answer hit Windy's 50-webcam limit, split into its two halves so the webcams it
+     * left out can be found. Nil when it's already small (about 10 km across), as far as it's worth going.
+     */
+    public static func windySplit(_ ask: WindyRouteAsk, line: [LatLng], cumulative cum: [Double]) -> [WindyRouteAsk]? {
+        guard ask.to - ask.from > 10_000 else { return nil }
+        let mid = (ask.from + ask.to) / 2
+        return [windyRouteAsk(line, cumulative: cum, from: ask.from, to: mid),
+                windyRouteAsk(line, cumulative: cum, from: mid, to: ask.to)]
     }
 
     // MARK: Helpers

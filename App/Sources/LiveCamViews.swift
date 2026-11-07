@@ -305,7 +305,8 @@ struct RouteLiveCams: View {
                 }
             }
         }
-        .task(id: route.id) {
+        // Asked again when the route changes, or a setting it depends on is switched on.
+        .task(id: "\(route.id)|\(settings.liveCams)|\(settings.liveCamsOnRoute)|\(settings.showsWebcams)") {
             guard settings.liveCams && settings.liveCamsOnRoute else { return }
             store.ensureLoaded()
             if settings.showsWebcams { store.loadWindyRoute(route.id.uuidString, line: route.polyline) }

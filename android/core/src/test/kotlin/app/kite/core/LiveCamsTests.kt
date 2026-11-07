@@ -78,15 +78,39 @@ class LiveCamsTests {
     @Test fun windyRouteAsksCoverTheRoute() {
         // About 11 km: one ask in the middle.
         val short = LiveCams.windyRouteAsks(listOf(LatLng(51.0, -1.0), LatLng(51.1, -1.0)))
-        assertEquals(1, short.points.size)
-        assertTrue(short.radiusKm >= 6)
-        // About 555 km: capped at 8 asks, circles wide enough to touch.
-        val long = LiveCams.windyRouteAsks(listOf(LatLng(50.0, -1.0), LatLng(55.0, -1.0)))
-        assertEquals(8, long.points.size)
-        val gap = long.points[0].distanceTo(long.points[1]) / 1000
-        assertTrue(long.radiusKm * 2 >= gap)
-        assertTrue(long.radiusKm <= 250)
-        assertTrue(LiveCams.windyRouteAsks(listOf(LatLng(51.0, -1.0))).points.isEmpty())
+        assertEquals(1, short.size)
+        assertTrue(short[0].radiusKm >= 6)
+        // About 555 km: capped at 8 asks, end to end, each circle wide enough for its stretch.
+        val line = listOf(LatLng(50.0, -1.0), LatLng(55.0, -1.0))
+        val long = LiveCams.windyRouteAsks(line)
+        assertEquals(8, long.size)
+        assertEquals(0.0, long.first().from, 0.001)
+        assertEquals(Geo.length(line), long.last().to, 1.0)
+        for (a in long) {
+            assertTrue(a.radiusKm * 1000.0 >= a.center.distanceTo(Geo.point(line, a.from)))
+            assertTrue(a.radiusKm <= 250)
+        }
+        assertTrue(LiveCams.windyRouteAsks(listOf(LatLng(51.0, -1.0))).isEmpty())
+    }
+
+    @Test fun windySplitHalvesAFullAsk() {
+        val line = listOf(LatLng(50.0, -1.0), LatLng(51.0, -1.0))
+        val cum = Geo.cumulative(line)
+        val ask = LiveCams.windyRouteAsks(line)[0]
+        val halves = LiveCams.windySplit(ask, line, cum)!!
+        assertEquals(2, halves.size)
+        assertEquals(halves[0].to, halves[1].from, 0.001)
+        assertTrue(halves[0].radiusKm < ask.radiusKm)
+        // Small enough already: not split again.
+        assertNull(LiveCams.windySplit(LiveCams.windyRouteAsk(line, cum, 0.0, 8000.0), line, cum))
+    }
+
+    @Test fun alongRouteFindsWebcamsFarNorth() {
+        // Shetland, 60.5°N: a webcam 2.4 km east of a road running north.
+        val line = listOf(LatLng(60.4, -1.2), LatLng(60.6, -1.2))
+        val east = -1.2 + 2400 / (111_320 * kotlin.math.cos(60.5 * Math.PI / 180))
+        val cams = listOf(LiveCam("w", LiveCam.Source.WINDY, "w", location = LatLng(60.5, east), imageUrl = "https://x/w.jpg"))
+        assertEquals(listOf("w"), LiveCams.along(cams, line, webcamOffset = LiveCams.WEBCAM_ROUTE_OFFSET).map { it.cam.id })
     }
 
     @Test fun tidyKeepsRoadNumbers() {

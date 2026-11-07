@@ -80,16 +80,39 @@ final class LiveCamsTests: XCTestCase {
     func testWindyRouteAsksCoverTheRoute() {
         // About 11 km: one ask in the middle.
         let short = LiveCams.windyRouteAsks([LatLng(51.0, -1.0), LatLng(51.1, -1.0)])
-        XCTAssertEqual(short.points.count, 1)
-        XCTAssertGreaterThanOrEqual(Double(short.radiusKm), 6)
-        // About 555 km: capped at 8 asks, circles wide enough to touch.
+        XCTAssertEqual(short.count, 1)
+        XCTAssertGreaterThanOrEqual(Double(short[0].radiusKm), 6)
+        // About 555 km: capped at 8 asks, end to end, each circle wide enough for its stretch.
         let line = [LatLng(50.0, -1.0), LatLng(55.0, -1.0)]
         let long = LiveCams.windyRouteAsks(line)
-        XCTAssertEqual(long.points.count, 8)
-        let gap = long.points[0].distance(to: long.points[1]) / 1000
-        XCTAssertGreaterThanOrEqual(Double(long.radiusKm) * 2, gap)
-        XCTAssertLessThanOrEqual(long.radiusKm, 250)
-        XCTAssertTrue(LiveCams.windyRouteAsks([LatLng(51, -1)]).points.isEmpty)
+        XCTAssertEqual(long.count, 8)
+        XCTAssertEqual(long.first?.from, 0)
+        XCTAssertEqual(long.last?.to ?? 0, Geo.length(line), accuracy: 1)
+        for a in long {
+            XCTAssertGreaterThanOrEqual(Double(a.radiusKm) * 1000, a.center.distance(to: Geo.point(along: line, meters: a.from)))
+            XCTAssertLessThanOrEqual(a.radiusKm, 250)
+        }
+        XCTAssertTrue(LiveCams.windyRouteAsks([LatLng(51, -1)]).isEmpty)
+    }
+
+    func testWindySplitHalvesAFullAsk() {
+        let line = [LatLng(50.0, -1.0), LatLng(51.0, -1.0)]
+        let cum = Geo.cumulative(line)
+        let ask = LiveCams.windyRouteAsks(line)[0]
+        let halves = LiveCams.windySplit(ask, line: line, cumulative: cum)!
+        XCTAssertEqual(halves.count, 2)
+        XCTAssertEqual(halves[0].to, halves[1].from)
+        XCTAssertLessThan(halves[0].radiusKm, ask.radiusKm)
+        // Small enough already: not split again.
+        XCTAssertNil(LiveCams.windySplit(LiveCams.windyRouteAsk(line, cumulative: cum, from: 0, to: 8000), line: line, cumulative: cum))
+    }
+
+    func testAlongRouteFindsWebcamsFarNorth() {
+        // Shetland, 60.5°N: a webcam 2.4 km east of a road running north.
+        let line = [LatLng(60.4, -1.2), LatLng(60.6, -1.2)]
+        let east = -1.2 + 2400 / (111_320 * cos(60.5 * Double.pi / 180))
+        let cams = [LiveCam(id: "w", source: .windy, name: "w", location: LatLng(60.5, east), imageURL: URL(string: "https://x/w.jpg")!)]
+        XCTAssertEqual(LiveCams.along(cams, line: line, webcamOffset: LiveCams.webcamRouteOffset).map(\.cam.id), ["w"])
     }
 
     func testTidyKeepsRoadNumbers() {
