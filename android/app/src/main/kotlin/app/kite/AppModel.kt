@@ -603,7 +603,7 @@ class AppModel {
     fun updateAreaRisk(live: List<WazeAlert>) {
         val fix = location.last
         if (!settings.wazeOn || !settings.policeRisk || !settings.wazePolice || location.reducedAccuracy || fix == null ||
-            fix.accuracy > 200 || System.currentTimeMillis() - fix.timeMillis > 120_000) { areaRisk = null; return }
+            fix.accuracy > 200 || fix.ageMs > 120_000) { areaRisk = null; return }
         val here = fix.coord
         val d = 0.0096 / max(cos(here.lat * PI / 180), 0.2) * 0.62
         val line = listOf(LatLng(here.lat, here.lng - d), LatLng(here.lat, here.lng + d))

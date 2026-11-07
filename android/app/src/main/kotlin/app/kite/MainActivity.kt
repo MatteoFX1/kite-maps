@@ -116,7 +116,9 @@ fun KiteScreen(model: AppModel, activity: MainActivity) {
                 s.liveCams, s.liveRoadCams, s.liveWebcams, LiveCamStore.version)
         }.collect { kiteMap.render() }
     }
-    LaunchedEffect(model.nav != null) { activity.keepScreenOn(model.nav != null) }
+    // Kept on while driving; once arrived the phone goes in a pocket, so the screen may sleep (like the iPhone).
+    val screenOn = model.nav?.let { !it.arrived } ?: false
+    LaunchedEffect(screenOn) { activity.keepScreenOn(screenOn) }
     LaunchedEffect(s.wazeOn) { if (!s.wazeOn) WazeWeb.shutDown() }
 
     val ready = s.welcomed && !s.needsWazeChoice

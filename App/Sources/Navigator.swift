@@ -106,7 +106,14 @@ final class Navigator: ObservableObject {
     /** Cameras already warned about, by OSM id: the list is replaced as road data comes in, so not by place in it. */
     private var spokenCameras: Set<Int64> = []
     private var zones: [AverageSpeedZone] = []
-    private var zoneEntry: (index: Int, time: Date, along: Double)?
+    /** The average speed check being driven through: its stretch of the route, and when and where it began. */
+    private var zoneEntry: (start: Double, end: Double, time: Date, along: Double, kmh: Double?)?
+    /**
+     * Rerouted (or a faster way taken) inside an average speed check: when it began, how far was
+     * driven in it, and the rest of its road from the old route, so the same check carries on on
+     * the new route instead of starting again from nothing. Dropped once the car leaves that road.
+     */
+    private var zoneCarry: (time: Date, driven: Double, rest: [LatLng], at: Date, kmh: Double?)?
     private var demoAlerts = false
     private var speeding = SpeedingAlerts()
     private var routeWaze: [(alert: WazeAlert, along: Double)] = []
@@ -582,21 +589,48 @@ final class Navigator: ObservableObject {
     private func checkZones(_ p: RouteTracker.Progress) {
         guard !demoAlerts else { return }
         let at = p.alongMeters
+        // How far along the carried check's road the car is now, while it's still on that road.
+        var carried: Double?
+        if let c = zoneCarry {
+            let on = Geo.project(p.snapped, on: c.rest)
+            if c.rest.count >= 2, on.offset < 40, on.along < Geo.length(c.rest) - 10, Date().timeIntervalSince(c.at) < 600 {
+                carried = c.driven + on.along
+            } else {
+                // Off that road, past its end or long ago: a check from here on is a new one.
+                zoneCarry = nil
+            }
+        }
         let inside = zones.firstIndex { at >= $0.startMeters && at <= $0.endMeters }
-        if let entry = zoneEntry, entry.index != inside {
-            zoneEntry = nil
-            averageCheck = nil
-            if AppSettings.shared.cameraWarnings { speak("Average speed check ended.") }
+        if let entry = zoneEntry {
+            // The list of checks is replaced as road data comes in: the same stretch of road is
+            // the same check, not one ending and another starting ("ended" then "for 2 miles").
+            if let i = inside, zones[i].startMeters <= entry.end, zones[i].endMeters >= entry.start {
+                zoneEntry?.start = zones[i].startMeters
+                zoneEntry?.end = zones[i].endMeters
+                if zones[i].kmh != nil { zoneEntry?.kmh = zones[i].kmh }
+            } else {
+                zoneEntry = nil
+                averageCheck = nil
+                if AppSettings.shared.cameraWarnings { speak("Average speed check ended.") }
+            }
         }
         guard let i = inside else { return }
         let z = zones[i]
         let limit = z.kmh ?? route.speedLimit(at: at)
         if zoneEntry == nil {
-            zoneEntry = (i, Date(), at)
-            if AppSettings.shared.cameraWarnings {
-                chime()
-                speak("Average speed check for \(Fmt.spokenDistance(z.endMeters - at))" + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+            // Rerouted inside a check and still on its road: the same check, carried on quietly
+            // with the average so far (every metre driven in it, the reroute included).
+            // A different limit is a different check, even on a road right next to it.
+            if let c = zoneCarry, let driven = carried, c.kmh == nil || z.kmh == nil || abs(c.kmh! - z.kmh!) < 2 {
+                zoneEntry = (z.startMeters, z.endMeters, c.time, at - driven, z.kmh ?? c.kmh)
+            } else {
+                zoneEntry = (z.startMeters, z.endMeters, Date(), at, z.kmh)
+                if AppSettings.shared.cameraWarnings {
+                    chime()
+                    speak("Average speed check for \(Fmt.spokenDistance(z.endMeters - at))" + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+                }
             }
+            zoneCarry = nil
         }
         guard let entry = zoneEntry else { return }
         let secs = Date().timeIntervalSince(entry.time)
@@ -840,6 +874,12 @@ final class Navigator: ObservableObject {
 
     /** Drives [fresh] from here on: a reroute, or a faster way found on the way. */
     private func adopt(_ fresh: Route) {
+        // Inside an average speed check: keep the rest of its road from the route being left.
+        // With none showing (a second reroute before the cameras came back), one already kept stays.
+        if let e = zoneEntry, let p = progress {
+            zoneCarry = e.end - p.alongMeters > 20
+                ? (e.time, max(0, p.alongMeters - e.along), Geo.slice(route.polyline, from: p.alongMeters, to: e.end), Date(), e.kmh) : nil
+        }
         let firstSteps = fresh.maneuvers.prefix(4).map { "\(Int($0.alongMeters)) m \($0.instruction)" }.joined(separator: " | ")
         Self.trace.info("new route \(Int(fresh.distanceMeters)) m, starts \(String(format: "%.5f,%.5f", fresh.polyline.first?.lat ?? 0, fresh.polyline.first?.lng ?? 0), privacy: .public): \(firstSteps, privacy: .public)")
         route = fresh

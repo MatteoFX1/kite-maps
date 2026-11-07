@@ -13,6 +13,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,7 +25,14 @@ import app.kite.core.LatLng
 data class Fix(
     val lat: Double, val lng: Double,
     val accuracy: Double, val speed: Double, val course: Double, val altitude: Double, val timeMillis: Long,
+    /**
+     * When the fix was taken by the phone's own running timer (not its clock), for how old it is:
+     * a clock a few seconds out showed "GPS lost" with GPS working.
+     */
+    val elapsedMs: Long = SystemClock.elapsedRealtime(),
 ) {
+    /** How old the fix is, in milliseconds. */
+    val ageMs get() = SystemClock.elapsedRealtime() - elapsedMs
     val coord get() = LatLng(lat, lng)
     /** Meters per second; negative when unknown. */
     val speedKnown get() = speed >= 0
@@ -58,11 +66,12 @@ object LocationService {
     private fun handle(loc: Location) {
         if (simulating) return
         if (!loc.hasAccuracy() && loc.provider != LocationManager.GPS_PROVIDER) return
-        if (System.currentTimeMillis() - loc.time > 120_000) return
+        val taken = takenAt(loc)
+        if (SystemClock.elapsedRealtime() - taken > 120_000) return
         // A network fix is only taken while GPS hasn't given anything for a while.
         val prev = last
         if (loc.provider != LocationManager.GPS_PROVIDER && prev != null && prev.accuracy < loc.accuracy &&
-            loc.time - prev.timeMillis < 10_000) return
+            taken - prev.elapsedMs < 10_000) return
         val f = Fix(
             loc.latitude, loc.longitude, loc.accuracy.toDouble(),
             if (loc.hasSpeed()) loc.speed.toDouble() else -1.0,
@@ -70,11 +79,16 @@ object LocationService {
             // used, like the iPhone app: it can look like driving the wrong way.
             if (loc.hasBearing() && loc.hasSpeed() && loc.speed > 0.5 &&
                 (!loc.hasBearingAccuracy() || loc.bearingAccuracyDegrees < 45)) loc.bearing.toDouble() else -1.0,
-            loc.altitude, loc.time,
+            loc.altitude, loc.time, taken,
         )
         last = f
         onUpdate?.invoke(f)
     }
+
+    /** When [loc] was taken, by the phone's running timer; from its clock time only if the timer's is missing. */
+    private fun takenAt(loc: Location): Long =
+        if (loc.elapsedRealtimeNanos > 0) loc.elapsedRealtimeNanos / 1_000_000
+        else SystemClock.elapsedRealtime() - (System.currentTimeMillis() - loc.time)
 
     fun refreshPermission() {
         val c = KiteApp.app
@@ -117,10 +131,11 @@ object LocationService {
         request(if (navigating) 0 else 1000)
         val best = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
             .mapNotNull { p -> runCatching { lm.getLastKnownLocation(p) }.getOrNull() }
-            .maxByOrNull { it.time }
+            .maxByOrNull { it.elapsedRealtimeNanos }
         // At most 2 minutes old, like the iPhone: an older one is somewhere already left.
-        if (best != null && last == null && System.currentTimeMillis() - best.time < 2 * 60_000) {
-            last = Fix(best.latitude, best.longitude, best.accuracy.toDouble(), -1.0, -1.0, best.altitude, best.time)
+        val bestAt = best?.let { takenAt(it) }
+        if (best != null && bestAt != null && last == null && SystemClock.elapsedRealtime() - bestAt < 2 * 60_000) {
+            last = Fix(best.latitude, best.longitude, best.accuracy.toDouble(), -1.0, -1.0, best.altitude, best.time, bestAt)
         }
     }
 
