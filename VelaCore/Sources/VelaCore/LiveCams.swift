@@ -265,7 +265,11 @@ public enum LiveCams {
         let covering = asked.filter { $0.center.distance(to: ask.center) / 1000 + r <= $0.km && r >= $0.minReach }
         if covering.isEmpty { return .fetch }
         if covering.contains(where: { $0.minReach == 0 }) { return .skip }
-        return windySplit(ask, line: line, cumulative: cum).map { WindyPlan.closer($0) } ?? .skip
+        if let halves = windySplit(ask, line: line, cumulative: cum) { return .closer(halves) }
+        // As small as it goes: a wider full answer may have left this stretch out, so it's asked
+        // once itself, unless this very ask was made already.
+        let asked = covering.contains { $0.center.distance(to: ask.center) < 100 && abs($0.km - r) < 0.5 }
+        return asked ? .skip : .fetch
     }
 
     // MARK: Helpers

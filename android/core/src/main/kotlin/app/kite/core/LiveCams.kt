@@ -253,7 +253,11 @@ object LiveCams {
         val covering = asked.filter { it.center.distanceTo(ask.center) / 1000 + r <= it.km && r >= it.minReach }
         if (covering.isEmpty()) return WindyPlan.Fetch
         if (covering.any { it.minReach == 0.0 }) return WindyPlan.Skip
-        return windySplit(ask, line, cum)?.let { WindyPlan.Closer(it) } ?: WindyPlan.Skip
+        windySplit(ask, line, cum)?.let { return WindyPlan.Closer(it) }
+        // As small as it goes: a wider full answer may have left this stretch out, so it's asked
+        // once itself, unless this very ask was made already.
+        val asked = covering.any { it.center.distanceTo(ask.center) < 100 && abs(it.km - r) < 0.5 }
+        return if (asked) WindyPlan.Skip else WindyPlan.Fetch
     }
 
     internal fun valid(lat: Double, lng: Double) = lat in -90.0..90.0 && lng in -180.0..180.0 && !(lat == 0.0 && lng == 0.0)

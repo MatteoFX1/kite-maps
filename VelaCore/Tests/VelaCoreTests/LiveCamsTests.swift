@@ -127,6 +127,19 @@ final class LiveCamsTests: XCTestCase {
         XCTAssertEqual(LiveCams.windyPlan(halves[1], asked: asked, line: line, cumulative: cum), .fetch)
     }
 
+    func testWindyPlanAsksASmallStretchAWiderFullAnswerCovered() {
+        // An 8 km route inside a full 15 km map answer: too small to split, so it's asked once itself.
+        let line = [LatLng(51.0, -1.0), LatLng(51.072, -1.0)]
+        let cum = Geo.cumulative(line)
+        let ask = LiveCams.windyRouteAsks(line)[0]
+        var asked: [(center: LatLng, km: Double, minReach: Double)] = [(ask.center, 15, 8)]
+        XCTAssertNil(LiveCams.windySplit(ask, line: line, cumulative: cum))
+        XCTAssertEqual(LiveCams.windyPlan(ask, asked: asked, line: line, cumulative: cum), .fetch)
+        // Then not again, even though its own answer was full too.
+        asked.append((ask.center, Double(ask.radiusKm), Double(ask.radiusKm) * 0.8))
+        XCTAssertEqual(LiveCams.windyPlan(ask, asked: asked, line: line, cumulative: cum), .skip)
+    }
+
     func testAlongRouteFindsWebcamsFarNorth() {
         // Shetland, 60.5°N: a webcam 2.4 km east of a road running north.
         let line = [LatLng(60.4, -1.2), LatLng(60.6, -1.2)]

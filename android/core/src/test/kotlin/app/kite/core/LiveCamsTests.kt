@@ -125,6 +125,19 @@ class LiveCamsTests {
         assertEquals(LiveCams.WindyPlan.Fetch, LiveCams.windyPlan(halves[1], asked, line, cum))
     }
 
+    @Test fun windyPlanAsksASmallStretchAWiderFullAnswerCovered() {
+        // An 8 km route inside a full 15 km map answer: too small to split, so it's asked once itself.
+        val line = listOf(LatLng(51.0, -1.0), LatLng(51.072, -1.0))
+        val cum = Geo.cumulative(line)
+        val ask = LiveCams.windyRouteAsks(line)[0]
+        val asked = arrayListOf(LiveCams.WindyAsked(ask.center, 15.0, 8.0))
+        assertNull(LiveCams.windySplit(ask, line, cum))
+        assertEquals(LiveCams.WindyPlan.Fetch, LiveCams.windyPlan(ask, asked, line, cum))
+        // Then not again, even though its own answer was full too.
+        asked += LiveCams.WindyAsked(ask.center, ask.radiusKm.toDouble(), ask.radiusKm * 0.8)
+        assertEquals(LiveCams.WindyPlan.Skip, LiveCams.windyPlan(ask, asked, line, cum))
+    }
+
     @Test fun alongRouteFindsWebcamsFarNorth() {
         // Shetland, 60.5°N: a webcam 2.4 km east of a road running north.
         val line = listOf(LatLng(60.4, -1.2), LatLng(60.6, -1.2))
