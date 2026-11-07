@@ -1,0 +1,179 @@
+=== icons
+=== welcome
+=== wazeintro
+=== browse
+=== search
+=== place
+=== directions
+=== nav
+--------- beginning of main
+11-07 18:12:18.259  5365  5365 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:12:21.906  5365  5365 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:12:24.942  5365  5365 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:12:28.934  5365  5365 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:12:31.985  5365  5365 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:12:35.930  5365  5365 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+=== camalert
+--------- beginning of main
+11-07 18:13:05.989  5561  5561 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:13:09.956  5561  5561 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:13:13.966  5561  5561 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+11-07 18:13:17.245  5561  5561 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+11-07 18:13:20.311  5561  5561 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+11-07 18:13:23.971  5561  5561 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+=== allalerts
+--------- beginning of main
+11-07 18:13:54.139  5777  5777 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:13:57.947  5777  5777 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:14:00.970  5777  5777 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+11-07 18:14:04.996  5777  5777 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+11-07 18:14:08.040  5777  5777 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+11-07 18:14:11.965  5777  5777 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+=== roundabout
+--------- beginning of main
+11-07 18:14:33.685  6038  6038 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:14:38.004  6038  6038 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:14:41.105  6038  6038 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+11-07 18:14:45.062  6038  6038 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+11-07 18:14:48.064  6038  6038 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+11-07 18:14:52.009  6038  6038 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+11-07 18:14:55.024  6038  6038 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+11-07 18:14:59.073  6038  6038 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 16
+=== uk
+--------- beginning of main
+11-07 18:15:20.611  6273  6273 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:15:25.042  6273  6273 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:15:28.401  6273  6273 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 25
+11-07 18:15:31.428  6273  6273 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 25
+11-07 18:15:35.021  6273  6273 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 25
+11-07 18:15:38.093  6273  6273 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 25
+11-07 18:15:42.015  6273  6273 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 25
+11-07 18:15:45.021  6273  6273 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 25
+11-07 18:15:48.033  6273  6273 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 25
+=== layers
+=== settings
+=== saved
+=== pickhome
+=== wazemap
+--------- beginning of main
+11-07 18:17:15.772  7016  7016 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:17:37.741  7016  7016 I KiteTrace: waze after 28 s: no answer yet; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api
+11-07 18:17:41.849  7016  7016 I KiteTrace: waze browse: live map failed, drivers' reports 44 (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+=== transit
+--------- beginning of main
+11-07 18:17:49.251  7281  7281 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:17:54.007  7281  7281 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:17:57.642  7281  7281 I KiteTrace: heat map: 2 of 2 tiles at zoom 8
+11-07 18:18:11.470  7281  7281 I KiteTrace: waze browse: live map failed, drivers' reports 8 (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+=== stops
+--------- beginning of main
+11-07 18:18:22.632  7631  7631 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:18:44.863  7631  7631 I KiteTrace: waze browse: live map failed, drivers' reports 8 (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+=== addstop
+--------- beginning of main
+11-07 18:19:06.242  7909  7909 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:19:37.089  7909  7909 I KiteTrace: waze browse: live map failed, drivers' reports 8 (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+=== endtrip
+--------- beginning of main
+11-07 18:19:51.633  8175  8175 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:20:14.729  8175  8175 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:20:18.218  8175  8175 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:20:21.220  8175  8175 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:20:24.244  8175  8175 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:20:27.325  8175  8175 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:20:31.253  8175  8175 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:20:31.814  8175  8175 I KiteTrace: waze browse: live map failed, drivers' reports 8 (Waze: nothing; page: no answer)
+=== wazesettings
+--------- beginning of main
+11-07 18:20:39.733  8441  8441 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== diagnostics
+--------- beginning of main
+11-07 18:20:58.726  8652  8652 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== puckflat
+--------- beginning of main
+11-07 18:21:13.298  8862  8862 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== puckpitch
+--------- beginning of main
+11-07 18:21:35.637  9061  9061 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== rail
+--------- beginning of main
+11-07 18:21:53.337  9265  9265 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:21:55.721  9265  9265 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:21:57.733  9265  9265 I KiteTrace: transit lines: failed at zoom 12 (HTTP 422, 27 bytes in 2363 ms: {"error":"too many routes"})
+=== cameras
+--------- beginning of main
+11-07 18:22:28.598  9535  9535 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:22:31.189  9535  9535 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:22:56.323  9535  9535 I KiteTrace: waze browse: live map failed, drivers' reports 8 (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+=== wazedemo
+--------- beginning of main
+11-07 18:23:03.307  9805  9805 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== wazetap
+--------- beginning of main
+11-07 18:23:36.306 10039 10039 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== longname
+--------- beginning of main
+11-07 18:24:05.201 10248 10248 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:24:27.122 10248 10248 I KiteTrace: waze browse: live map failed, drivers' reports 8 (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+=== longdir
+--------- beginning of main
+11-07 18:24:36.154 10508 10508 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== searchfocus
+--------- beginning of main
+11-07 18:25:10.039 10750 10750 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== locationoff
+--------- beginning of main
+11-07 18:25:38.908 10978 10978 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== transituk
+--------- beginning of main
+11-07 18:26:06.330 11188 11188 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:26:09.411 11188 11188 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:26:15.144 11188 11188 I KiteTrace: heat map: 2 of 2 tiles at zoom 8
+=== wazelink
+--------- beginning of main
+11-07 18:26:39.458 11460 11460 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:26:43.167 11460 11460 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:27:05.202 11460 11460 I KiteTrace: waze browse: live map failed, drivers' reports 8 (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd livemap)
+=== googlelink
+--------- beginning of main
+11-07 18:27:11.224 11697 11697 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:27:17.442 11697 11697 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== mine
+--------- beginning of main
+11-07 18:27:42.112 11965 11965 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== board
+--------- beginning of main
+11-07 18:28:13.208 12193 12193 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== streetview
+--------- beginning of main
+11-07 18:28:45.853 12420 12420 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:28:50.873 12420 12420 I KiteTrace: street view: pano Ym80fPMYZCabrQCY1Zu_UQ thumbnail 403 126 bytes application/json; charset=UTF-8; tile 403 126 bytes
+=== listscroll
+--------- beginning of main
+11-07 18:29:18.294 12686 12686 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+=== wazeroute
+--------- beginning of main
+11-07 18:29:52.960 12940 12940 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:30:16.708 12940 12940 I KiteTrace: waze browse: live map failed, drivers' reports 8 (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+=== livecams
+--------- beginning of main
+11-07 18:30:36.581 13212 13212 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:30:38.124 13212 13212 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:31:19.055 13212 13212 I KiteTrace: waze browse: live map failed, drivers' reports 8 (Waze: nothing; page: no answer)
+=== livecamcard
+--------- beginning of main
+11-07 18:31:39.488 13478 13478 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:31:41.442 13478 13478 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:32:05.107 13478 13478 I KiteTrace: waze browse: live map failed, drivers' reports 8 (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+=== livecamroute
+--------- beginning of main
+11-07 18:32:41.924 13723 13723 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:32:46.870 13723 13723 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:32:51.772 13723 13723 I KiteTrace: heat map: 2 of 2 tiles at zoom 8
+11-07 18:33:08.809 13723 13723 I KiteTrace: waze browse: live map failed, drivers' reports 7 (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+=== livecamroutecard
+--------- beginning of main
+11-07 18:33:46.389 14036 14036 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:33:48.655 14036 14036 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:33:55.718 14036 14036 I KiteTrace: heat map: 2 of 2 tiles at zoom 8
+11-07 18:34:33.842 14036 14036 I KiteTrace: waze browse: live map failed, drivers' reports 7 (Waze: nothing; page: no answer)

@@ -1,0 +1,179 @@
+--------- beginning of main
+11-07 18:43:12.700 15115 15115 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:43:19.882 15115 15115 I KiteTrace: heat map: 2 of 2 tiles at zoom 10
+11-07 18:43:26.371 15115 15115 I KiteVoice: say: Starting route to Select Car Leasing Stadium. In 50 yards, turn left onto Bridge Street.
+11-07 18:43:26.404 15115 15115 I KiteTrace: at 51.45430,-0.97310 along 0 off 25 next 1 in 64 offRoute false speed 0
+11-07 18:43:27.395 15115 15115 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:43:29.635 15115 15115 I KiteTrace: at 51.45404,-0.97302 along 14 off 0 next 1 in 50 offRoute false speed 14
+11-07 18:43:29.640 15115 15115 I KiteVoice: say: Turn left onto Bridge Street
+11-07 18:43:33.111 15115 15115 I KiteTrace: at 51.45387,-0.97356 along 56 off 0 next 1 in 8 offRoute false speed 14
+11-07 18:43:34.671 15115 15115 I KiteVoice: say: In 250 yards, at the roundabout, take the 3rd exit. Use the right lane
+11-07 18:43:36.117 15115 15115 I KiteTrace: at 51.45368,-0.97351 along 84 off 0 next 2 in 225 offRoute false speed 14
+11-07 18:43:39.542 15115 15115 I KiteTrace: at 51.45336,-0.97318 along 126 off 0 next 2 in 183 offRoute false speed 14
+11-07 18:43:42.597 15115 15115 I KiteTrace: at 51.45315,-0.97297 along 154 off 0 next 2 in 155 offRoute false speed 14
+11-07 18:43:46.057 15115 15115 I KiteTrace: at 51.45293,-0.97276 along 182 off 0 next 2 in 127 offRoute false speed 14
+11-07 18:43:46.057 15115 15115 I KiteTrace: waze browse: both failed (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+11-07 18:43:49.061 15115 15115 I KiteTrace: at 51.45261,-0.97247 along 224 off 0 next 2 in 85 offRoute false speed 14
+11-07 18:43:52.066 15115 15115 I KiteTrace: at 51.45230,-0.97214 along 266 off 0 next 2 in 43 offRoute false speed 14
+11-07 18:43:52.068 15115 15115 I KiteVoice: say: At the roundabout, take the 3rd exit
+11-07 18:43:55.107 15115 15115 I KiteTrace: at 51.45199,-0.97178 along 308 off 0 next 3 in 314 offRoute false speed 14
+11-07 18:43:58.110 15115 15115 I KiteTrace: at 51.45183,-0.97129 along 350 off 0 next 3 in 272 offRoute false speed 14
+11-07 18:44:00.170 15115 15115 I KiteVoice: say: In 250 yards, slight left onto A329
+11-07 18:44:01.171 15115 15115 I KiteTrace: at 51.45149,-0.97144 along 392 off 0 next 3 in 230 offRoute false speed 14
+11-07 18:44:04.172 15115 15115 I KiteTrace: at 51.45134,-0.97198 along 434 off 0 next 3 in 188 offRoute false speed 14
+11-07 18:44:07.180 15115 15115 I KiteTrace: at 51.45109,-0.97244 along 476 off 0 next 3 in 146 offRoute false speed 14
+11-07 18:44:10.183 15115 15115 I KiteTrace: at 51.45084,-0.97290 along 518 off 0 next 3 in 104 offRoute false speed 14
+11-07 18:44:13.185 15115 15115 I KiteTrace: at 51.45060,-0.97336 along 560 off 0 next 3 in 62 offRoute false speed 14
+11-07 18:44:14.191 15115 15115 I KiteVoice: say: Slight left onto A329
+11-07 18:44:16.190 15115 15115 I KiteTrace: at 51.45043,-0.97390 along 602 off 0 next 3 in 20 offRoute false speed 14
+11-07 18:44:17.195 15115 15115 I KiteVoice: say: Slight left onto A33
+11-07 18:44:19.196 15115 15115 I KiteTrace: at 51.45039,-0.97449 along 644 off 0 next 5 in 2742 offRoute false speed 14
+11-07 18:44:22.309 15115 15115 I KiteTrace: at 51.45022,-0.97502 along 686 off 0 next 5 in 2700 offRoute false speed 14
+11-07 18:44:25.314 15115 15115 I KiteTrace: at 51.44993,-0.97539 along 728 off 0 next 5 in 2658 offRoute false speed 14
+11-07 18:44:28.334 15115 15115 I KiteTrace: at 51.44956,-0.97545 along 770 off 0 next 5 in 2616 offRoute false speed 14
+11-07 18:44:31.338 15115 15115 I KiteTrace: at 51.44920,-0.97533 along 812 off 0 next 5 in 2574 offRoute false speed 14
+11-07 18:44:34.342 15115 15115 I KiteTrace: at 51.44884,-0.97514 along 854 off 0 next 5 in 2532 offRoute false speed 14
+11-07 18:44:37.407 15115 15115 I KiteTrace: at 51.44848,-0.97495 along 896 off 0 next 5 in 2490 offRoute false speed 14
+11-07 18:44:40.408 15115 15115 I KiteTrace: at 51.44812,-0.97478 along 938 off 0 next 5 in 2448 offRoute false speed 14
+11-07 18:44:43.412 15115 15115 I KiteTrace: at 51.44775,-0.97460 along 980 off 0 next 5 in 2406 offRoute false speed 14
+11-07 18:44:46.415 15115 15115 I KiteTrace: at 51.44739,-0.97446 along 1022 off 0 next 5 in 2364 offRoute false speed 14
+11-07 18:44:51.015 15115 15115 I KiteTrace: at 51.44701,-0.97438 along 1064 off 0 next 5 in 2322 offRoute false speed 14
+11-07 18:44:54.814 15115 15115 I KiteTrace: at 51.44664,-0.97433 along 1106 off 0 next 5 in 2280 offRoute false speed 14
+11-07 18:44:57.964 15115 15115 I KiteTrace: at 51.44639,-0.97433 along 1134 off 0 next 5 in 2252 offRoute false speed 14
+11-07 18:45:02.032 15115 15115 I KiteTrace: at 51.44601,-0.97439 along 1176 off 0 next 5 in 2210 offRoute false speed 14
+11-07 18:45:05.774 15115 15115 I KiteTrace: at 51.44564,-0.97452 along 1218 off 0 next 5 in 2168 offRoute false speed 14
+11-07 18:45:09.703 15115 15115 I KiteTrace: at 51.44528,-0.97471 along 1260 off 0 next 5 in 2126 offRoute false speed 14
+11-07 18:45:10.676 15115 15115 I KiteTrace: waze browse: both failed (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+11-07 18:45:12.711 15115 15115 I KiteTrace: at 51.44494,-0.97496 along 1302 off 0 next 5 in 2084 offRoute false speed 14
+11-07 18:45:15.713 15115 15115 I KiteTrace: at 51.44462,-0.97528 along 1344 off 0 next 5 in 2042 offRoute false speed 14
+11-07 18:45:18.714 15115 15115 I KiteTrace: at 51.44433,-0.97567 along 1386 off 0 next 5 in 2000 offRoute false speed 14
+11-07 18:45:21.716 15115 15115 I KiteTrace: at 51.44406,-0.97609 along 1428 off 0 next 5 in 1958 offRoute false speed 14
+11-07 18:45:24.808 15115 15115 I KiteTrace: at 51.44375,-0.97644 along 1470 off 0 next 5 in 1916 offRoute false speed 14
+11-07 18:45:27.874 15115 15115 I KiteTrace: at 51.44339,-0.97660 along 1512 off 0 next 5 in 1874 offRoute false speed 14
+11-07 18:45:30.878 15115 15115 I KiteTrace: at 51.44302,-0.97667 along 1554 off 0 next 5 in 1832 offRoute false speed 14
+11-07 18:45:33.880 15115 15115 I KiteTrace: at 51.44264,-0.97671 along 1596 off 0 next 5 in 1790 offRoute false speed 14
+11-07 18:45:36.891 15115 15115 I KiteTrace: at 51.44226,-0.97675 along 1638 off 0 next 5 in 1748 offRoute false speed 14
+11-07 18:45:39.891 15115 15115 I KiteTrace: at 51.44189,-0.97678 along 1680 off 0 next 5 in 1706 offRoute false speed 14
+11-07 18:45:42.928 15115 15115 I KiteTrace: at 51.44151,-0.97683 along 1722 off 0 next 5 in 1664 offRoute false speed 14
+11-07 18:45:45.933 15115 15115 I KiteTrace: at 51.44113,-0.97688 along 1764 off 0 next 5 in 1622 offRoute false speed 14
+11-07 18:45:48.997 15115 15115 I KiteTrace: at 51.44076,-0.97693 along 1806 off 0 next 5 in 1580 offRoute false speed 14
+11-07 18:45:52.014 15115 15115 I KiteTrace: at 51.44038,-0.97698 along 1848 off 0 next 5 in 1538 offRoute false speed 14
+11-07 18:45:55.019 15115 15115 I KiteTrace: at 51.44000,-0.97703 along 1890 off 0 next 5 in 1496 offRoute false speed 14
+11-07 18:45:58.023 15115 15115 I KiteTrace: at 51.43963,-0.97708 along 1932 off 0 next 5 in 1454 offRoute false speed 14
+11-07 18:46:01.025 15115 15115 I KiteTrace: at 51.43939,-0.97732 along 1960 off 13 next 5 in 1426 offRoute false speed 14
+11-07 18:46:04.173 15115 15115 I KiteTrace: at 51.43942,-0.97792 along 1960 off 55 next 5 in 1426 offRoute false speed 14
+11-07 18:46:05.234 15115 15115 I KiteTrace: reroute from 51.43942833243259,-0.9781200350304322
+11-07 18:46:05.256 15115 15115 I KiteVoice: say: Rerouting.
+11-07 18:46:06.103 15115 15115 I KiteVoice: say: In half a mile, make a U-turn on A33
+11-07 18:46:07.583 15115 15115 I KiteTrace: at 51.43945,-0.97852 along 0 off 88 next 1 in 584 offRoute true speed 14
+11-07 18:46:11.574 15115 15115 I KiteTrace: at 51.43948,-0.97913 along 0 off 130 next 1 in 584 offRoute true speed 14
+11-07 18:46:14.294 15115 15115 I KiteTrace: reroute from 51.439501469085336,-0.9795275214031733
+11-07 18:46:15.333 15115 15115 I KiteTrace: at 51.43951,-0.97973 along 0 off 172 next 1 in 584 offRoute true speed 14
+11-07 18:46:16.056 15115 15115 I KiteVoice: say: In half a mile, make a U-turn on A33
+11-07 18:46:18.934 15115 15115 I KiteTrace: at 51.43954,-0.98033 along 0 off 214 next 1 in 584 offRoute true speed 14
+11-07 18:46:22.064 15115 15115 I KiteTrace: at 51.43956,-0.98073 along 0 off 242 next 1 in 584 offRoute true speed 14
+11-07 18:46:23.466 15115 15115 I KiteTrace: reroute from 51.43957460573808,-0.9809350100296902
+11-07 18:46:25.018 15115 15115 I KiteVoice: say: In half a mile, make a U-turn on A33
+11-07 18:46:26.269 15115 15115 I KiteTrace: at 51.43952,-0.97724 along 13 off 0 next 1 in 569 offRoute false speed 14
+11-07 18:46:30.133 15115 15115 I KiteTrace: at 51.43989,-0.97719 along 56 off 0 next 1 in 527 offRoute false speed 14
+11-07 18:46:33.762 15115 15115 I KiteTrace: at 51.44027,-0.97714 along 98 off 0 next 1 in 485 offRoute false speed 14
+11-07 18:46:38.078 15115 15115 I KiteTrace: at 51.44064,-0.97709 along 139 off 0 next 1 in 443 offRoute false speed 14
+11-07 18:46:42.516 15115 15115 I KiteTrace: at 51.44102,-0.97703 along 182 off 0 next 1 in 401 offRoute false speed 14
+11-07 18:46:46.746 15115 15115 I KiteTrace: at 51.44140,-0.97698 along 224 off 0 next 1 in 359 offRoute false speed 14
+11-07 18:46:50.264 15115 15115 I KiteTrace: at 51.44165,-0.97695 along 252 off 0 next 1 in 331 offRoute false speed 14
+11-07 18:46:51.098 15115 15115 I KiteTrace: waze browse: both failed (Waze: nothing; page: no answer)
+11-07 18:46:53.358 15115 15115 I KiteTrace: at 51.44202,-0.97689 along 294 off 0 next 1 in 289 offRoute false speed 14
+11-07 18:46:56.360 15115 15115 I KiteTrace: at 51.44240,-0.97684 along 336 off 0 next 1 in 247 offRoute false speed 14
+11-07 18:46:56.363 15115 15115 I KiteVoice: say: In 250 yards, make a U-turn on A33. Use the right lane
+11-07 18:46:59.365 15115 15115 I KiteTrace: at 51.44278,-0.97681 along 378 off 0 next 1 in 205 offRoute false speed 14
+11-07 18:47:02.391 15115 15115 I KiteTrace: at 51.44315,-0.97677 along 420 off 0 next 1 in 163 offRoute false speed 14
+11-07 18:47:05.392 15115 15115 I KiteTrace: at 51.44353,-0.97680 along 462 off 0 next 1 in 121 offRoute false speed 14
+11-07 18:47:08.397 15115 15115 I KiteTrace: at 51.44390,-0.97685 along 504 off 0 next 1 in 79 offRoute false speed 14
+11-07 18:47:10.459 15115 15115 I KiteVoice: say: Make a U-turn on A33
+11-07 18:47:11.461 15115 15115 I KiteTrace: at 51.44422,-0.97662 along 546 off 0 next 1 in 37 offRoute false speed 14
+11-07 18:47:14.461 15115 15115 I KiteTrace: at 51.44401,-0.97630 along 588 off 0 next 2 in 2487 offRoute false speed 14
+11-07 18:47:17.462 15115 15115 I KiteTrace: at 51.44367,-0.97650 along 630 off 0 next 2 in 2445 offRoute false speed 14
+11-07 18:47:20.466 15115 15115 I KiteTrace: at 51.44331,-0.97662 along 672 off 0 next 2 in 2403 offRoute false speed 14
+11-07 18:47:23.467 15115 15115 I KiteTrace: at 51.44293,-0.97668 along 714 off 0 next 2 in 2361 offRoute false speed 14
+11-07 18:47:26.569 15115 15115 I KiteTrace: at 51.44255,-0.97671 along 756 off 0 next 2 in 2319 offRoute false speed 14
+11-07 18:47:29.573 15115 15115 I KiteTrace: at 51.44218,-0.97675 along 798 off 0 next 2 in 2277 offRoute false speed 14
+11-07 18:47:32.575 15115 15115 I KiteTrace: at 51.44180,-0.97679 along 840 off 0 next 2 in 2235 offRoute false speed 14
+11-07 18:47:35.576 15115 15115 I KiteTrace: at 51.44142,-0.97684 along 882 off 0 next 2 in 2193 offRoute false speed 14
+11-07 18:47:38.579 15115 15115 I KiteTrace: at 51.44105,-0.97689 along 924 off 0 next 2 in 2151 offRoute false speed 14
+11-07 18:47:41.601 15115 15115 I KiteTrace: at 51.44067,-0.97694 along 966 off 0 next 2 in 2109 offRoute false speed 14
+11-07 18:47:44.662 15115 15115 I KiteTrace: at 51.44029,-0.97699 along 1008 off 0 next 2 in 2067 offRoute false speed 14
+11-07 18:47:47.771 15115 15115 I KiteTrace: at 51.43992,-0.97704 along 1050 off 0 next 2 in 2025 offRoute false speed 14
+11-07 18:47:50.846 15115 15115 I KiteTrace: at 51.43954,-0.97709 along 1092 off 0 next 2 in 1983 offRoute false speed 14
+11-07 18:47:55.409 15115 15115 I KiteTrace: at 51.43916,-0.97714 along 1134 off 0 next 2 in 1941 offRoute false speed 14
+11-07 18:47:59.556 15115 15115 I KiteTrace: at 51.43879,-0.97719 along 1176 off 0 next 2 in 1899 offRoute false speed 14
+11-07 18:48:02.888 15115 15115 I KiteTrace: at 51.43854,-0.97723 along 1204 off 0 next 2 in 1871 offRoute false speed 14
+11-07 18:48:07.434 15115 15115 I KiteTrace: at 51.43816,-0.97728 along 1246 off 0 next 2 in 1829 offRoute false speed 14
+11-07 18:48:11.466 15115 15115 I KiteTrace: at 51.43778,-0.97733 along 1288 off 0 next 2 in 1787 offRoute false speed 14
+11-07 18:48:15.394 15115 15115 I KiteTrace: at 51.43741,-0.97743 along 1330 off 0 next 2 in 1745 offRoute false speed 14
+11-07 18:48:18.555 15115 15115 I KiteTrace: at 51.43717,-0.97753 along 1358 off 0 next 2 in 1717 offRoute false speed 14
+11-07 18:48:19.598 15115 15115 I KiteTrace: waze browse: both failed (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+11-07 18:48:21.606 15115 15115 I KiteTrace: at 51.43680,-0.97766 along 1400 off 0 next 2 in 1675 offRoute false speed 14
+11-07 18:48:24.609 15115 15115 I KiteTrace: at 51.43642,-0.97768 along 1442 off 0 next 2 in 1633 offRoute false speed 14
+11-07 18:48:27.610 15115 15115 I KiteTrace: at 51.43605,-0.97771 along 1484 off 0 next 2 in 1591 offRoute false speed 14
+11-07 18:48:30.613 15115 15115 I KiteTrace: at 51.43567,-0.97775 along 1526 off 0 next 2 in 1549 offRoute false speed 14
+11-07 18:48:33.615 15115 15115 I KiteTrace: at 51.43529,-0.97781 along 1568 off 0 next 2 in 1507 offRoute false speed 14
+11-07 18:48:36.632 15115 15115 I KiteTrace: at 51.43492,-0.97784 along 1610 off 0 next 2 in 1465 offRoute false speed 14
+11-07 18:48:39.636 15115 15115 I KiteTrace: at 51.43454,-0.97788 along 1652 off 0 next 2 in 1423 offRoute false speed 14
+11-07 18:48:42.638 15115 15115 I KiteTrace: at 51.43416,-0.97793 along 1694 off 0 next 2 in 1381 offRoute false speed 14
+11-07 18:48:45.651 15115 15115 I KiteTrace: at 51.43379,-0.97797 along 1736 off 0 next 2 in 1339 offRoute false speed 14
+11-07 18:48:48.658 15115 15115 I KiteTrace: at 51.43341,-0.97799 along 1778 off 0 next 2 in 1297 offRoute false speed 14
+11-07 18:48:51.663 15115 15115 I KiteTrace: at 51.43303,-0.97803 along 1820 off 0 next 2 in 1255 offRoute false speed 14
+11-07 18:48:53.890 15115 15115 I KiteTrace: heat map: 2 of 2 tiles at zoom 10
+11-07 18:48:54.667 15115 15115 I KiteTrace: at 51.43266,-0.97807 along 1862 off 0 next 2 in 1213 offRoute false speed 14
+11-07 18:48:57.672 15115 15115 I KiteTrace: at 51.43228,-0.97814 along 1904 off 0 next 2 in 1171 offRoute false speed 14
+11-07 18:49:00.677 15115 15115 I KiteTrace: at 51.43191,-0.97822 along 1946 off 0 next 2 in 1129 offRoute false speed 14
+11-07 18:49:03.679 15115 15115 I KiteTrace: at 51.43154,-0.97835 along 1988 off 0 next 2 in 1087 offRoute false speed 14
+11-07 18:49:06.680 15115 15115 I KiteTrace: at 51.43118,-0.97852 along 2030 off 0 next 2 in 1045 offRoute false speed 14
+11-07 18:49:09.680 15115 15115 I KiteTrace: at 51.43082,-0.97873 along 2072 off 0 next 2 in 1003 offRoute false speed 14
+11-07 18:49:10.682 15115 15115 I KiteVoice: say: In three quarters of a mile, at the roundabout, take the 2nd exit onto South Oak Way
+11-07 18:49:12.683 15115 15115 I KiteTrace: at 51.43047,-0.97894 along 2114 off 0 next 2 in 961 offRoute false speed 14
+11-07 18:49:15.686 15115 15115 I KiteTrace: at 51.43011,-0.97914 along 2156 off 0 next 2 in 919 offRoute false speed 14
+11-07 18:49:18.687 15115 15115 I KiteTrace: at 51.42976,-0.97935 along 2198 off 0 next 2 in 877 offRoute false speed 14
+11-07 18:49:21.739 15115 15115 I KiteTrace: at 51.42940,-0.97956 along 2240 off 0 next 2 in 835 offRoute false speed 14
+11-07 18:49:26.107 15115 15115 I KiteTrace: at 51.42905,-0.97976 along 2282 off 0 next 2 in 793 offRoute false speed 14
+11-07 18:49:29.163 15115 15115 I KiteTrace: at 51.42881,-0.97991 along 2310 off 0 next 2 in 765 offRoute false speed 14
+11-07 18:49:33.347 15115 15115 I KiteTrace: at 51.42846,-0.98013 along 2352 off 0 next 2 in 723 offRoute false speed 14
+11-07 18:49:37.637 15115 15115 I KiteTrace: at 51.42811,-0.98036 along 2394 off 0 next 2 in 681 offRoute false speed 14
+11-07 18:49:41.133 15115 15115 I KiteTrace: at 51.42787,-0.98049 along 2422 off 0 next 2 in 653 offRoute false speed 14
+11-07 18:49:44.875 15115 15115 I KiteTrace: at 51.42750,-0.98061 along 2464 off 0 next 2 in 611 offRoute false speed 14
+11-07 18:49:46.763 15115 15115 I KiteTrace: waze browse: both failed (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+11-07 18:49:48.424 15115 15115 I KiteTrace: at 51.42712,-0.98066 along 2506 off 0 next 2 in 569 offRoute false speed 14
+11-07 18:49:51.454 15115 15115 I KiteTrace: at 51.42675,-0.98055 along 2548 off 0 next 2 in 527 offRoute false speed 14
+11-07 18:49:54.455 15115 15115 I KiteTrace: at 51.42638,-0.98042 along 2590 off 0 next 2 in 485 offRoute false speed 14
+11-07 18:49:57.455 15115 15115 I KiteTrace: at 51.42601,-0.98031 along 2632 off 0 next 2 in 443 offRoute false speed 14
+11-07 18:50:00.455 15115 15115 I KiteTrace: at 51.42564,-0.98025 along 2674 off 0 next 2 in 401 offRoute false speed 14
+11-07 18:50:03.458 15115 15115 I KiteTrace: at 51.42527,-0.98018 along 2716 off 0 next 2 in 359 offRoute false speed 14
+11-07 18:50:05.172 15115 15115 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:50:06.488 15115 15115 I KiteTrace: at 51.42490,-0.98003 along 2758 off 0 next 2 in 317 offRoute false speed 14
+11-07 18:50:09.531 15115 15115 I KiteTrace: at 51.42455,-0.97981 along 2800 off 0 next 2 in 275 offRoute false speed 14
+11-07 18:50:11.537 15115 15115 I KiteVoice: say: In 250 yards, at the roundabout, take the 2nd exit onto South Oak Way. Use the right lane
+11-07 18:50:12.537 15115 15115 I KiteTrace: at 51.42420,-0.97957 along 2842 off 0 next 2 in 233 offRoute false speed 14
+11-07 18:50:15.543 15115 15115 I KiteTrace: at 51.42386,-0.97933 along 2884 off 0 next 2 in 191 offRoute false speed 14
+11-07 18:50:18.601 15115 15115 I KiteTrace: at 51.42350,-0.97912 along 2926 off 0 next 2 in 149 offRoute false speed 14
+11-07 18:50:21.647 15115 15115 I KiteTrace: at 51.42314,-0.97894 along 2968 off 0 next 2 in 107 offRoute false speed 14
+11-07 18:50:24.671 15115 15115 I KiteTrace: at 51.42278,-0.97881 along 3010 off 0 next 2 in 65 offRoute false speed 14
+11-07 18:50:25.673 15115 15115 I KiteVoice: say: At the roundabout, take the 2nd exit onto South Oak Way
+11-07 18:50:27.678 15115 15115 I KiteTrace: at 51.42240,-0.97880 along 3052 off 0 next 2 in 23 offRoute false speed 14
+11-07 18:50:30.680 15115 15115 I KiteTrace: at 51.42206,-0.97866 along 3094 off 0 next 3 in 37 offRoute false speed 14
+11-07 18:50:33.683 15115 15115 I KiteTrace: at 51.42192,-0.97911 along 3136 off 0 next 4 in 84 offRoute false speed 14
+11-07 18:50:36.727 15115 15115 I KiteTrace: at 51.42179,-0.97967 along 3178 off 0 next 4 in 42 offRoute false speed 14
+11-07 18:50:36.729 15115 15115 I KiteVoice: say: At the roundabout, take the 2nd exit onto Hurst Way
+11-07 18:50:39.798 15115 15115 I KiteTrace: at 51.42152,-0.98008 along 3220 off 0 next 5 in 59 offRoute false speed 14
+11-07 18:50:42.802 15115 15115 I KiteTrace: at 51.42134,-0.98049 along 3262 off 0 next 5 in 17 offRoute false speed 14
+11-07 18:50:43.806 15115 15115 I KiteVoice: say: In 200 yards, turn right to stay on Hurst Way
+11-07 18:50:45.819 15115 15115 I KiteTrace: at 51.42148,-0.98099 along 3304 off 0 next 6 in 150 offRoute false speed 14
+11-07 18:50:47.424 15115 15115 I KiteTrace: heat map: 2 of 2 tiles at zoom 10
+11-07 18:50:48.821 15115 15115 I KiteTrace: at 51.42129,-0.98150 along 3346 off 0 next 6 in 108 offRoute false speed 14
+11-07 18:50:49.622 15115 15115 I KiteTrace: heat map: 1 of 1 tiles at zoom 10
+11-07 18:50:52.075 15115 15115 I KiteTrace: at 51.42116,-0.98207 along 3388 off 0 next 6 in 66 offRoute false speed 14
+11-07 18:50:53.517 15115 15115 I KiteVoice: say: Turn right to stay on Hurst Way
+11-07 18:50:55.486 15115 15115 I KiteTrace: at 51.42116,-0.98247 along 3416 off 0 next 6 in 38 offRoute false speed 14
+11-07 18:50:58.575 15115 15115 I KiteTrace: at 51.42123,-0.98285 along 3444 off 0 next 6 in 10 offRoute false speed 14
+11-07 18:51:00.524 15115 15115 I KiteVoice: say: You have arrived at Select Car Leasing Stadium.
+11-07 18:51:01.894 15115 15115 I KiteTrace: test drive over: still driving
+11-07 18:51:15.381 15115 15115 I KiteTrace: waze browse: both failed (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)

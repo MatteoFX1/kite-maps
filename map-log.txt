@@ -1,0 +1,7 @@
+--------- beginning of main
+11-07 18:43:07.287 15115 15168 I Mbgl    : {RenderThread 57}[General]: GPU Identifier: Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))
+11-07 18:51:30.049 16197 16249 I Mbgl    : {RenderThread 57}[General]: GPU Identifier: Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))
+11-07 18:51:47.234 16432 16478 I Mbgl    : {RenderThread 57}[General]: GPU Identifier: Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))
+11-07 18:52:20.443 16685 16738 I Mbgl    : {RenderThread 56}[General]: GPU Identifier: Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))
+11-07 18:53:06.430 16956 17005 I Mbgl    : {RenderThread 57}[General]: GPU Identifier: Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))
+glyphs from the runner: 200 81170 bytes
