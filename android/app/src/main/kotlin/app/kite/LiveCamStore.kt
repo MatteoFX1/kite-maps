@@ -182,7 +182,11 @@ object LiveCamStore {
                 val radius = ask.radiusKm.toDouble()
                 val now = System.currentTimeMillis()
                 windyAsked.removeAll { now - it.at >= 600_000 }
-                if (windyAsked.any { it.center.distanceTo(ask.center) / 1000 + radius <= it.km && radius >= it.minReach }) continue
+                when (val plan = LiveCams.windyPlan(ask, windyAsked.map { LiveCams.WindyAsked(it.center, it.km, it.minReach) }, line, cum)) {
+                    LiveCams.WindyPlan.Skip -> continue
+                    is LiveCams.WindyPlan.Closer -> { queue.addAll(plan.asks); continue }
+                    LiveCams.WindyPlan.Fetch -> {}
+                }
                 budget--
                 val data = withContext(Dispatchers.IO) { get(LiveCams.windyNearbyUrl(ask.center, ask.radiusKm), mapOf("x-windy-api-key" to WindyKey.VALUE)) }
                 val cams = data?.let { LiveCams.parseWindy(it) }
@@ -200,6 +204,8 @@ object LiveCamStore {
                 // Shown as each stretch arrives.
                 bump()
             }
+            // Out of asks with stretches still to look at: carry on the next time this route is shown.
+            if (queue.isNotEmpty() && isActive) windyRouteKey = null
         }
     }
 

@@ -230,6 +230,32 @@ object LiveCams {
         return listOf(windyRouteAsk(line, cum, ask.from, mid), windyRouteAsk(line, cum, mid, ask.to))
     }
 
+    /** An earlier Windy ask: its circle, and [minReach] > 0 when its answer was full (the 50 limit). */
+    data class WindyAsked(val center: LatLng, val km: Double, val minReach: Double)
+
+    /** What to do with one route ask, given what Windy was already asked in the last few minutes. */
+    sealed class WindyPlan {
+        /** Not asked yet: ask Windy. */
+        object Fetch : WindyPlan()
+        /** Already covered by an answer that had room for every webcam there. */
+        object Skip : WindyPlan()
+        /** Covered, but by an answer that hit the 50 limit: look at these smaller stretches instead. */
+        data class Closer(val asks: List<WindyRouteAsk>) : WindyPlan()
+    }
+
+    /**
+     * Whether [ask] needs asking, given the [asked] circles. A full earlier answer still sends the
+     * ask's halves on, so a look that was cut short (another route opened, or the budget ran out)
+     * carries on next time.
+     */
+    fun windyPlan(ask: WindyRouteAsk, asked: List<WindyAsked>, line: List<LatLng>, cum: DoubleArray): WindyPlan {
+        val r = ask.radiusKm.toDouble()
+        val covering = asked.filter { it.center.distanceTo(ask.center) / 1000 + r <= it.km && r >= it.minReach }
+        if (covering.isEmpty()) return WindyPlan.Fetch
+        if (covering.any { it.minReach == 0.0 }) return WindyPlan.Skip
+        return windySplit(ask, line, cum)?.let { WindyPlan.Closer(it) } ?: WindyPlan.Skip
+    }
+
     internal fun valid(lat: Double, lng: Double) = lat in -90.0..90.0 && lng in -180.0..180.0 && !(lat == 0.0 && lng == 0.0)
 
     internal fun absolute(raw: String, base: String): String? = when {

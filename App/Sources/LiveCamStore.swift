@@ -194,7 +194,11 @@ final class LiveCamStore: ObservableObject {
                 let radius = Double(ask.radiusKm)
                 let now = Date()
                 self.windyAsked.removeAll { now.timeIntervalSince($0.at) >= 600 }
-                if self.windyAsked.contains(where: { $0.center.distance(to: ask.center) / 1000 + radius <= $0.km && radius >= $0.minReach }) { continue }
+                switch LiveCams.windyPlan(ask, asked: self.windyAsked.map { ($0.center, $0.km, $0.minReach) }, line: line, cumulative: cum) {
+                case .skip: continue
+                case .closer(let halves): queue += halves; continue
+                case .fetch: break
+                }
                 budget -= 1
                 let data = await Self.get(LiveCams.windyNearbyURL(ask.center, radiusKm: ask.radiusKm), headers: ["x-windy-api-key": WindyKey.value])
                 guard !Task.isCancelled else { return }
@@ -212,6 +216,8 @@ final class LiveCamStore: ObservableObject {
                 // Shown as each stretch arrives.
                 self.version += 1
             }
+            // Out of asks with stretches still to look at: carry on the next time this route is shown.
+            if !queue.isEmpty, let self, !Task.isCancelled { self.windyRouteKey = nil }
         }
     }
 

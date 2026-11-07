@@ -244,6 +244,30 @@ public enum LiveCams {
                 windyRouteAsk(line, cumulative: cum, from: mid, to: ask.to)]
     }
 
+    /** What to do with one route ask, given what Windy was already asked in the last few minutes. */
+    public enum WindyPlan: Equatable, Sendable {
+        /** Not asked yet: ask Windy. */
+        case fetch
+        /** Already covered by an answer that had room for every webcam there. */
+        case skip
+        /** Covered, but by an answer that hit the 50 limit: look at these smaller stretches instead. */
+        case closer([WindyRouteAsk])
+    }
+
+    /**
+     * Whether [ask] needs asking: [asked] are earlier asks (center, radius km, and [minReach] > 0
+     * when that answer was full). A full earlier answer still sends the ask's halves on, so a look
+     * that was cut short (another route opened, or the budget ran out) carries on next time.
+     */
+    public static func windyPlan(_ ask: WindyRouteAsk, asked: [(center: LatLng, km: Double, minReach: Double)],
+                                 line: [LatLng], cumulative cum: [Double]) -> WindyPlan {
+        let r = Double(ask.radiusKm)
+        let covering = asked.filter { $0.center.distance(to: ask.center) / 1000 + r <= $0.km && r >= $0.minReach }
+        if covering.isEmpty { return .fetch }
+        if covering.contains(where: { $0.minReach == 0 }) { return .skip }
+        return windySplit(ask, line: line, cumulative: cum).map { WindyPlan.closer($0) } ?? .skip
+    }
+
     // MARK: Helpers
 
     static func valid(_ lat: Double, _ lng: Double) -> Bool {

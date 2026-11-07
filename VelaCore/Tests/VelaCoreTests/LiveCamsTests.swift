@@ -107,6 +107,26 @@ final class LiveCamsTests: XCTestCase {
         XCTAssertNil(LiveCams.windySplit(LiveCams.windyRouteAsk(line, cumulative: cum, from: 0, to: 8000), line: line, cumulative: cum))
     }
 
+    func testWindyPlanCarriesOnAfterAnInterruptedLook() {
+        let line = [LatLng(50.0, -1.0), LatLng(50.36, -1.0)]
+        let cum = Geo.cumulative(line)
+        let parent = LiveCams.windyRouteAsks(line)[0]
+        var asked: [(center: LatLng, km: Double, minReach: Double)] = []
+        XCTAssertEqual(LiveCams.windyPlan(parent, asked: asked, line: line, cumulative: cum), .fetch)
+        // Its answer was full; then the look was cut short before the halves were asked.
+        asked.append((parent.center, Double(parent.radiusKm), Double(parent.radiusKm) * 0.8))
+        // Shown again: the full answer sends its halves on instead of counting as done.
+        guard case .closer(let halves) = LiveCams.windyPlan(parent, asked: asked, line: line, cumulative: cum) else {
+            return XCTFail("a full answer should send its halves on")
+        }
+        XCTAssertEqual(halves.count, 2)
+        XCTAssertEqual(LiveCams.windyPlan(halves[0], asked: asked, line: line, cumulative: cum), .fetch)
+        // Once a half has its own answer with room to spare, it's done.
+        asked.append((halves[0].center, Double(halves[0].radiusKm), 0))
+        XCTAssertEqual(LiveCams.windyPlan(halves[0], asked: asked, line: line, cumulative: cum), .skip)
+        XCTAssertEqual(LiveCams.windyPlan(halves[1], asked: asked, line: line, cumulative: cum), .fetch)
+    }
+
     func testAlongRouteFindsWebcamsFarNorth() {
         // Shetland, 60.5°N: a webcam 2.4 km east of a road running north.
         let line = [LatLng(60.4, -1.2), LatLng(60.6, -1.2)]

@@ -105,6 +105,26 @@ class LiveCamsTests {
         assertNull(LiveCams.windySplit(LiveCams.windyRouteAsk(line, cum, 0.0, 8000.0), line, cum))
     }
 
+    @Test fun windyPlanCarriesOnAfterAnInterruptedLook() {
+        val line = listOf(LatLng(50.0, -1.0), LatLng(50.36, -1.0))
+        val cum = Geo.cumulative(line)
+        val parent = LiveCams.windyRouteAsks(line)[0]
+        val asked = ArrayList<LiveCams.WindyAsked>()
+        assertEquals(LiveCams.WindyPlan.Fetch, LiveCams.windyPlan(parent, asked, line, cum))
+        // Its answer was full; then the look was cut short before the halves were asked.
+        asked += LiveCams.WindyAsked(parent.center, parent.radiusKm.toDouble(), parent.radiusKm * 0.8)
+        // Shown again: the full answer sends its halves on instead of counting as done.
+        val plan = LiveCams.windyPlan(parent, asked, line, cum)
+        assertTrue(plan is LiveCams.WindyPlan.Closer)
+        val halves = (plan as LiveCams.WindyPlan.Closer).asks
+        assertEquals(2, halves.size)
+        assertEquals(LiveCams.WindyPlan.Fetch, LiveCams.windyPlan(halves[0], asked, line, cum))
+        // Once a half has its own answer with room to spare, it's done.
+        asked += LiveCams.WindyAsked(halves[0].center, halves[0].radiusKm.toDouble(), 0.0)
+        assertEquals(LiveCams.WindyPlan.Skip, LiveCams.windyPlan(halves[0], asked, line, cum))
+        assertEquals(LiveCams.WindyPlan.Fetch, LiveCams.windyPlan(halves[1], asked, line, cum))
+    }
+
     @Test fun alongRouteFindsWebcamsFarNorth() {
         // Shetland, 60.5°N: a webcam 2.4 km east of a road running north.
         val line = listOf(LatLng(60.4, -1.2), LatLng(60.6, -1.2))
