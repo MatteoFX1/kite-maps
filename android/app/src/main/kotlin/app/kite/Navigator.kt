@@ -83,10 +83,10 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     private var zoneEntry: ZoneEntry? = null
     /**
      * Rerouted (or a faster way taken) inside an average speed check: when it began, how far was
-     * driven in it and how much of it was left, so the same check carries on on the new route
-     * instead of starting again from nothing.
+     * driven in it, and the rest of its road from the old route, so the same check carries on on
+     * the new route instead of starting again from nothing. Dropped once the car leaves that road.
      */
-    private data class ZoneCarry(val time: Long, val driven: Double, val left: Double, val at: Long)
+    private data class ZoneCarry(val time: Long, val driven: Double, val rest: List<LatLng>, val at: Long)
     private var zoneCarry: ZoneCarry? = null
     private val speeding = SpeedingAlerts()
     private var routeWaze: List<PlacedAlert> = emptyList()
@@ -296,8 +296,6 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         routeCameras = emptyList()
         cameraAhead = null
         zones = emptyList()
-        val e = zoneEntry; val p = progress
-        if (e != null && p != null) zoneCarry = ZoneCarry(e.time, max(0.0, p.alongMeters - e.along), max(0.0, e.end - p.alongMeters), now())
         zoneEntry = null
         averageCheck = null
         routeSignals = emptyList()
@@ -517,6 +515,14 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     private fun checkZones(p: RouteTracker.Progress) {
         if (demoAlerts) return
         val at = p.alongMeters
+        // How far along the carried check's road the car is now, while it's still on that road.
+        var carried: Double? = null
+        zoneCarry?.let { c ->
+            val on = Geo.project(p.snapped, c.rest)
+            if (c.rest.size >= 2 && on.offset < 40 && on.along < Geo.length(c.rest) - 10 && since(c.at) < 600) carried = c.driven + on.along
+            // Off that road, past its end or long ago: a check from here on is a new one.
+            else zoneCarry = null
+        }
         val inside = zones.indexOfFirst { at >= it.startMeters && at <= it.endMeters }.takeIf { it >= 0 }
         zoneEntry?.let { entry ->
             // The list of checks is replaced as road data comes in: the same stretch of road is
@@ -534,11 +540,12 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         val z = zones[i]
         val limit = z.kmh ?: route.speedLimit(at)
         if (zoneEntry == null) {
-            // Just rerouted inside a check, and this one starts before that one would have ended:
-            // the same check, carried on quietly with the average so far.
+            // Rerouted inside a check and still on its road: the same check, carried on quietly
+            // with the average so far (every metre driven in it, the reroute included).
             val c = zoneCarry
-            if (c != null && since(c.at) < 600 && z.startMeters <= c.left + 500) {
-                zoneEntry = ZoneEntry(z.startMeters, z.endMeters, c.time, at - c.driven)
+            val driven = carried
+            if (c != null && driven != null) {
+                zoneEntry = ZoneEntry(z.startMeters, z.endMeters, c.time, at - driven)
             } else {
                 zoneEntry = ZoneEntry(z.startMeters, z.endMeters, now(), at)
                 if (AppSettings.cameraWarnings) {
@@ -752,6 +759,10 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
 
     /** Drives [fresh] from here on: a reroute, or a faster way found on the way. */
     private fun adopt(fresh: Route) {
+        // Inside an average speed check: keep the rest of its road from the route being left.
+        val e = zoneEntry; val p = progress
+        zoneCarry = if (e != null && p != null && e.end - p.alongMeters > 20)
+            ZoneCarry(e.time, max(0.0, p.alongMeters - e.along), Geo.slice(route.polyline, p.alongMeters, e.end), now()) else null
         route = fresh
         tracker = RouteTracker(fresh)
         spokenStage = mutableMapOf()

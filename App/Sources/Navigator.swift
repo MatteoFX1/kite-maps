@@ -110,10 +110,10 @@ final class Navigator: ObservableObject {
     private var zoneEntry: (start: Double, end: Double, time: Date, along: Double)?
     /**
      * Rerouted (or a faster way taken) inside an average speed check: when it began, how far was
-     * driven in it and how much of it was left, so the same check carries on on the new route
-     * instead of starting again from nothing.
+     * driven in it, and the rest of its road from the old route, so the same check carries on on
+     * the new route instead of starting again from nothing. Dropped once the car leaves that road.
      */
-    private var zoneCarry: (time: Date, driven: Double, left: Double, at: Date)?
+    private var zoneCarry: (time: Date, driven: Double, rest: [LatLng], at: Date)?
     private var demoAlerts = false
     private var speeding = SpeedingAlerts()
     private var routeWaze: [(alert: WazeAlert, along: Double)] = []
@@ -336,9 +336,6 @@ final class Navigator: ObservableObject {
         // Kept across a reroute: a camera already warned about isn't warned about again.
         cameraAhead = nil
         zones = []
-        if let e = zoneEntry, let p = progress {
-            zoneCarry = (e.time, max(0, p.alongMeters - e.along), max(0, e.end - p.alongMeters), Date())
-        }
         zoneEntry = nil
         averageCheck = nil
         routeSignals = []
@@ -592,6 +589,17 @@ final class Navigator: ObservableObject {
     private func checkZones(_ p: RouteTracker.Progress) {
         guard !demoAlerts else { return }
         let at = p.alongMeters
+        // How far along the carried check's road the car is now, while it's still on that road.
+        var carried: Double?
+        if let c = zoneCarry {
+            let on = Geo.project(p.snapped, on: c.rest)
+            if c.rest.count >= 2, on.offset < 40, on.along < Geo.length(c.rest) - 10, Date().timeIntervalSince(c.at) < 600 {
+                carried = c.driven + on.along
+            } else {
+                // Off that road, past its end or long ago: a check from here on is a new one.
+                zoneCarry = nil
+            }
+        }
         let inside = zones.firstIndex { at >= $0.startMeters && at <= $0.endMeters }
         if let entry = zoneEntry {
             // The list of checks is replaced as road data comes in: the same stretch of road is
@@ -609,10 +617,10 @@ final class Navigator: ObservableObject {
         let z = zones[i]
         let limit = z.kmh ?? route.speedLimit(at: at)
         if zoneEntry == nil {
-            // Just rerouted inside a check, and this one starts before that one would have ended:
-            // the same check, carried on quietly with the average so far.
-            if let c = zoneCarry, Date().timeIntervalSince(c.at) < 600, z.startMeters <= c.left + 500 {
-                zoneEntry = (z.startMeters, z.endMeters, c.time, at - c.driven)
+            // Rerouted inside a check and still on its road: the same check, carried on quietly
+            // with the average so far (every metre driven in it, the reroute included).
+            if let c = zoneCarry, let driven = carried {
+                zoneEntry = (z.startMeters, z.endMeters, c.time, at - driven)
             } else {
                 zoneEntry = (z.startMeters, z.endMeters, Date(), at)
                 if AppSettings.shared.cameraWarnings {
@@ -864,6 +872,12 @@ final class Navigator: ObservableObject {
 
     /** Drives [fresh] from here on: a reroute, or a faster way found on the way. */
     private func adopt(_ fresh: Route) {
+        // Inside an average speed check: keep the rest of its road from the route being left.
+        if let e = zoneEntry, let p = progress, e.end - p.alongMeters > 20 {
+            zoneCarry = (e.time, max(0, p.alongMeters - e.along), Geo.slice(route.polyline, from: p.alongMeters, to: e.end), Date())
+        } else {
+            zoneCarry = nil
+        }
         let firstSteps = fresh.maneuvers.prefix(4).map { "\(Int($0.alongMeters)) m \($0.instruction)" }.joined(separator: " | ")
         Self.trace.info("new route \(Int(fresh.distanceMeters)) m, starts \(String(format: "%.5f,%.5f", fresh.polyline.first?.lat ?? 0, fresh.polyline.first?.lng ?? 0), privacy: .public): \(firstSteps, privacy: .public)")
         route = fresh
