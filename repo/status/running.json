@@ -10,15 +10,15 @@
     "--use-date-from-apk"
   ],
   "disabled": [],
-  "endTimestamp": 1794078087983,
+  "endTimestamp": 1794082809827,
   "failedBuilds": {},
   "fdroiddata": {
-    "commitId": "8d9f7b03a9aafc059bf19de796ccc02fea9b0f9f",
+    "commitId": "48894ea970129c186ce1636f12f3e907d2eff0da",
     "isDirty": false,
     "modifiedFiles": [],
     "untrackedFiles": [
       "config.yml",
-      "repo/app.kite_709.apk"
+      "repo/app.kite_710.apk"
     ]
   },
   "jarsigner": "/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64/bin/jarsigner",
@@ -33,17 +33,17 @@
     "app.kite"
   ],
   "stages": {
-    "archive_old_apks archive": 1794078081569,
-    "delete_disabled_builds": 1794078079129,
-    "index.make archive": 1794078081570,
-    "index.make repo": 1794078084839,
-    "prepare_apps archive": 1794078081570,
-    "prepare_apps repo": 1794078084838,
-    "process_apks": 1794078079130,
-    "read_added_date_from_all_apks": 1794078081569,
-    "remove_apks": 1794078081568,
-    "scan_repo_files": 1794078081567
+    "archive_old_apks archive": 1794082803516,
+    "delete_disabled_builds": 1794082801263,
+    "index.make archive": 1794082803518,
+    "index.make repo": 1794082806684,
+    "prepare_apps archive": 1794082803517,
+    "prepare_apps repo": 1794082806683,
+    "process_apks": 1794082801263,
+    "read_added_date_from_all_apks": 1794082803516,
+    "remove_apks": 1794082803515,
+    "scan_repo_files": 1794082803514
   },
-  "startTimestamp": 1794078078000,
+  "startTimestamp": 1794082800000,
   "subcommand": "update"
 }
