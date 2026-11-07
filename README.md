@@ -4,27 +4,27 @@
 
 # Kite Maps
 
-**Private maps and turn-by-turn navigation for iPhone, with Google's search and traffic and no Google account.**
-
-An unofficial iPhone port of [Vela Maps](https://github.com/PimpinPumpkin/Vela) for Android.
+**Private maps and turn-by-turn navigation for iPhone and Android.<br>Google's search and traffic, no Google account.**
 
 [![Latest release](https://img.shields.io/github/v/release/matteofx1/kite-maps?label=download&color=1E8FD6)](https://github.com/matteofx1/kite-maps/releases/latest)
 [![Build](https://img.shields.io/github/actions/workflow/status/matteofx1/kite-maps/build.yml?branch=main&label=build)](https://github.com/matteofx1/kite-maps/actions/workflows/build.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Made with Claude](https://img.shields.io/badge/vibecoded%20with-Claude-D97757)](#vibecoded-with-claude)
 ![iOS 16+](https://img.shields.io/badge/iOS-16%2B-black?logo=apple)
+![Android 8+](https://img.shields.io/badge/Android-8%2B-3DDC84?logo=android&logoColor=white)
+[![F-Droid repo](https://img.shields.io/badge/F--Droid-repo-1976D2?logo=fdroid&logoColor=white)](#-android)
 
 [Get the app](#get-the-app) · [What you get](#what-you-get) · [Screenshots](#screenshots) · [What's new](CHANGELOG.md) · [Privacy](#privacy) · [Vibecoded](#vibecoded-with-claude) · [Credits](#credits)
 
 </div>
 
 > [!note]
-> **Kite is a hobby project in beta.** It's not on the App Store: you install it yourself
-> (sideload). Expect bugs, and please [open an issue](https://github.com/matteofx1/kite-maps/issues)
+> **Kite is a hobby project in beta.** It's not on the App Store or Google Play: you install it
+> yourself (AltStore on iPhone, F-Droid on Android). Expect bugs, and please [open an issue](https://github.com/matteofx1/kite-maps/issues)
 > if you find one.
 
-Kite brings [Vela Maps](https://velamaps.org/), the open-source Google Maps alternative for
-Android, to the iPhone. The map itself is open data (OpenStreetMap, drawn with MapLibre).
+Kite is an open-source Google Maps alternative for iPhone and Android, made for driving. The
+same app, screen for screen and with the same version numbers, on both phones. The map itself is open data (OpenStreetMap, drawn with MapLibre).
 When you search, tap a place or ask for directions, your phone asks Google's public web pages
 directly, anonymously, the way a logged-out browser would. No account, no API key, no server in
 between, and no Google code in the app. Don't want Google at all? Flip one switch and everything
@@ -32,41 +32,44 @@ comes from open data instead.
 
 ## Get the app
 
-1. Open the [**latest release**](https://github.com/matteofx1/kite-maps/releases/latest) and
-   download **`Kite.ipa`**.
-2. Install it with [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) using
-   your Apple ID. With a free Apple ID the app needs refreshing every 7 days (AltStore can do
-   this for you).
+### 🍎 iPhone
 
-### Get updates automatically (AltStore / SideStore)
-
-Add this source once and Kite updates itself whenever a new build comes out:
+**Easiest: AltStore or SideStore** (updates arrive by themselves). Add this source once:
 
 ```
 https://raw.githubusercontent.com/MatteoFX1/kite-maps/altstore/apps.json
 ```
 
 In AltStore or SideStore, open **Sources**, tap **+**, paste the link above, then install
-**Kite Maps** from the source. If you already have Kite installed, it keeps your saved places.
+**Kite Maps**. Updating keeps your saved places.
 
-Every change merged into `main` builds a new release automatically on a GitHub Actions Mac,
-named after its version (like `v0.7.1`) with a "What's new" list from [CHANGELOG.md](CHANGELOG.md).
-Pull requests build too: their `.ipa` is under the run's **Artifacts** in the Actions tab.
+**Or by hand:** download **`Kite.ipa`** from the
+[latest release](https://github.com/matteofx1/kite-maps/releases/latest) and install it with
+[AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) using your Apple ID.
+With a free Apple ID the app needs refreshing every 7 days (AltStore can do this for you).
+Needs iOS 16 or newer.
 
-### Android (F-Droid)
+### 🤖 Android
 
-Kite for Android works without Google Play Services (GrapheneOS and other de-Googled phones
-included). Add Kite's own F-Droid repo once and updates arrive like any other F-Droid app:
+**Easiest: F-Droid** (updates arrive like any other F-Droid app). Add Kite's repo once:
 
 ```
 https://raw.githubusercontent.com/MatteoFX1/kite-maps/fdroid/repo
 ```
 
 In F-Droid, open **Settings › Repositories**, tap **+**, paste the link above, then search for
-**Kite Maps** and install. You can also download **`Kite.apk`** from the
-[latest release](https://github.com/matteofx1/kite-maps/releases/latest). The Android app lives
-in the [`android/`](android) folder and is built on GitHub Actions with the same version numbers
-as the iPhone app.
+**Kite Maps** and install.
+
+**Or by hand:** download **`Kite.apk`** from the
+[latest release](https://github.com/matteofx1/kite-maps/releases/latest).
+Works without Google Play Services, so GrapheneOS and other de-Googled phones are fine.
+Needs Android 8 or newer.
+
+### New versions
+
+Every change merged into `main` builds a new release for both phones automatically on GitHub
+Actions, named after its version (like `v0.7.8`) with a "What's new" list from
+[CHANGELOG.md](CHANGELOG.md).
 
 ## What you get
 
@@ -97,9 +100,11 @@ as the iPhone app.
 - 🇬🇧 **Great in the UK**: miles and yards, British signs, postcode search, and clockwise
   roundabouts for driving on the left.
 - ⭐ **Your stuff stays on your phone**: home, work, parked car, recent places, stops on the way,
-  voice search and Siri shortcuts ("Take me home with Kite").
+  voice search, and on iPhone Siri shortcuts ("Take me home with Kite").
 
 ## Screenshots
+
+### On iPhone
 
 | Map | Search | Place | Directions | Navigation |
 |:-:|:-:|:-:|:-:|:-:|
@@ -113,7 +118,13 @@ as the iPhone app.
 |:-:|:-:|:-:|:-:|:-:|
 | <img src="docs/screenshots/light-nav.jpg" width="150"> | <img src="docs/screenshots/big-directions.jpg" width="150"> | <img src="docs/screenshots/board.jpg" width="150"> | <img src="docs/screenshots/streetview.jpg" width="150"> | <img src="docs/screenshots/settings.jpg" width="150"> |
 
-*Taken automatically in the iPhone simulator on every build.*
+### On Android
+
+| Place | Directions | Camera alerts | Night drive | Saved |
+|:-:|:-:|:-:|:-:|:-:|
+| <img src="docs/screenshots/android/place.jpg" width="150"> | <img src="docs/screenshots/android/directions.jpg" width="150"> | <img src="docs/screenshots/android/camalert.jpg" width="150"> | <img src="docs/screenshots/android/dark-nav.jpg" width="150"> | <img src="docs/screenshots/android/saved.jpg" width="150"> |
+
+*Taken automatically in the iPhone simulator and the Android emulator.*
 
 ## Privacy
 
@@ -134,19 +145,17 @@ servers.
 
 Full honesty: **I'm not a programmer.** Kite was vibecoded: I described what I wanted and
 [Claude](https://claude.ai) (Anthropic's AI) wrote the code, the build setup and this page,
-working from Vela's open-source code. I test the builds on my own iPhone while driving around
-the UK.
+starting from Vela's open-source code. I test it while driving around the UK.
 
-That means the code hasn't been reviewed by an experienced iOS developer. It works well for me,
+That means the code hasn't been reviewed by an experienced iOS or Android developer. It works well for me,
 but treat it as a beta, and bug reports and pull requests are very welcome.
 
 ## Credits
 
 - **[Vela Maps](https://github.com/PimpinPumpkin/Vela)** by
   [PimpinPumpkin](https://github.com/PimpinPumpkin) ([velamaps.org](https://velamaps.org/)).
-  Kite is built on Vela's ideas, design and its keyless Google search, ported from Vela's
-  Kotlin code. All the hard work of figuring that out is theirs. Kite is an unofficial port and
-  isn't made or endorsed by Vela's developer. If you're on Android, use Vela!
+  Kite started from Vela and still uses its code (under GPLv3), including the keyless Google
+  search, which was all their hard work. Kite isn't made or endorsed by Vela's developer.
 - Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, tiles by
   [OpenFreeMap](https://openfreemap.org) and OpenMapTiles, drawn with [MapLibre](https://maplibre.org).
 - Routing by [FOSSGIS OSRM](https://routing.openstreetmap.de), transit by
@@ -158,14 +167,17 @@ Kite is not affiliated with or endorsed by Google, Waze or Apple.
 
 ## How it's built
 
-- `App/` is the SwiftUI app with the [MapLibre](https://maplibre.org) map.
-- `VelaCore/` is the search and routing code (Google extractor, OpenStreetMap and FOSSGIS
-  fallbacks, route tracking), ported from Vela's Kotlin `:core` module.
+- `App/` is the iPhone app (SwiftUI) with the [MapLibre](https://maplibre.org) map.
+- `VelaCore/` is the iPhone's search and routing code (Google extractor, OpenStreetMap and
+  FOSSGIS fallbacks, route tracking), first ported from Vela's Kotlin `:core` module.
   `swift run vela-probe pizza` runs a live search from a Mac.
 - `project.yml` describes the Xcode project; [XcodeGen](https://github.com/yonaskolb/XcodeGen)
   turns it into `Kite.xcodeproj`. The GitHub Actions workflow builds the `.ipa` on a Mac runner,
   so you don't need a Mac to make a release.
+- `android/` is the Android app (Kotlin, Jetpack Compose and MapLibre): `android/core` is the
+  search and routing code, `android/app` is the app. It's built on GitHub Actions too, and
+  published to Kite's own F-Droid repo.
 
 ## License
 
-GPL-3.0, the same as Vela. See [LICENSE](LICENSE).
+GPL-3.0, the same as Vela (Kite uses Vela's code, so it stays GPL). See [LICENSE](LICENSE).
