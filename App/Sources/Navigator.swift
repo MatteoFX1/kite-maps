@@ -106,7 +106,14 @@ final class Navigator: ObservableObject {
     /** Cameras already warned about, by OSM id: the list is replaced as road data comes in, so not by place in it. */
     private var spokenCameras: Set<Int64> = []
     private var zones: [AverageSpeedZone] = []
-    private var zoneEntry: (index: Int, time: Date, along: Double)?
+    /** The average speed check being driven through: its stretch of the route, and when and where it began. */
+    private var zoneEntry: (start: Double, end: Double, time: Date, along: Double)?
+    /**
+     * Rerouted (or a faster way taken) inside an average speed check: when it began, how far was
+     * driven in it and how much of it was left, so the same check carries on on the new route
+     * instead of starting again from nothing.
+     */
+    private var zoneCarry: (time: Date, driven: Double, left: Double, at: Date)?
     private var demoAlerts = false
     private var speeding = SpeedingAlerts()
     private var routeWaze: [(alert: WazeAlert, along: Double)] = []
@@ -329,6 +336,9 @@ final class Navigator: ObservableObject {
         // Kept across a reroute: a camera already warned about isn't warned about again.
         cameraAhead = nil
         zones = []
+        if let e = zoneEntry, let p = progress {
+            zoneCarry = (e.time, max(0, p.alongMeters - e.along), max(0, e.end - p.alongMeters), Date())
+        }
         zoneEntry = nil
         averageCheck = nil
         routeSignals = []
@@ -583,20 +593,34 @@ final class Navigator: ObservableObject {
         guard !demoAlerts else { return }
         let at = p.alongMeters
         let inside = zones.firstIndex { at >= $0.startMeters && at <= $0.endMeters }
-        if let entry = zoneEntry, entry.index != inside {
-            zoneEntry = nil
-            averageCheck = nil
-            if AppSettings.shared.cameraWarnings { speak("Average speed check ended.") }
+        if let entry = zoneEntry {
+            // The list of checks is replaced as road data comes in: the same stretch of road is
+            // the same check, not one ending and another starting ("ended" then "for 2 miles").
+            if let i = inside, zones[i].startMeters <= entry.end, zones[i].endMeters >= entry.start {
+                zoneEntry?.start = zones[i].startMeters
+                zoneEntry?.end = zones[i].endMeters
+            } else {
+                zoneEntry = nil
+                averageCheck = nil
+                if AppSettings.shared.cameraWarnings { speak("Average speed check ended.") }
+            }
         }
         guard let i = inside else { return }
         let z = zones[i]
         let limit = z.kmh ?? route.speedLimit(at: at)
         if zoneEntry == nil {
-            zoneEntry = (i, Date(), at)
-            if AppSettings.shared.cameraWarnings {
-                chime()
-                speak("Average speed check for \(Fmt.spokenDistance(z.endMeters - at))" + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+            // Just rerouted inside a check, and this one starts before that one would have ended:
+            // the same check, carried on quietly with the average so far.
+            if let c = zoneCarry, Date().timeIntervalSince(c.at) < 600, z.startMeters <= c.left + 500 {
+                zoneEntry = (z.startMeters, z.endMeters, c.time, at - c.driven)
+            } else {
+                zoneEntry = (z.startMeters, z.endMeters, Date(), at)
+                if AppSettings.shared.cameraWarnings {
+                    chime()
+                    speak("Average speed check for \(Fmt.spokenDistance(z.endMeters - at))" + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+                }
             }
+            zoneCarry = nil
         }
         guard let entry = zoneEntry else { return }
         let secs = Date().timeIntervalSince(entry.time)

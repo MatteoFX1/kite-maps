@@ -3,6 +3,20 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.9 (iPhone and Android)
+
+A check of the basics on both phones, with the bugs it found fixed. Nothing looks different.
+
+- **Average speed checks:** Kite no longer says "Average speed check ended" and then starts the
+  same check again a moment later when the road data updates. After a reroute or a faster route
+  in the middle of a check, it carries on with your average so far instead of starting again.
+- **"GPS signal lost" (Android):** no longer shows while GPS is working when the phone's clock
+  is a few seconds out.
+- **Staying on the route (Android):** Kite no longer loses its place on the route for a moment
+  once the roundabout pictures have loaded, like the iPhone.
+- **After arriving (Android):** the screen can go to sleep straight away, like the iPhone,
+  instead of staying on for 3 more minutes.
+
 ## 0.7.8 (iPhone and Android)
 
 Everything ChatGPT found when it went through both apps as a second reviewer, fixed and checked,

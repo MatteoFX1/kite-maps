@@ -78,8 +78,16 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     var routeCameras: List<PlacedCamera> = emptyList(); private set
     private val spokenCameras = mutableSetOf<Long>()
     private var zones: List<AverageSpeedZone> = emptyList()
-    private data class ZoneEntry(val index: Int, val time: Long, val along: Double)
+    /** The average speed check being driven through: its stretch of the route, and when and where it began. */
+    private data class ZoneEntry(val start: Double, val end: Double, val time: Long, val along: Double)
     private var zoneEntry: ZoneEntry? = null
+    /**
+     * Rerouted (or a faster way taken) inside an average speed check: when it began, how far was
+     * driven in it and how much of it was left, so the same check carries on on the new route
+     * instead of starting again from nothing.
+     */
+    private data class ZoneCarry(val time: Long, val driven: Double, val left: Double, val at: Long)
+    private var zoneCarry: ZoneCarry? = null
     private val speeding = SpeedingAlerts()
     private var routeWaze: List<PlacedAlert> = emptyList()
     private val spokenWaze = mutableSetOf<String>()
@@ -111,7 +119,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             delay(2_000)
             val fix = lastFix ?: continue
             if (demoAlerts) continue
-            val lost = System.currentTimeMillis() - fix.timeMillis > 8_000
+            val lost = fix.ageMs > 8_000
             if (lost != gpsLost) gpsLost = lost
         }
     }
@@ -260,8 +268,9 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             val drawn = Roundabouts.apply(r.deep()) ?: return@launch
             if (route.id != r.id || route.maneuvers.size != drawn.maneuvers.size) return@launch
             val steps = route.maneuvers.mapIndexed { i, m -> m.copy(roundabout = drawn.maneuvers[i].roundabout) }.toMutableList()
+            // Only the pictures change, not the steps: the tracker keeps its place on the route,
+            // like the iPhone's (a new one could snap to the wrong part of a route that loops back).
             route = route.copy(maneuvers = steps)
-            tracker = RouteTracker(route)
         }
     }
 
@@ -287,6 +296,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         routeCameras = emptyList()
         cameraAhead = null
         zones = emptyList()
+        val e = zoneEntry; val p = progress
+        if (e != null && p != null) zoneCarry = ZoneCarry(e.time, max(0.0, p.alongMeters - e.along), max(0.0, e.end - p.alongMeters), now())
         zoneEntry = null
         averageCheck = null
         routeSignals = emptyList()
@@ -507,20 +518,35 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         if (demoAlerts) return
         val at = p.alongMeters
         val inside = zones.indexOfFirst { at >= it.startMeters && at <= it.endMeters }.takeIf { it >= 0 }
-        zoneEntry?.let { if (it.index != inside) {
-            zoneEntry = null
-            averageCheck = null
-            if (AppSettings.cameraWarnings) speak("Average speed check ended.")
-        } }
+        zoneEntry?.let { entry ->
+            // The list of checks is replaced as road data comes in: the same stretch of road is
+            // the same check, not one ending and another starting ("ended" then "for 2 miles").
+            val same = inside?.let { zones[it] }?.takeIf { it.startMeters <= entry.end && it.endMeters >= entry.start }
+            if (same != null) {
+                zoneEntry = entry.copy(start = same.startMeters, end = same.endMeters)
+            } else {
+                zoneEntry = null
+                averageCheck = null
+                if (AppSettings.cameraWarnings) speak("Average speed check ended.")
+            }
+        }
         val i = inside ?: return
         val z = zones[i]
         val limit = z.kmh ?: route.speedLimit(at)
         if (zoneEntry == null) {
-            zoneEntry = ZoneEntry(i, now(), at)
-            if (AppSettings.cameraWarnings) {
-                chime()
-                speak("Average speed check for ${Fmt.spokenDistance(z.endMeters - at)}" + (limit?.let { ", limit ${Fmt.spokenSpeed(it)}." } ?: "."))
+            // Just rerouted inside a check, and this one starts before that one would have ended:
+            // the same check, carried on quietly with the average so far.
+            val c = zoneCarry
+            if (c != null && since(c.at) < 600 && z.startMeters <= c.left + 500) {
+                zoneEntry = ZoneEntry(z.startMeters, z.endMeters, c.time, at - c.driven)
+            } else {
+                zoneEntry = ZoneEntry(z.startMeters, z.endMeters, now(), at)
+                if (AppSettings.cameraWarnings) {
+                    chime()
+                    speak("Average speed check for ${Fmt.spokenDistance(z.endMeters - at)}" + (limit?.let { ", limit ${Fmt.spokenSpeed(it)}." } ?: "."))
+                }
             }
+            zoneCarry = null
         }
         val entry = zoneEntry ?: return
         val secs = since(entry.time)
