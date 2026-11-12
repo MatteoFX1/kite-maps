@@ -254,7 +254,13 @@ object DirectionsParser {
                 else -> lr(ManeuverType.TURN_LEFT, ManeuverType.TURN_RIGHT, ManeuverType.STRAIGHT)
             }
             "UTURN", "UTURN_LEFT", "UTURN_RIGHT" -> ManeuverType.UTURN
-            "STRAIGHT", "CONTINUE", "NAME_CHANGE" -> ManeuverType.STRAIGHT
+            // "Station Rd turns slightly right and becomes Mount Pleasant Ln": the road bends, and the arrow should too.
+            "STRAIGHT", "CONTINUE", "NAME_CHANGE" -> when {
+                !left && !right -> ManeuverType.STRAIGHT
+                slight -> lr(ManeuverType.SLIGHT_LEFT, ManeuverType.SLIGHT_RIGHT, ManeuverType.STRAIGHT)
+                sharp -> lr(ManeuverType.SHARP_LEFT, ManeuverType.SHARP_RIGHT, ManeuverType.STRAIGHT)
+                else -> lr(ManeuverType.TURN_LEFT, ManeuverType.TURN_RIGHT, ManeuverType.STRAIGHT)
+            }
             "MERGE", "MERGE_LEFT", "MERGE_RIGHT" -> ManeuverType.MERGE
             "FORK", "FORK_LEFT", "FORK_RIGHT" -> lr(ManeuverType.FORK_LEFT, ManeuverType.FORK_RIGHT, ManeuverType.STRAIGHT)
             "ON_RAMP", "OFF_RAMP", "RAMP", "RAMP_LEFT", "ON_RAMP_LEFT", "OFF_RAMP_LEFT",

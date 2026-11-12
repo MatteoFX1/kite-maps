@@ -50,11 +50,11 @@ object OSRM {
     }
 
     /** The open router forced through points sampled off [line] (Google's route), so its steps follow the same roads. */
-    suspend fun routeVia(line: List<LatLng>, mode: TravelMode): Route? {
+    suspend fun routeVia(line: List<LatLng>, mode: TravelMode, spacing: Double = 1_500.0, maxVias: Int = 12): Route? {
         if (line.size < 2) return null
         val cum = Geo.cumulative(line)
         val total = cum.last()
-        val vias = min(12, (total / 1_500).toInt())
+        val vias = min(maxVias, (total / spacing).toInt())
         val pts = mutableListOf(line[0])
         val bearings = mutableListOf(bearing(line, cum, 0.0))
         for (i in 1..vias) {
@@ -443,11 +443,18 @@ object Directions {
                     val plain = deadline(wait) { osrmTask.await().getOrNull() } ?: emptyList()
                     val spare = plain.toMutableList()
                     for (i in g.indices) {
-                        val steps = StepMerge.adopt(vias[i]?.let { listOf(it) + plain } ?: plain, g[i].polyline)
+                        val candidates = vias[i]?.let { listOf(it) + plain } ?: plain
+                        // Google's step positions are only trustworthy when its steps cover the whole line.
+                        val complete = g[i].stepsComplete
+                        val steps = StepMerge.adopt(candidates, g[i].polyline)
+                            ?: if (complete) StepMerge.adoptPiecewise(candidates, g[i].maneuvers, g[i].polyline) else null
                         if (steps != null) {
-                            if (g[i].stepsComplete) {
+                            if (complete) {
                                 StepMerge.addGoogleLaneHints(steps, g[i].maneuvers)
                                 StepMerge.addGoogleExits(steps, g[i].maneuvers)
+                                StepMerge.addGoogleKinds(steps, g[i].maneuvers)
+                                StepMerge.addGoogleMissing(steps, g[i].maneuvers, g[i].polyline)
+                                StepMerge.addGoogleSigns(steps, g[i].maneuvers)
                             }
                             g[i].maneuvers = steps
                             g[i].stepsComplete = true
@@ -460,6 +467,7 @@ object Directions {
                     }
                     for (i in g.indices) {
                         for (m in g[i].maneuvers) if (m.type == ManeuverType.ROUNDABOUT && m.exit == null) m.exit = DirectionsParser.exitNumber(m.instruction)
+                        StepMerge.tidy(g[i].maneuvers)
                         g[i] = Roundabouts.settle(g[i])
                         // Britain and Ireland ("slip road" is British).
                         if (a.lat in 49.8..61.0 && a.lng in -11.0..2.0) for (m in g[i].maneuvers) m.instruction = British.words(m.instruction)
@@ -474,7 +482,7 @@ object Directions {
             }
         }
         val o = osrmTask.await()
-        o.getOrNull()?.let { if (it.isNotEmpty()) return@coroutineScope Result(it.map { r -> Roundabouts.settle(r) }) }
+        o.getOrNull()?.let { if (it.isNotEmpty()) return@coroutineScope Result(it.map { r -> StepMerge.tidy(r.maneuvers); Roundabouts.settle(r) }) }
         o.exceptionOrNull()?.let { err = it.message }
         Result(emptyList(), err ?: "No route found.")
     }
