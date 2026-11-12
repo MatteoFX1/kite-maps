@@ -201,7 +201,17 @@ extension StepMerge {
      * says "Continue straight onto Gloucester Road" because the main road bends away. The router's
      * road name and lanes are kept.
      */
-    public static func addGoogleKinds(_ steps: inout [Maneuver], from google: [Maneuver]) {
+    public static func addGoogleKinds(_ steps: inout [Maneuver], from google: [Maneuver], line: [LatLng] = []) {
+        let cum = Geo.cumulative(line)
+        let total = cum.last ?? 0
+        /** Which way the line goes at [a]: degrees, left negative. */
+        func bend(_ a: Double) -> Double? {
+            guard line.count >= 2 else { return nil }
+            let p0 = Geo.point(along: line, meters: max(0, a - 40), cumulative: cum), p1 = Geo.point(along: line, meters: a, cumulative: cum)
+            let p2 = Geo.point(along: line, meters: min(total, a + 60), cumulative: cum)
+            guard p0.distance(to: p1) > 3, p1.distance(to: p2) > 3 else { return nil }
+            return (Geo.bearing(p1, p2) - Geo.bearing(p0, p1) + 540).truncatingRemainder(dividingBy: 360) - 180
+        }
         for i in steps.indices where !steps[i].silent && ![.depart, .arrive, .roundabout].contains(steps[i].type) {
             let near = google.filter { abs($0.alongMeters - steps[i].alongMeters) < 50 && turnKinds.contains($0.type) }
             guard let g = near.min(by: { abs($0.alongMeters - steps[i].alongMeters) < abs($1.alongMeters - steps[i].alongMeters) }) else { continue }
@@ -213,6 +223,14 @@ extension StepMerge {
                 steps[i].exit = n
                 steps[i].lanes = []
                 steps[i].instruction = OSRM.instruction(type: "roundabout", modifier: nil, road: road, exit: n, mode: .drive)
+            } else if side(steps[i].type) != 0, side(g.type) != 0, side(g.type) != side(steps[i].type),
+                      let b = bend(steps[i].alongMeters), b * Double(side(g.type)) > 30 {
+                // "Keep right at the fork onto Castle Lane West" where the road really goes 45 degrees
+                // left (Ibbertson Road, Bournemouth): Google's "Turn left", the way the road goes.
+                steps[i].type = g.type
+                let verb = DirectionsParser.phrase(g.type).replacingOccurrences(of: "Slight", with: "Turn slight").replacingOccurrences(of: "Sharp", with: "Turn sharp")
+                steps[i].instruction = verb + (road.map { " onto \($0)" } ?? "")
+                steps[i].lanes = []
             } else if steps[i].type == .straight, side(g.type) != 0, [.turnLeft, .turnRight, .sharpLeft, .sharpRight, .slightLeft, .slightRight].contains(g.type) {
                 steps[i].type = g.type
                 let verb = DirectionsParser.phrase(g.type).replacingOccurrences(of: "Slight", with: "Turn slight").replacingOccurrences(of: "Sharp", with: "Turn sharp")

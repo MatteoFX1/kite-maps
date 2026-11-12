@@ -525,7 +525,7 @@ public enum Directions {
                         if complete {
                             StepMerge.addGoogleLaneHints(&steps, from: g[i].maneuvers)
                             StepMerge.addGoogleExits(&steps, from: g[i].maneuvers)
-                            StepMerge.addGoogleKinds(&steps, from: g[i].maneuvers)
+                            StepMerge.addGoogleKinds(&steps, from: g[i].maneuvers, line: g[i].polyline)
                             StepMerge.addGoogleMissing(&steps, from: g[i].maneuvers, line: g[i].polyline)
                             StepMerge.addGoogleSigns(&steps, from: g[i].maneuvers)
                         }

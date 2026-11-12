@@ -453,7 +453,7 @@ object Directions {
                             if (complete) {
                                 StepMerge.addGoogleLaneHints(steps, g[i].maneuvers)
                                 StepMerge.addGoogleExits(steps, g[i].maneuvers)
-                                StepMerge.addGoogleKinds(steps, g[i].maneuvers)
+                                StepMerge.addGoogleKinds(steps, g[i].maneuvers, g[i].polyline)
                                 StepMerge.addGoogleMissing(steps, g[i].maneuvers, g[i].polyline)
                                 StepMerge.addGoogleSigns(steps, g[i].maneuvers)
                             }

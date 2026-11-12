@@ -146,4 +146,17 @@ class StepFillTests {
         StepMerge.dropFalseUTurns(real, back)
         assertEquals(3, real.size)
     }
+
+    @Test fun forkSideAgainstTheRoadTakesGooglesTurn() {
+        val bent = listOf(LatLng(50.0, -1.0), LatLng(50.009, -1.0), LatLng(50.009, -1.014))
+        val at = Geo.project(LatLng(50.009, -1.0), bent).along
+        val fork = Maneuver(ManeuverType.FORK_RIGHT, "Keep right at the fork onto Castle Lane West", LatLng(50.009, -1.0), at, 0.0, road = "Castle Lane West")
+        val steps = mutableListOf(fork)
+        StepMerge.addGoogleKinds(steps, listOf(Maneuver(ManeuverType.TURN_LEFT, "Turn left onto Castle Ln W", fork.location, at + 10, 0.0)), bent)
+        assertEquals(ManeuverType.TURN_LEFT, steps[0].type)
+        assertEquals("Turn left onto Castle Lane West", steps[0].instruction)
+        val straight = mutableListOf(fork.copy(type = ManeuverType.FORK_RIGHT, alongMeters = 1000.0))
+        StepMerge.addGoogleKinds(straight, listOf(Maneuver(ManeuverType.TURN_LEFT, "Turn left", fork.location, 1010.0, 0.0)), line)
+        assertEquals(ManeuverType.FORK_RIGHT, straight[0].type)
+    }
 }

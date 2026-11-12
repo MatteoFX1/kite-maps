@@ -193,7 +193,16 @@ fun StepMerge.addGoogleMissing(steps: MutableList<Maneuver>, google: List<Maneuv
  * roundabout Google knows where the router only says "Turn right", and a real turn where the
  * router says "Continue straight onto Gloucester Road". The router's road name is kept.
  */
-fun StepMerge.addGoogleKinds(steps: MutableList<Maneuver>, google: List<Maneuver>) {
+fun StepMerge.addGoogleKinds(steps: MutableList<Maneuver>, google: List<Maneuver>, line: List<LatLng> = emptyList()) {
+    val cum = if (line.size >= 2) Geo.cumulative(line) else DoubleArray(0)
+    val total = cum.lastOrNull() ?: 0.0
+    /** Which way the line goes at [a]: degrees, left negative. */
+    fun bend(a: Double): Double? {
+        if (line.size < 2) return null
+        val p0 = Geo.point(line, max(0.0, a - 40), cum); val p1 = Geo.point(line, a, cum); val p2 = Geo.point(line, min(total, a + 60), cum)
+        if (p0.distanceTo(p1) <= 3 || p1.distanceTo(p2) <= 3) return null
+        return (Geo.bearing(p1, p2) - Geo.bearing(p0, p1) + 540) % 360 - 180
+    }
     val plainTurns = setOf(ManeuverType.TURN_LEFT, ManeuverType.TURN_RIGHT, ManeuverType.SLIGHT_LEFT, ManeuverType.SLIGHT_RIGHT,
         ManeuverType.SHARP_LEFT, ManeuverType.SHARP_RIGHT)
     for (i in steps.indices) {
@@ -208,6 +217,13 @@ fun StepMerge.addGoogleKinds(steps: MutableList<Maneuver>, google: List<Maneuver
             s.exit = n
             s.lanes = emptyList()
             s.instruction = OSRM.instruction("roundabout", null, s.road, n, TravelMode.DRIVE)
+        } else if (side(s.type) != 0 && side(g.type) != 0 && side(g.type) != side(s.type) &&
+            (bend(s.alongMeters)?.let { it * side(g.type) > 30 } == true)) {
+            // "Keep right at the fork onto Castle Lane West" where the road really goes 45 degrees left: Google's "Turn left".
+            s.type = g.type
+            val verb = DirectionsParser.phrase(g.type).replace("Slight", "Turn slight").replace("Sharp", "Turn sharp")
+            s.instruction = verb + (s.road?.let { " onto $it" } ?: "")
+            s.lanes = emptyList()
         } else if (s.type == ManeuverType.STRAIGHT && g.type in plainTurns) {
             s.type = g.type
             val verb = DirectionsParser.phrase(g.type).replace("Slight", "Turn slight").replace("Sharp", "Turn sharp")

@@ -151,4 +151,22 @@ final class StepFillTests: XCTestCase {
         StepMerge.dropFalseUTurns(&real, line: back)
         XCTAssertEqual(real.count, 3)
     }
+
+    func testForkSideAgainstTheRoadTakesGooglesTurn() {
+        // North for 1 km, then west: a left turn, which the router called "Keep right at the fork".
+        let bent = [LatLng(50.0, -1.0), LatLng(50.009, -1.0), LatLng(50.009, -1.014)]
+        let at = Geo.project(LatLng(50.009, -1.0), on: bent).along
+        var fork = Maneuver(type: .forkRight, instruction: "Keep right at the fork onto Castle Lane West", location: LatLng(50.009, -1.0),
+                            alongMeters: at, distanceMeters: 0, road: "Castle Lane West")
+        var steps = [fork]
+        StepMerge.addGoogleKinds(&steps, from: [Maneuver(type: .turnLeft, instruction: "Turn left onto Castle Ln W", location: fork.location,
+                                                         alongMeters: at + 10, distanceMeters: 0)], line: bent)
+        XCTAssertEqual(steps[0].type, .turnLeft)
+        XCTAssertEqual(steps[0].instruction, "Turn left onto Castle Lane West")
+        // On a straight road the router's fork stays.
+        fork.alongMeters = 1000
+        steps = [fork]
+        StepMerge.addGoogleKinds(&steps, from: [Maneuver(type: .turnLeft, instruction: "Turn left", location: fork.location, alongMeters: 1010, distanceMeters: 0)], line: line)
+        XCTAssertEqual(steps[0].type, .forkRight)
+    }
 }
