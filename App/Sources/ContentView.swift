@@ -739,6 +739,20 @@ enum DemoScript {
             model.select(station)
             return
         }
+        if step == "go" {
+            // A simulated test drive: straight into navigation to `-demoTo lat,lng`, in miles and yards, nothing made up on screen.
+            guard let k = args.firstIndex(of: "-demoTo"), k + 1 < args.count else { return }
+            let c = args[k + 1].split(separator: ",").compactMap { Double($0) }
+            guard c.count == 2 else { return }
+            model.settings.units = .yards
+            let to = Place(id: "demo-go", name: "Test destination", location: LatLng(c[0], c[1]), source: "demo")
+            model.select(to)
+            await wait(2)
+            model.openDirections(to: to)
+            for _ in 0..<40 where model.directions?.route == nil { await wait(1) }
+            model.startNavigation()
+            return
+        }
         if step == "roundabout" {
             // Matteo's M27 roundabout drawn in the banner, in miles and yards, with the camera alert.
             model.settings.units = .yards

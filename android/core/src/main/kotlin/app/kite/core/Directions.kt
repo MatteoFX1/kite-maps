@@ -215,6 +215,9 @@ object DirectionsParser {
         }
         text = text.capitalizedFirst()
         val m = Maneuver(mapType(token, side, severity), text.ifEmpty { "Continue" }, LatLng(0.0, 0.0), 0.0, meters, road, lane)
+        // "Keep right to stay on A38(M)" comes marked as a turn: it's a keep, and its arrow should say so.
+        if (text.startsWith("Keep left") && m.type in setOf(ManeuverType.TURN_LEFT, ManeuverType.SLIGHT_LEFT)) m.type = ManeuverType.KEEP_LEFT
+        if (text.startsWith("Keep right") && m.type in setOf(ManeuverType.TURN_RIGHT, ManeuverType.SLIGHT_RIGHT)) m.type = ManeuverType.KEEP_RIGHT
         if ((token?.uppercase() ?: "") in setOf("ON_RAMP", "OFF_RAMP", "RAMP") && side == null) {
             m.type = ManeuverType.RAMP_LEFT
             m.sideUnknown = true

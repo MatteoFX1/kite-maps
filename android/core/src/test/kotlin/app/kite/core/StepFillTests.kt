@@ -130,4 +130,9 @@ class StepFillTests {
         assertEquals(listOf("Drive along High Street", "Turn left onto Mill Lane", "At the roundabout, take the 1st exit", "Turn left onto Station Road", "You have arrived"),
             out?.map { it.instruction })
     }
+
+    @Test fun googleKeepIsAKeepArrow() {
+        val m = DirectionsParser.parseStep("<step maneuver='TURN' meters='500'>Keep <turn side='RIGHT'>right</turn> to stay on <road>A38(M)</road></step>")
+        assertEquals(ManeuverType.KEEP_RIGHT, m.type)
+    }
 }

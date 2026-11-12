@@ -205,6 +205,9 @@ enum DirectionsParser {
         var m = Maneuver(type: mapType(token, side: side, severity: severity),
                          instruction: text.isEmpty ? "Continue" : text,
                          location: LatLng(0, 0), alongMeters: 0, distanceMeters: meters, road: road, laneHint: lane)
+        // "Keep right to stay on A38(M)" comes marked as a turn: it's a keep, and its arrow should say so.
+        if text.hasPrefix("Keep left"), [.turnLeft, .slightLeft].contains(m.type) { m.type = .keepLeft }
+        if text.hasPrefix("Keep right"), [.turnRight, .slightRight].contains(m.type) { m.type = .keepRight }
         // A slip road with no side ("Take the M3 slip road" is ON_RAMP alone): not a merge, whatever
         // the side turns out to be. Until the line says which, the left (where most leave in Britain).
         if ["ON_RAMP", "OFF_RAMP", "RAMP"].contains(token?.uppercased() ?? ""), side == nil {
