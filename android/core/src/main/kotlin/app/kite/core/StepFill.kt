@@ -234,7 +234,7 @@ fun StepMerge.tidy(steps: MutableList<Maneuver>) {
             val p = prev
             if (p != null && steps[p].type != ManeuverType.DEPART && s.alongMeters - steps[p].alongMeters < 35) {
                 val a = steps[p]
-                if (carryOn) {
+                if (carryOn && s.lanes.isEmpty()) {
                     s.silent = true
                     val r = s.road
                     if (r != null && !a.instruction.contains(" onto ") && !a.instruction.contains(" on ") && !a.instruction.contains(" toward") &&

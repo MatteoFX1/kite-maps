@@ -229,7 +229,7 @@ extension StepMerge {
             let w = steps[i].instruction
             let carryOn = steps[i].type == .straight && (w.hasPrefix("Continue") || w.hasPrefix("Stay on"))
             if let p = prev, steps[p].type != .depart, steps[i].alongMeters - steps[p].alongMeters < 35 {
-                if carryOn {
+                if carryOn, steps[i].lanes.isEmpty {
                     steps[i].silent = true
                     let pw = steps[p].instruction
                     if let r = steps[i].road, !pw.contains(" onto "), !pw.contains(" on "), !pw.contains(" toward"),
