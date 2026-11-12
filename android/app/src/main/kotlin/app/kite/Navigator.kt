@@ -313,7 +313,13 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
                     if (route.id == id && partial.isNotEmpty()) { matchedLimits = true; setLimits(partial) }
                 }
             }
-            if (found == null || route.id != id || found.limits.isEmpty()) return@async false
+            if (found == null || route.id != id || found.limits.isEmpty()) {
+                // A long drive's later miles didn't come back (the server timed out on one piece): the
+                // first miles were already shown, but the rest must still come from the road data below,
+                // or the sign stays blank past the first 25 km for the whole drive.
+                if (route.id == id) matchedLimits = false
+                return@async false
+            }
             matchedLimits = true
             setLimits(found.limits)
             matchedWays = found.ways
@@ -660,7 +666,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             trafficLoading = false
             val fresh = r?.routes?.firstOrNull() ?: return@launch
             val nowP = progress ?: return@launch
-            if (route.id != id || rerouting || planned <= 0 || fresh.trafficSeconds == null) return@launch
+            // Arrived (or ended) while asking: no new route, and no "Found a faster route" in the car park.
+            if (stopped || arrived || route.id != id || rerouting || planned <= 0 || fresh.trafficSeconds == null) return@launch
             val current = nowP.remainingSeconds
             val saving = current - fresh.durationSeconds
             val sameWay = abs(fresh.distanceMeters - nowP.remainingMeters) < max(300.0, nowP.remainingMeters * 0.03)
@@ -742,6 +749,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             }.getOrNull()
             if (stopped || req != rerouteRequest) return@launch
             rerouting = false
+            // Parked at the destination while the new route was loading: the trip is over, keep it that way.
+            if (arrived) return@launch
             val fresh = r?.routes?.firstOrNull()
             if (fresh == null) {
                 // The stop just added couldn't be routed to: say so, and don't keep it as if it were on the way.

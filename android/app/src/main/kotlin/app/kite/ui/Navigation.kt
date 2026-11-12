@@ -325,14 +325,14 @@ fun SpeedBadge(mps: Double, limitKmh: Double?) {
 @Composable
 fun SpeedLimitSign(kmh: Double, size: Dp = 56.dp) {
     if (Fmt.metric || Fmt.yards) {
-        val n = if (Fmt.metric) kmh.roundToInt() else (kmh / 1.609344 / 5).roundToInt() * 5
+        val n = if (Fmt.metric) kmh.roundToInt() else Fmt.postedMph(kmh)
         Box(Modifier.size(size).shadow(5.dp, CircleShape).clip(CircleShape).background(Color.White)
             .border(size * 0.11f, hex(0xD93025), CircleShape), contentAlignment = Alignment.Center) {
             Text("$n", fontSize = (size.value * 0.4f).sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
         }
     } else {
         // OSM limits in the US are mapped in mph; round back to the posted number.
-        val mph = (kmh / 1.609344 / 5).roundToInt() * 5
+        val mph = Fmt.postedMph(kmh)
         Column(Modifier.size(size * 0.86f, size * 1.07f).shadow(5.dp, RoundedCornerShape(6.dp)).clip(RoundedCornerShape(6.dp))
             .background(Color.White).padding(2.dp).border(2.dp, Color.Black, RoundedCornerShape(5.dp)),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {

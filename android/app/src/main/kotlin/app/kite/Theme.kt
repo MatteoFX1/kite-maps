@@ -203,7 +203,13 @@ object Fmt {
 
     /** A limit for the voice: "30 miles per hour" (to the posted 5), "50 kilometers per hour". */
     fun spokenSpeed(kmh: Double): String =
-        if (metric) "${r(kmh / 5) * 5} kilometers per hour" else "${r(kmh / 1.609344 / 5) * 5} miles per hour"
+        if (metric) "${max(5, r(kmh / 5) * 5)} kilometers per hour" else "${postedMph(kmh)} miles per hour"
+
+    /**
+     * A limit in mph as the sign shows it, to the nearest 5. Never 0: a road mapped "walk" (about
+     * 7 km/h, a car park or a living street) would round down to a "0" sign; the lowest sign is 5.
+     */
+    fun postedMph(kmh: Double): Int = max(5, r(kmh / 1.609344 / 5) * 5)
 
     /** A speed in the user's units, without the unit. */
     fun speed(kmh: Double): Int = r(if (metric) kmh else kmh / 1.609344)

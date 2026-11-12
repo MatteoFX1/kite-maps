@@ -3,6 +3,18 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.11 (iPhone and Android)
+
+Another check of the basics on both phones, with the bugs it found fixed. Nothing looks different.
+
+- **Speed limits on long drives:** if the speed limit service stopped answering partway through
+  a long route, the sign could stay blank after the first 25 km for the rest of the drive. Kite
+  now fills in the rest from its other map source, like it does when that service is down.
+- **After arriving:** a new route or "Found a faster route" that was still loading when you
+  arrived no longer starts the trip up again in the car park.
+- **Speed limit sign:** a car park or "walking pace" road no longer shows a "0" mph sign (or says
+  "limit 0 miles per hour"); it shows 5, the lowest sign there is.
+
 ## 0.7.10 (iPhone and Android)
 
 Live cameras, finished off after checking them against the request (GitHub #15).

@@ -197,7 +197,9 @@ final class Navigator: ObservableObject {
 
     /** The one after next, for the "Then" line when two turns come close together. */
     var thenManeuver: Maneuver? {
-        guard let i = progress?.nextIndex, let j = route.maneuvers[(i + 1)...].firstIndex(where: { !$0.silent }) else { return nil }
+        // The route can be swapped a moment before the progress catches up: never read past its steps.
+        guard let i = progress?.nextIndex, i < route.maneuvers.count,
+              let j = route.maneuvers[(i + 1)...].firstIndex(where: { !$0.silent }) else { return nil }
         let a = route.maneuvers[i], b = route.maneuvers[j]
         // Leaving a roundabout is part of the roundabout, not a turn of its own.
         if b.leavesRoundabout { return nil }
@@ -355,7 +357,13 @@ final class Navigator: ObservableObject {
                     self.route.speedLimits = partial
                 }
             }
-            guard let found, self.route.id == id, !found.limits.isEmpty else { return false }
+            guard let found, self.route.id == id, !found.limits.isEmpty else {
+                // A long drive's later miles didn't come back (the server timed out on one piece): the
+                // first miles were already shown, but the rest must still come from the road data below,
+                // or the sign stays blank past the first 25 km for the whole drive.
+                if self.route.id == id { self.matchedLimits = false }
+                return false
+            }
             self.matchedLimits = true
             self.route.speedLimits = found.limits
             self.matchedWays = found.ways
@@ -753,7 +761,9 @@ final class Navigator: ObservableObject {
         Task {
             let r = await Directions.routes(from: from, to: to, mode: .drive, avoidHighways: hw, avoidTolls: tolls, via: via, heading: course)
             self.trafficLoading = false
-            guard let fresh = r.routes.first, self.route.id == id, !self.rerouting, let now = self.progress,
+            // Arrived (or ended) while asking: no new route, and no "Found a faster route" in the car park.
+            guard !self.stopped, !self.arrived,
+                  let fresh = r.routes.first, self.route.id == id, !self.rerouting, let now = self.progress,
                   planned > 0, fresh.trafficSeconds != nil else { return }
             let current = now.remainingSeconds
             let saving = current - fresh.durationSeconds
@@ -858,6 +868,8 @@ final class Navigator: ObservableObject {
                                             heading: course)
             guard !self.stopped, req == self.rerouteRequest else { return }
             self.rerouting = false
+            // Parked at the destination while the new route was loading: the trip is over, keep it that way.
+            if self.arrived { return }
             guard let fresh = r.routes.first else {
                 // The stop just added couldn't be routed to: say so, and don't keep it as if it were on the way.
                 if let adding, let i = self.stops.firstIndex(where: { $0.id == adding.id }) {

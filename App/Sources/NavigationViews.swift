@@ -412,7 +412,7 @@ struct SpeedLimitSign: View {
     var body: some View {
         if Fmt.metric || Fmt.yards {
             // Round red ring: kilometers on the Continent, miles in Britain.
-            Text("\(Fmt.metric ? Int(kmh.rounded()) : Int((kmh / 1.609344 / 5).rounded()) * 5)")
+            Text("\(Fmt.metric ? Int(kmh.rounded()) : Fmt.postedMph(kmh))")
                 .font(.system(size: size * 0.4, weight: .heavy))
                 .foregroundColor(.black)
                 .frame(width: size, height: size)
@@ -421,7 +421,7 @@ struct SpeedLimitSign: View {
                 .shadow(color: .black.opacity(0.3), radius: 5, y: 2)
         } else {
             // OSM limits in the US are mapped in mph; round back to the posted number.
-            let mph = Int((kmh / 1.609344 / 5).rounded()) * 5
+            let mph = Fmt.postedMph(kmh)
             VStack(spacing: 0) {
                 Text("SPEED\nLIMIT").font(.system(size: size * 0.14, weight: .bold)).multilineTextAlignment(.center)
                 Text("\(mph)").font(.system(size: size * 0.4, weight: .heavy))
