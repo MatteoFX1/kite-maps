@@ -170,6 +170,19 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             return route.maneuvers[i].road?.trim()?.ifEmpty { null }
         }
 
+    /**
+     * ", then turn right onto King Street" when the step after [i] comes so soon after it (70 m)
+     * there's no time to be told on its own, the way Waze says both together. Not for leaving a
+     * roundabout (said with the roundabout) or arriving.
+     */
+    private fun thenWords(i: Int): String {
+        if (route.mode != TravelMode.DRIVE || i >= route.maneuvers.size) return ""
+        val j = (i + 1 until route.maneuvers.size).firstOrNull { !route.maneuvers[it].silent } ?: return ""
+        val a = route.maneuvers[i]; val b = route.maneuvers[j]
+        if (b.leavesRoundabout || b.type == ManeuverType.ARRIVE || b.alongMeters - a.alongMeters >= 70) return ""
+        return ", then ${b.instruction.lowercasedFirst()}"
+    }
+
     /** The one after next, for the "Then" line when two turns come close together. */
     val thenManeuver: Maneuver?
         get() {
@@ -630,7 +643,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
                 val r = route.maneuvers.subList(0, i).lastOrNull { it.type == ManeuverType.ROUNDABOUT }
                 if (r != null && m.alongMeters - r.alongMeters < 150) return
             }
-            speak(m.instruction, urgent = true)
+            speak(m.instruction + thenWords(i), urgent = true)
         } else if (m.leavesRoundabout) {
             return
         } else if (d <= near && d > nowD + 30 && stage < 2) {
@@ -641,7 +654,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             } ?: ""
             val words = if (m.type == ManeuverType.ARRIVE) destinationSide?.let { "your destination is on the $it" } ?: "your destination is ahead"
                 else m.instruction.lowercasedFirst()
-            speak("In ${Fmt.spokenDistance(d)}, $words$lane")
+            speak("In ${Fmt.spokenDistance(d)}, $words${if (m.type == ManeuverType.ARRIVE) "" else thenWords(i)}$lane")
         } else if (d <= far && d > near + 150 && stage < 1 && m.type != ManeuverType.ARRIVE) {
             spokenStage[i] = 1
             if (Voice.onCall) return

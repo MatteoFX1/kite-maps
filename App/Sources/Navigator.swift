@@ -195,6 +195,19 @@ final class Navigator: ObservableObject {
         return road?.isEmpty == false ? road : nil
     }
 
+    /**
+     * ", then turn right onto King Street" when the step after [i] comes so soon after it (70 m)
+     * there's no time to be told on its own, the way Waze says both together. Not for leaving a
+     * roundabout (said with the roundabout) or arriving.
+     */
+    private func thenWords(_ i: Int) -> String {
+        guard route.mode == .drive, i < route.maneuvers.count,
+              let j = route.maneuvers[(i + 1)...].firstIndex(where: { !$0.silent }) else { return "" }
+        let a = route.maneuvers[i], b = route.maneuvers[j]
+        guard !b.leavesRoundabout, b.type != .arrive, b.alongMeters - a.alongMeters < 70 else { return "" }
+        return ", then \(b.instruction.lowercasedFirst)"
+    }
+
     /** The one after next, for the "Then" line when two turns come close together. */
     var thenManeuver: Maneuver? {
         // The route can be swapped a moment before the progress catches up: never read past its steps.
@@ -717,7 +730,7 @@ final class Navigator: ObservableObject {
             if m.leavesRoundabout, let r = route.maneuvers[..<i].last(where: { $0.type == .roundabout }),
                m.alongMeters - r.alongMeters < 150 { return }
             // The turn itself matters more than whatever is still being said.
-            speak(m.instruction, urgent: true)
+            speak(m.instruction + thenWords(i), urgent: true)
         } else if m.leavesRoundabout {
             // Already said with the roundabout ("take the 3rd exit"): only "exit" itself, as it comes up.
             return
@@ -731,7 +744,7 @@ final class Navigator: ObservableObject {
             // "In 200 yards, your destination is on the left", the way Google says it.
             let words = m.type == .arrive ? destinationSide.map { "your destination is on the \($0)" } ?? "your destination is ahead"
                 : m.instruction.lowercasedFirst
-            speak("In \(Fmt.spokenDistance(d)), \(words)\(lane)")
+            speak("In \(Fmt.spokenDistance(d)), \(words)\(m.type == .arrive ? "" : thenWords(i))\(lane)")
         } else if d <= far && d > near + 150 && stage < 1 && m.type != .arrive {
             spokenStage[i] = 1
             // On a phone call only what's needed now is said; the early heads-up would talk over it.

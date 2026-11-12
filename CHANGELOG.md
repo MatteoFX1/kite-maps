@@ -5,7 +5,28 @@ the middle number for big milestones.
 
 ## 0.7.11 (iPhone and Android)
 
-Another check of the basics on both phones, with the bugs it found fixed. Nothing looks different.
+Another check of the basics on both phones, with the bugs it found fixed, and turn-by-turn checked
+on 40 of Britain's trickiest junctions (Spaghetti Junction, both Magic Roundabouts, Hanger Lane,
+Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
+
+- **No more missing turns:** Kite said nothing where the A38(M) splits at Spaghetti Junction
+  ("Keep right to stay on A38(M)"), skipped the second of two roundabouts close together (Six
+  Ways, Erdington), and left out some merges ("Merge onto M8"). Turns the map's directions leave
+  out are now filled in from Google's.
+- **Lanes and signs on more routes:** on about half the test routes, one stretch where the map's
+  directions went a slightly different way made Kite drop them for the whole trip, losing the
+  painted lanes and road signs. Now only that stretch uses Google's directions.
+- **Junction numbers:** motorway exits say the number as well as where they go, like "Take exit 4
+  toward The Midlands and London", and a bare "Take the exit" gets the sign's destination
+  ("towards Emsworth").
+- **Two close turns said together:** when the next turn comes within about 70 m, Kite says both,
+  Waze style: "Turn left, then turn right onto King Street".
+- **Roundabouts Google knows about:** where the map only says "Turn right" but there's a
+  roundabout (Otterbourne Hill), Kite now says "At the roundabout, take the 2nd exit".
+- **Cleaner steps:** one turn is no longer told twice ("Turn right", then "Continue straight onto
+  Wide Lane" 11 m later is now "Turn right onto Wide Lane"), a turn that keeps you on the same
+  road says "to stay on", keep-left and keep-right steps show a keep arrow instead of a full turn,
+  and a turn where the road bends away is no longer called "Continue straight".
 
 - **Speed limits on long drives:** if the speed limit service stopped answering partway through
   a long route, the sign could stay blank after the first 25 km for the rest of the drive. Kite
