@@ -70,11 +70,11 @@ public enum OSRM {
      * The open router forced through points sampled off [line] (Google's route), so its
      * turn-by-turn follows the same roads, the way Vela gets readable steps for Google routes.
      */
-    public static func routeVia(_ line: [LatLng], mode: TravelMode) async throws -> Route? {
+    public static func routeVia(_ line: [LatLng], mode: TravelMode, spacing: Double = 1_500, maxVias: Int = 12) async throws -> Route? {
         guard line.count >= 2 else { return nil }
         let cum = Geo.cumulative(line)
         let total = cum.last ?? 0
-        let vias = min(12, Int(total / 1_500))
+        let vias = min(maxVias, Int(total / spacing))
         var pts = [line[0]]
         var bearings = [bearing(line, cum, at: 0)]
         for i in stride(from: 1, through: vias, by: 1) {
@@ -516,11 +516,17 @@ public enum Directions {
                 })).flatMap { $0 } ?? []
                 var spare = plain
                 for i in g.indices {
-                    if var steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
-                        // Google's step positions are only trustworthy when its steps cover the whole line.
-                        if g[i].stepsComplete {
+                    let candidates = vias[i].map { [$0] + plain } ?? plain
+                    // Google's step positions are only trustworthy when its steps cover the whole line.
+                    let complete = g[i].stepsComplete
+                    if var steps = StepMerge.adopt(candidates, onto: g[i].polyline)
+                        ?? (complete ? StepMerge.adoptPiecewise(candidates, google: g[i].maneuvers, onto: g[i].polyline) : nil) {
+                        if complete {
                             StepMerge.addGoogleLaneHints(&steps, from: g[i].maneuvers)
                             StepMerge.addGoogleExits(&steps, from: g[i].maneuvers)
+                            StepMerge.addGoogleKinds(&steps, from: g[i].maneuvers)
+                            StepMerge.addGoogleMissing(&steps, from: g[i].maneuvers, line: g[i].polyline)
+                            StepMerge.addGoogleSigns(&steps, from: g[i].maneuvers)
                         }
                         g[i].maneuvers = steps
                         g[i].stepsComplete = true
@@ -537,6 +543,7 @@ public enum Directions {
                     for j in g[i].maneuvers.indices where g[i].maneuvers[j].type == .roundabout && g[i].maneuvers[j].exit == nil {
                         g[i].maneuvers[j].exit = DirectionsParser.exitNumber(in: g[i].maneuvers[j].instruction)
                     }
+                    StepMerge.tidy(&g[i].maneuvers)
                     g[i] = Roundabouts.settle(g[i])
                     // Britain and Ireland ("slip road" is British; Australia says "ramp" too).
                     if (49.8...61).contains(a.lat), (-11...2).contains(a.lng) {
@@ -550,7 +557,13 @@ public enum Directions {
         } }
         do {
             let o = try await osrmTask.value
-            if !o.isEmpty { return Result(routes: o.map(Roundabouts.settle)) }
+            if !o.isEmpty {
+                return Result(routes: o.map { r in
+                    var r = r
+                    StepMerge.tidy(&r.maneuvers)
+                    return Roundabouts.settle(r)
+                })
+            }
         } catch {
             err = error.localizedDescription
         }
@@ -630,7 +643,7 @@ public enum StepMerge {
     }
 
     /** Whether [route] keeps within 30 m of [line] everywhere (checked every 50 m), ends aside. */
-    static func follows(_ route: [LatLng], _ line: [LatLng], cumulative cum: [Double]) -> Bool {
+    public static func follows(_ route: [LatLng], _ line: [LatLng], cumulative cum: [Double]) -> Bool {
         guard route.count >= 2 else { return false }
         let rc = Geo.cumulative(route)
         let total = rc.last ?? 0

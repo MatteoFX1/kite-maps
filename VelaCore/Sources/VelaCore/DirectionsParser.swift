@@ -245,7 +245,10 @@ enum DirectionsParser {
             if sharp { return lr(.sharpLeft, .sharpRight, .straight) }
             return lr(.turnLeft, .turnRight, .straight)
         case "UTURN", "UTURN_LEFT", "UTURN_RIGHT": return .uturn
-        case "STRAIGHT", "CONTINUE", "NAME_CHANGE": return .straight
+        case "STRAIGHT", "CONTINUE", "NAME_CHANGE":
+            // "Station Rd turns slightly right and becomes Mount Pleasant Ln": the road bends, and the arrow should too.
+            if left || right { return slight ? lr(.slightLeft, .slightRight, .straight) : sharp ? lr(.sharpLeft, .sharpRight, .straight) : lr(.turnLeft, .turnRight, .straight) }
+            return .straight
         case "MERGE", "MERGE_LEFT", "MERGE_RIGHT": return .merge
         case "FORK", "FORK_LEFT", "FORK_RIGHT": return lr(.forkLeft, .forkRight, .straight)
         case "ON_RAMP", "OFF_RAMP", "RAMP", "RAMP_LEFT", "ON_RAMP_LEFT", "OFF_RAMP_LEFT",
