@@ -449,6 +449,7 @@ object Directions {
                         val steps = StepMerge.adopt(candidates, g[i].polyline)
                             ?: if (complete) StepMerge.adoptPiecewise(candidates, g[i].maneuvers, g[i].polyline) else null
                         if (steps != null) {
+                            StepMerge.dropFalseUTurns(steps, g[i].polyline)
                             if (complete) {
                                 StepMerge.addGoogleLaneHints(steps, g[i].maneuvers)
                                 StepMerge.addGoogleExits(steps, g[i].maneuvers)

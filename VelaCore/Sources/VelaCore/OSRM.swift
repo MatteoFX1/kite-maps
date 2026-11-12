@@ -521,6 +521,7 @@ public enum Directions {
                     let complete = g[i].stepsComplete
                     if var steps = StepMerge.adopt(candidates, onto: g[i].polyline)
                         ?? (complete ? StepMerge.adoptPiecewise(candidates, google: g[i].maneuvers, onto: g[i].polyline) : nil) {
+                        StepMerge.dropFalseUTurns(&steps, line: g[i].polyline)
                         if complete {
                             StepMerge.addGoogleLaneHints(&steps, from: g[i].maneuvers)
                             StepMerge.addGoogleExits(&steps, from: g[i].maneuvers)

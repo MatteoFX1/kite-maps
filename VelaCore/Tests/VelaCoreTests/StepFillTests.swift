@@ -138,4 +138,17 @@ final class StepFillTests: XCTestCase {
         let m = DirectionsParser.parseStep("<step maneuver='TURN' meters='500'>Keep <turn side='RIGHT'>right</turn> to stay on <road>A38(M)</road></step>")
         XCTAssertEqual(m.type, .keepRight)
     }
+
+    func testUTurnTheLineNeverMakesIsDropped() {
+        // Romsey: the router's start sat past the junction, so it turned round and came back.
+        var steps = ends([step(.uturn, "Make a U-turn", 36), step(.sharpRight, "Turn sharp right onto Mill Lane", 36, road: "Mill Lane"),
+                          step(.turnRight, "Turn right onto Church Street", 450, road: "Church Street")])
+        StepMerge.dropFalseUTurns(&steps, line: line)
+        XCTAssertEqual(steps.map(\.instruction), ["Head out", "Turn right onto Church Street", "You have arrived"])
+        // A line that really turns back keeps its U-turn.
+        let back = [LatLng(50.0, -1.0), LatLng(50.001, -1.0), LatLng(50.0, -1.00005)]
+        var real = [step(.depart, "Head out", 0), step(.uturn, "Make a U-turn", 111), step(.arrive, "You have arrived", 222)]
+        StepMerge.dropFalseUTurns(&real, line: back)
+        XCTAssertEqual(real.count, 3)
+    }
 }

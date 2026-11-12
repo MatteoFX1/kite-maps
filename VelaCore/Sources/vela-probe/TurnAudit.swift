@@ -54,8 +54,52 @@ let turnDrives: [(String, LatLng, LatLng)] = [
         ("Belfast Westlink", LatLng(54.6000, -5.9400), LatLng(54.5900, -5.9600)),
     ]
 
+/** A second batch for `TURNSET=2 vela-probe turns`: more interchanges, ring roads and Hampshire roundabouts. */
+let turnDrives2: [(String, LatLng, LatLng)] = [
+    ("M25 J10 Wisley onto the A3 south", LatLng(51.3300, -0.4700), LatLng(51.2900, -0.5300)),
+    ("M60 Simister Island to the M62 east", LatLng(53.5450, -2.2700), LatLng(53.5700, -2.1800)),
+    ("M5 to M6 north at Ray Hall", LatLng(52.5300, -2.0100), LatLng(52.6000, -2.0300)),
+    ("M6 Thelwall to the M56", LatLng(53.4100, -2.5300), LatLng(53.3600, -2.4800)),
+    ("A1(M) to M62 at Ferrybridge", LatLng(53.7300, -1.2700), LatLng(53.7200, -1.3800)),
+    ("Air Balloon roundabout, Cheltenham", LatLng(51.8400, -2.1000), LatLng(51.8700, -2.0600)),
+    ("M4 J4 for Heathrow", LatLng(51.4950, -0.4200), LatLng(51.4700, -0.4500)),
+    ("Hilsea into Portsmouth", LatLng(50.8350, -1.0700), LatLng(50.8100, -1.0700)),
+    ("Charlotte Place roundabout, Southampton", LatLng(50.9150, -1.3950), LatLng(50.9100, -1.4100)),
+    ("Northam Bridge to Bitterne", LatLng(50.9100, -1.3900), LatLng(50.9180, -1.3650)),
+    ("Hockley interchange, Winchester (M3 J11)", LatLng(51.0500, -1.3200), LatLng(51.0350, -1.3300)),
+    ("M27 J5 Southampton Airport", LatLng(50.9450, -1.3650), LatLng(50.9600, -1.3400)),
+    ("Romsey bypass roundabouts", LatLng(50.9900, -1.5100), LatLng(50.9750, -1.4800)),
+    ("Delme roundabout, Fareham", LatLng(50.8500, -1.1650), LatLng(50.8450, -1.1500)),
+    ("Hiltingbury, Chandler's Ford", LatLng(50.9950, -1.3800), LatLng(50.9800, -1.3700)),
+    ("Cooper Dean roundabout, Bournemouth", LatLng(50.7600, -1.8400), LatLng(50.7450, -1.8300)),
+    ("Holes Bay, Poole", LatLng(50.7300, -1.9900), LatLng(50.7150, -1.9800)),
+    ("Salisbury ring road", LatLng(51.0750, -1.8000), LatLng(51.0650, -1.7850)),
+    ("Botley interchange, Oxford", LatLng(51.7500, -1.2900), LatLng(51.7550, -1.2600)),
+    ("Cribbs Causeway, M5 J17", LatLng(51.5250, -2.6000), LatLng(51.5300, -2.5700)),
+    ("Exeter M5 J30", LatLng(50.7100, -3.4700), LatLng(50.7200, -3.5000)),
+    ("Marsh Mills, Plymouth", LatLng(50.3950, -4.0850), LatLng(50.3850, -4.1150)),
+    ("Queensway tunnel approach, Liverpool", LatLng(53.4050, -2.9750), LatLng(53.4100, -2.9900)),
+    ("Sheffield Parkway to the centre", LatLng(53.3900, -1.4300), LatLng(53.3800, -1.4650)),
+    ("Nottingham ring road, Basford", LatLng(52.9800, -1.1850), LatLng(52.9600, -1.1700)),
+    ("Leicester St Margaret's", LatLng(52.6450, -1.1350), LatLng(52.6350, -1.1300)),
+    ("Coventry ring road", LatLng(52.4100, -1.5150), LatLng(52.4050, -1.4950)),
+    ("Norwich ring road", LatLng(52.6350, 1.2800), LatLng(52.6250, 1.3050)),
+    ("Culverhouse Cross, Cardiff", LatLng(51.4650, -3.2650), LatLng(51.4800, -3.2300)),
+    ("Fabian Way, Swansea", LatLng(51.6250, -3.9200), LatLng(51.6200, -3.9450)),
+    ("Haymarket, Edinburgh", LatLng(55.9450, -3.2200), LatLng(55.9500, -3.1950)),
+    ("Haudagain roundabout, Aberdeen", LatLng(57.1700, -2.1400), LatLng(57.1550, -2.1150)),
+    ("Kingsway, Dundee", LatLng(56.4800, -3.0000), LatLng(56.4700, -2.9700)),
+    ("Raigmore interchange, Inverness", LatLng(57.4750, -4.1900), LatLng(57.4800, -4.2250)),
+    ("Mytongate, Hull", LatLng(53.7400, -0.3500), LatLng(53.7450, -0.3250)),
+    ("Hopgrove roundabout, York", LatLng(53.9850, -1.0300), LatLng(53.9700, -1.0700)),
+    ("Pentagon island, Derby", LatLng(52.9250, -1.4500), LatLng(52.9200, -1.4750)),
+    ("M1 J15 Northampton", LatLng(52.1950, -0.9200), LatLng(52.2150, -0.8900)),
+    ("A34/M4 Chieveley", LatLng(51.4500, -1.3100), LatLng(51.4300, -1.3250)),
+    ("Sandown, Isle of Wight lanes", LatLng(50.6550, -1.1550), LatLng(50.6450, -1.1700)),
+]
+
 func turnAudit() async {
-    let drives = turnDrives
+    let drives = ProcessInfo.processInfo.environment["TURNSET"] == "2" ? turnDrives2 : turnDrives
     let only = CommandLine.arguments.count > 2 ? Int(CommandLine.arguments[2]) : nil
     var flags: [String: Int] = [:]
     var steps = 0

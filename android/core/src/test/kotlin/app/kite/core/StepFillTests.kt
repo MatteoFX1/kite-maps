@@ -135,4 +135,15 @@ class StepFillTests {
         val m = DirectionsParser.parseStep("<step maneuver='TURN' meters='500'>Keep <turn side='RIGHT'>right</turn> to stay on <road>A38(M)</road></step>")
         assertEquals(ManeuverType.KEEP_RIGHT, m.type)
     }
+
+    @Test fun uTurnTheLineNeverMakesIsDropped() {
+        val steps = ends(listOf(step(ManeuverType.UTURN, "Make a U-turn", 36.0), step(ManeuverType.SHARP_RIGHT, "Turn sharp right onto Mill Lane", 36.0, road = "Mill Lane"),
+            step(ManeuverType.TURN_RIGHT, "Turn right onto Church Street", 450.0, road = "Church Street")))
+        StepMerge.dropFalseUTurns(steps, line)
+        assertEquals(listOf("Head out", "Turn right onto Church Street", "You have arrived"), steps.map { it.instruction })
+        val back = listOf(LatLng(50.0, -1.0), LatLng(50.001, -1.0), LatLng(50.0, -1.00005))
+        val real = mutableListOf(step(ManeuverType.DEPART, "Head out", 0.0), step(ManeuverType.UTURN, "Make a U-turn", 111.0), step(ManeuverType.ARRIVE, "You have arrived", 222.0))
+        StepMerge.dropFalseUTurns(real, back)
+        assertEquals(3, real.size)
+    }
 }

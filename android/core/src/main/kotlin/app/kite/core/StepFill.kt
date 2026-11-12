@@ -110,6 +110,33 @@ internal fun respace(all: MutableList<Maneuver>) {
 }
 
 /**
+ * A "Make a U-turn" from the open router where the route line itself doesn't turn back: its start
+ * was put on the wrong side of a junction, so it drove 20 m on, turned round and came back (Romsey,
+ * 2026-11-12). The U-turn goes, and so does the turn straight after it that only undoes it.
+ */
+fun StepMerge.dropFalseUTurns(steps: MutableList<Maneuver>, line: List<LatLng>) {
+    val cum = Geo.cumulative(line)
+    val total = cum.last()
+    fun heading(a: Double, b: Double): Double? {
+        val p = Geo.point(line, max(0.0, a), cum)
+        val q = Geo.point(line, min(total, b), cum)
+        return if (p.distanceTo(q) > 3) Geo.bearing(p, q) else null
+    }
+    var i = 0
+    while (i < steps.size) {
+        val m = steps[i]
+        if (m.type != ManeuverType.UTURN || m.silent) { i++; continue }
+        val a = heading(m.alongMeters - 40, m.alongMeters)
+        val b = heading(m.alongMeters, m.alongMeters + 40)
+        if (a != null && b != null && Geo.diff(a, b) > 135) { i++; continue }
+        steps.removeAt(i)
+        val j = (i until steps.size).firstOrNull { !steps[it].silent }
+        if (j != null && steps[j].type != ManeuverType.ARRIVE && steps[j].alongMeters - m.alongMeters < 40) steps.removeAt(j)
+    }
+    respace(steps)
+}
+
+/**
  * Google's turns that the open router has nothing for, each lined up first by the nearest turn
  * both of them have (Google counts its steps back from the end, which can drift by tens of
  * metres). A quiet "the road's name changes" step right there takes the turn instead. Merges too

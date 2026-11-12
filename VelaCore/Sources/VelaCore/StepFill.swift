@@ -103,6 +103,39 @@ extension StepMerge {
     }
 
     /**
+     * A "Make a U-turn" from the open router where the route line itself doesn't turn back: its
+     * start was put on the wrong side of a junction, so it drove 20 m on, turned round and came
+     * back, and Kite said "Make a U-turn", then "Turn sharp right onto Mill Lane" where Google
+     * says "Slight left to stay on Mill Ln" (Romsey, 2026-11-12). The U-turn goes, and so does
+     * the turn straight after it that only undoes it.
+     */
+    public static func dropFalseUTurns(_ steps: inout [Maneuver], line: [LatLng]) {
+        let cum = Geo.cumulative(line)
+        let total = cum.last ?? 0
+        func heading(_ a: Double, _ b: Double) -> Double? {
+            let p = Geo.point(along: line, meters: max(0, a), cumulative: cum), q = Geo.point(along: line, meters: min(total, b), cumulative: cum)
+            return p.distance(to: q) > 3 ? Geo.bearing(p, q) : nil
+        }
+        var i = 0
+        while i < steps.count {
+            let m = steps[i]
+            guard m.type == .uturn, !m.silent else { i += 1; continue }
+            // The line's own way round over the 40 m either side: a real U-turn goes back the way it came.
+            var back = false
+            if let a = heading(m.alongMeters - 40, m.alongMeters), let b = heading(m.alongMeters, m.alongMeters + 40) {
+                back = Roundabouts.angleGap(a, b) > 135
+            }
+            if back { i += 1; continue }
+            steps.remove(at: i)
+            if let j = steps[i...].firstIndex(where: { !$0.silent }), j < steps.count, steps[j].type != .arrive,
+               steps[j].alongMeters - m.alongMeters < 40 {
+                steps.remove(at: j)
+            }
+        }
+        respace(&steps)
+    }
+
+    /**
      * Google's turns that the open router has nothing for (it leaves out a turn it thinks is
      * obvious, like keeping right where the A38(M) splits at Spaghetti Junction, or the second of
      * two roundabouts close together). Google places its steps by counting back from the end of
