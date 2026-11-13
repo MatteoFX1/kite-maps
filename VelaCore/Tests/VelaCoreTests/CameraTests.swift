@@ -197,6 +197,27 @@ final class ValhallaTests: XCTestCase {
         XCTAssertEqual(p.ways.map(\.id), [11, 12, 13])
     }
 
+    /** Wide Lane, Southampton (2026-11-13): the road matcher's lane count where the road meets a roundabout. */
+    func testRoundaboutEntryLanesFromTheMatcher() throws {
+        let json = """
+        {"shape":"_ibE_ibE_ibE?_ibE?_ibE?","edges":[
+         {"way_id":1,"lane_count":1,"length":0.1,"begin_shape_index":0,"end_shape_index":1},
+         {"way_id":2,"lane_count":3,"length":0.1,"begin_shape_index":1,"end_shape_index":2},
+         {"way_id":3,"lane_count":2,"roundabout":true,"length":0.02,"begin_shape_index":2,"end_shape_index":3},
+         {"way_id":4,"lane_count":1,"length":0.1,"begin_shape_index":3,"end_shape_index":4}]}
+        """
+        let p = try XCTUnwrap(Valhalla.parse(Data(json.utf8)))
+        XCTAssertEqual(p.entries.map(\.lanes), [3])
+        let shape = Geo.decodePolyline("_ibE_ibE_ibE?_ibE?_ibE?")
+        XCTAssertEqual(p.entries[0].at, shape[2])
+        // Put on the roundabout step there, only where nothing better is known.
+        var m = Maneuver(type: .roundabout, instruction: "At the roundabout, take the 2nd exit", location: shape[2], alongMeters: 200, distanceMeters: 0, exit: 2)
+        m.roundabout = RoundaboutShape(exits: [270, 60], taken: 1, clockwise: true, complete: false)
+        XCTAssertEqual(Roundabouts.withEntryLanes([m], p.entries)?[0].roundabout?.entryLanes, 3)
+        m.roundabout?.entryLanes = 2
+        XCTAssertNil(Roundabouts.withEntryLanes([m], p.entries))
+    }
+
     /** A British road mapped "maxspeed=30" with no unit is 30 mph, not 19; elsewhere 30 stays km/h. */
     func testBritishUnitlessLimitIsMph() {
         let eastleigh = LatLng(50.9613, -1.3705), paris = LatLng(48.85, 2.35), dublin = LatLng(53.35, -6.26)

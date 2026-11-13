@@ -84,6 +84,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     private var fullRoadData = false
     private var matchedLimits = false
     private var matchedWays: List<Overpass.LimitWay> = emptyList()
+    /** The road matcher's lane counts into each roundabout on this route. */
+    private var entryLanes: List<RoundaboutEntry> = emptyList()
     var onFinished: (() -> Unit)? = null
     private var toldContinue = mutableSetOf<Int>()
     private var lastReroute = 0L
@@ -300,6 +302,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             // Only the pictures change, not the steps: the tracker keeps its place on the route,
             // like the iPhone's (a new one could snap to the wrong part of a route that loops back).
             route = route.copy(maneuvers = steps)
+            // The road matcher's lane counts, where OpenStreetMap's layout came without them.
+            Roundabouts.withEntryLanes(route.maneuvers, entryLanes)?.let { route = route.copy(maneuvers = it) }
         }
     }
 
@@ -336,6 +340,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         fullRoadData = false
         matchedLimits = false
         matchedWays = emptyList()
+        entryLanes = emptyList()
         val matcher = scope.async {
             val found = Valhalla.speedLimits(line) { partial ->
                 withContext(Dispatchers.Main) {
@@ -352,6 +357,9 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             matchedLimits = true
             setLimits(found.limits)
             matchedWays = found.ways
+            // How many lanes go into each roundabout, in case OpenStreetMap's own answer doesn't come.
+            entryLanes = found.entries
+            Roundabouts.withEntryLanes(route.maneuvers, found.entries)?.let { route = route.copy(maneuvers = it) }
             routeCameras = onOurSide(routeCameras)
             camerasTick++
             withContext(Dispatchers.IO) { RoadCache.shared.add(found.ways.filter { it.kmh != null }, emptyList(), emptyList()) }

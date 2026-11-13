@@ -331,6 +331,8 @@ final class Navigator: ObservableObject {
             for i in self.route.maneuvers.indices where i < drawn.maneuvers.count {
                 self.route.maneuvers[i].roundabout = drawn.maneuvers[i].roundabout
             }
+            // The road matcher's lane counts, where OpenStreetMap's layout came without them.
+            if let steps = Roundabouts.withEntryLanes(self.route.maneuvers, self.entryLanes) { self.route.maneuvers = steps }
         }
     }
 
@@ -352,6 +354,9 @@ final class Navigator: ObservableObject {
         }
     }
 
+    /** The road matcher's lane counts into each roundabout on this route. */
+    private var entryLanes: [RoundaboutEntry] = []
+
     private func loadCameras() {
         routeCameras = []
         // Kept across a reroute: a camera already warned about isn't warned about again.
@@ -367,6 +372,7 @@ final class Navigator: ObservableObject {
         fullRoadData = false
         matchedLimits = false
         matchedWays = []
+        entryLanes = []
         // Speed limits from the road matcher first: it answers in about a second.
         let matcher = Task { () -> Bool in
             let found = await Valhalla.speedLimits(along: line) { partial in
@@ -386,6 +392,9 @@ final class Navigator: ObservableObject {
             self.matchedLimits = true
             self.route.speedLimits = found.limits
             self.matchedWays = found.ways
+            // How many lanes go into each roundabout, in case OpenStreetMap's own answer doesn't come.
+            self.entryLanes = found.entries
+            if let steps = Roundabouts.withEntryLanes(self.route.maneuvers, found.entries) { self.route.maneuvers = steps }
             self.routeCameras = self.onOurSide(self.routeCameras)
             RoadCache.shared.add(ways: found.ways.filter { $0.kmh != nil }, cameras: [], signals: [])
             return true
