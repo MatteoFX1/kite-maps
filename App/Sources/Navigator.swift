@@ -166,8 +166,8 @@ final class Navigator: ObservableObject {
         }
         // The first step with how far it is ("In 300 yards, turn left"), so a turn a little way off
         // doesn't sound like it's right here.
-        let firstWords = first.map { f in f.alongMeters < 40 || f.type == .arrive ? "\(f.instruction)."
-            : "In \(Fmt.spokenDistance(f.alongMeters)), \(f.instruction.lowercasedFirst)." } ?? ""
+        let firstWords = first.map { f in f.alongMeters < 40 || f.type == .arrive ? "\(f.spokenWords)."
+            : "In \(Fmt.spokenDistance(f.alongMeters)), \(f.spokenWords.lowercasedFirst)." } ?? ""
         speak("Starting route to \(destination.name). " + firstWords)
         // That was the heads-up for the first step: don't say it again a moment later, but still
         // say the turn itself as it comes up.
@@ -211,7 +211,7 @@ final class Navigator: ObservableObject {
               let j = route.maneuvers[(i + 1)...].firstIndex(where: { !$0.silent }) else { return "" }
         let a = route.maneuvers[i], b = route.maneuvers[j]
         guard !b.leavesRoundabout, b.type != .arrive, b.alongMeters - a.alongMeters < 70 else { return "" }
-        return ", then \(b.instruction.lowercasedFirst)"
+        return ", then \(b.spokenWords.lowercasedFirst)"
     }
 
     /** The one after next, for the "Then" line when two turns come close together. */
@@ -736,7 +736,7 @@ final class Navigator: ObservableObject {
             if m.leavesRoundabout, let r = route.maneuvers[..<i].last(where: { $0.type == .roundabout }),
                m.alongMeters - r.alongMeters < 150 { return }
             // The turn itself matters more than whatever is still being said.
-            speak(m.instruction + thenWords(i), urgent: true)
+            speak(m.spokenWords + thenWords(i), urgent: true)
         } else if m.leavesRoundabout {
             // Already said with the roundabout ("take the 3rd exit"): only "exit" itself, as it comes up.
             return
@@ -749,13 +749,13 @@ final class Navigator: ObservableObject {
             } ?? ""
             // "In 200 yards, your destination is on the left", the way Google says it.
             let words = m.type == .arrive ? destinationSide.map { "your destination is on the \($0)" } ?? "your destination is ahead"
-                : m.instruction.lowercasedFirst
+                : m.spokenWords.lowercasedFirst
             speak("In \(Fmt.spokenDistance(d)), \(words)\(m.type == .arrive ? "" : thenWords(i))\(lane)")
         } else if d <= far && d > near + 150 && stage < 1 && m.type != .arrive {
             spokenStage[i] = 1
             // On a phone call only what's needed now is said; the early heads-up would talk over it.
             if onCall { return }
-            speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
+            speak("In \(Fmt.spokenDistance(d)), \(m.spokenWords.lowercasedFirst)")
         } else if drive && d > 3000 && stage < 1 && !toldContinue.contains(i) && justPassed(p) {
             // A long way to the next turn, like after joining a motorway: say so once, the way
             // Google does ("Continue on M27 for 7 miles"), so a quiet stretch doesn't feel lost.
@@ -827,7 +827,7 @@ final class Navigator: ObservableObject {
             speak(continueWords(d))
         } else {
             spokenStage[i] = d <= near ? 2 : 1
-            speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
+            speak("In \(Fmt.spokenDistance(d)), \(m.spokenWords.lowercasedFirst)")
         }
     }
 
@@ -967,6 +967,19 @@ final class SpeechDone: NSObject, AVSpeechSynthesizerDelegate {
             guard !synthesizer.isSpeaking else { return }
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
+    }
+}
+
+extension Maneuver {
+    /**
+     * What the voice says for this step: a roundabout's way off too, as the banner shows it, so it's
+     * "take the 3rd exit onto West End Road" and not just "take the 3rd exit" (the open router's
+     * roundabout steps often leave the road out of the words).
+     */
+    var spokenWords: String {
+        guard type == .roundabout, !leavesRoundabout, let r = road?.trimmingCharacters(in: .whitespaces), !r.isEmpty,
+              !instruction.contains(" onto "), !instruction.contains(" toward") else { return instruction }
+        return instruction + " onto \(r)"
     }
 }
 

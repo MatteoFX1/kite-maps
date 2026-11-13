@@ -149,8 +149,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         // The first step with how far it is ("In 300 yards, turn left"), so a turn a little way off
         // doesn't sound like it's right here.
         val firstWords = first?.let { f ->
-            if (f.alongMeters < 40 || f.type == ManeuverType.ARRIVE) "${f.instruction}."
-            else "In ${Fmt.spokenDistance(f.alongMeters)}, ${f.instruction.lowercasedFirst()}."
+            if (f.alongMeters < 40 || f.type == ManeuverType.ARRIVE) "${f.spokenWords}."
+            else "In ${Fmt.spokenDistance(f.alongMeters)}, ${f.spokenWords.lowercasedFirst()}."
         } ?: ""
         speak("Starting route to ${destination.name}. $firstWords")
         // That was the heads-up for the first step: not again a moment later, but still the turn itself.
@@ -196,7 +196,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         val j = (i + 1 until route.maneuvers.size).firstOrNull { !route.maneuvers[it].silent } ?: return ""
         val a = route.maneuvers[i]; val b = route.maneuvers[j]
         if (b.leavesRoundabout || b.type == ManeuverType.ARRIVE || b.alongMeters - a.alongMeters >= 70) return ""
-        return ", then ${b.instruction.lowercasedFirst()}"
+        return ", then ${b.spokenWords.lowercasedFirst()}"
     }
 
     /** The one after next, for the "Then" line when two turns come close together. */
@@ -659,7 +659,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
                 val r = route.maneuvers.subList(0, i).lastOrNull { it.type == ManeuverType.ROUNDABOUT }
                 if (r != null && m.alongMeters - r.alongMeters < 150) return
             }
-            speak(m.instruction + thenWords(i), urgent = true)
+            speak(m.spokenWords + thenWords(i), urgent = true)
         } else if (m.leavesRoundabout) {
             return
         } else if (d <= near && d > nowD + 30 && stage < 2) {
@@ -669,12 +669,12 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
                 else ". Use the ${g.second.lowercase()}"
             } ?: ""
             val words = if (m.type == ManeuverType.ARRIVE) destinationSide?.let { "your destination is on the $it" } ?: "your destination is ahead"
-                else m.instruction.lowercasedFirst()
+                else m.spokenWords.lowercasedFirst()
             speak("In ${Fmt.spokenDistance(d)}, $words${if (m.type == ManeuverType.ARRIVE) "" else thenWords(i)}$lane")
         } else if (d <= far && d > near + 150 && stage < 1 && m.type != ManeuverType.ARRIVE) {
             spokenStage[i] = 1
             if (Voice.onCall) return
-            speak("In ${Fmt.spokenDistance(d)}, ${m.instruction.lowercasedFirst()}")
+            speak("In ${Fmt.spokenDistance(d)}, ${m.spokenWords.lowercasedFirst()}")
         } else if (drive && d > 3000 && stage < 1 && !toldContinue.contains(i) && justPassed(p)) {
             toldContinue.add(i)
             if (!Voice.onCall) speak(continueWords(d))
@@ -735,7 +735,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             speak(continueWords(d))
         } else {
             spokenStage[i] = if (d <= near) 2 else 1
-            speak("In ${Fmt.spokenDistance(d)}, ${m.instruction.lowercasedFirst()}")
+            speak("In ${Fmt.spokenDistance(d)}, ${m.spokenWords.lowercasedFirst()}")
         }
     }
 
@@ -860,3 +860,15 @@ object LaneGuide {
         return lanes to words
     }
 }
+
+/**
+ * What the voice says for this step: a roundabout's way off too, as the banner shows it, so it's
+ * "take the 3rd exit onto West End Road" and not just "take the 3rd exit" (the open router's
+ * roundabout steps often leave the road out of the words).
+ */
+val Maneuver.spokenWords: String
+    get() {
+        val r = road?.trim()
+        if (type != ManeuverType.ROUNDABOUT || leavesRoundabout || r.isNullOrEmpty() || instruction.contains(" onto ") || instruction.contains(" toward")) return instruction
+        return "$instruction onto $r"
+    }

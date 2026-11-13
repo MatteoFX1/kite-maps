@@ -46,6 +46,8 @@ Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
 - **Long drives load again:** on a long trip like Southampton to Newcastle, when the map's own
   directions server was slow (often at night), Kite could sit on "Finding routes…" for minutes.
   The step that lines its turns up with Google's route now takes a fraction of a second.
+- **Roundabouts say the road:** the voice now says "take the 3rd exit onto West End Road", like the
+  banner, instead of sometimes leaving the road off.
 - **New police heat map look ("blue lights"):** roads where police get reported now glow blue,
   turning violet and pink at the worst spots, instead of a muddy yellow-to-red haze that looked
   like traffic jams. Quiet roads stay clear, and closer in it follows the roads sharply instead
