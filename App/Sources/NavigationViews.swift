@@ -563,7 +563,6 @@ struct TripBar: View {
             HStack(alignment: .top, spacing: 4) {
                 stat(Text(arrive.time) + Text(arrive.suffix).font(.system(size: 16, weight: .bold)),
                      "arrive", TripBody.delayColor(nav.route, scheme))
-                    .layoutPriority(1)
                 stat(Text(left.value), left.unit, .primary)
                 stat(Text(dist.value), dist.unit, .primary)
             }
