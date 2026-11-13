@@ -45,6 +45,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -431,13 +434,27 @@ fun TripBar(nav: Navigator, onEnd: () -> Unit, onSteps: () -> Unit) {
         val left = timeParts(remaining)
         val dist = distanceParts(meters)
         val spoken = "Arrive at ${Fmt.arrival(remaining)}, ${Fmt.duration(remaining)}, ${Fmt.distance(meters)} to go"
-        Row(Modifier.weight(1f).clearAndSetSemantics { contentDescription = spoken }, verticalAlignment = Alignment.Top) {
-            TripStat(Modifier.weight(1.45f), buildAnnotatedString {
+        // The biggest size where all three fit with a gap between them, all three the same size
+        // (so they share a line), dropping the small "am"/"pm" only when even that won't fit.
+        BoxWithConstraints(Modifier.weight(1f).clearAndSetSemantics { contentDescription = spoken }, contentAlignment = Alignment.Center) {
+            val measurer = rememberTextMeasurer()
+            val gap = 14.dp
+            val avail = with(LocalDensity.current) { maxWidth.toPx() - 2 * gap.toPx() }
+            fun arriveText(size: Int, ampm: Boolean) = buildAnnotatedString {
                 append(arrive.first)
-                if (arrive.second.isNotEmpty()) withStyle(SpanStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold)) { append(arrive.second) }
-            }, "arrive", delayColor(nav.route, dark))
-            TripStat(Modifier.weight(1f), AnnotatedString(left.first), left.second, primaryText)
-            TripStat(Modifier.weight(1f), AnnotatedString(dist.first), dist.second, primaryText)
+                if (ampm && arrive.second.isNotEmpty()) withStyle(SpanStyle(fontSize = (size * 0.53f).sp, fontWeight = FontWeight.Bold)) { append(arrive.second) }
+            }
+            val candidates = listOf(30 to true, 27 to true, 24 to true, 24 to false, 21 to false, 18 to false)
+            val (size, ampm) = candidates.firstOrNull { (s, a) ->
+                val style = TextStyle(fontSize = s.sp, fontWeight = FontWeight.ExtraBold)
+                listOf(arriveText(s, a), AnnotatedString(left.first), AnnotatedString(dist.first))
+                    .sumOf { measurer.measure(it, style, maxLines = 1, softWrap = false).size.width } <= avail
+            } ?: candidates.last()
+            Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.Top) {
+                TripStat(arriveText(size, ampm), "arrive", delayColor(nav.route, dark), size)
+                TripStat(AnnotatedString(left.first), left.second, primaryText, size)
+                TripStat(AnnotatedString(dist.first), dist.second, primaryText, size)
+            }
         }
         Box(Modifier.size(64.dp).clip(CircleShape).background(Vela.chip(dark)).tap(onSteps), contentAlignment = Alignment.Center) {
             Icon(Icons.AutoMirrored.Filled.List, "Trip and steps", tint = primaryText, modifier = Modifier.size(30.dp))
@@ -446,22 +463,12 @@ fun TripBar(nav: Navigator, onEnd: () -> Unit, onSteps: () -> Unit) {
 }
 
 @Composable
-private fun TripStat(modifier: Modifier, big: AnnotatedString, label: String, color: Color) {
+private fun TripStat(big: AnnotatedString, label: String, color: Color, size: Int) {
     val dark = LocalDark.current
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        // Same height for all three, so the labels underneath line up even when one number shrinks to fit.
-        Box(Modifier.height(38.dp), contentAlignment = Alignment.BottomCenter) { AutoSizeText(big, color) }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(big, fontSize = size.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, softWrap = false, lineHeight = (size + 2).sp)
         Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Vela.muted(dark), maxLines = 1)
     }
-}
-
-/** Big text that shrinks a little (down to 60%) rather than cut off, like minimumScaleFactor on iPhone. */
-@Composable
-private fun AutoSizeText(text: AnnotatedString, color: Color) {
-    var size by remember(text) { mutableStateOf(30f) }
-    Text(text, fontSize = size.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, softWrap = false,
-        lineHeight = (size + 2).sp,
-        onTextLayout = { if (it.hasVisualOverflow && size > 18f) size -= 2f })
 }
 
 /** "9:18" and " pm" (nothing on a 24 hour clock), so the time stays big and the pm small. */

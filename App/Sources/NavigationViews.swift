@@ -560,18 +560,17 @@ struct TripBar: View {
             let arrive = TripBar.arrivalParts(remaining)
             let left = TripBar.timeParts(remaining)
             let dist = TripBar.distanceParts(meters)
-            // The arrival time gets a wider share, since "10:42 pm" is longer than "8" or "2.1".
-            GeometryReader { g in
-                HStack(spacing: 0) {
-                    stat(Text(arrive.time) + Text(arrive.suffix).font(.system(size: 16, weight: .bold)),
-                         "arrive", TripBody.delayColor(nav.route, scheme))
-                        .frame(width: g.size.width * 0.42)
-                    stat(Text(left.value), left.unit, .primary).frame(width: g.size.width * 0.29)
-                    stat(Text(dist.value), dist.unit, .primary).frame(width: g.size.width * 0.29)
-                }
-                .frame(maxHeight: .infinity)
+            // The biggest size where all three fit with a gap between them, all three the same size
+            // (so they share a line), dropping the small "am"/"pm" only when even that won't fit.
+            let color = TripBody.delayColor(nav.route, scheme)
+            ViewThatFits(in: .horizontal) {
+                stats(arrive, left, dist, color, size: 30, ampm: true)
+                stats(arrive, left, dist, color, size: 27, ampm: true)
+                stats(arrive, left, dist, color, size: 24, ampm: true)
+                stats(arrive, left, dist, color, size: 24, ampm: false)
+                stats(arrive, left, dist, color, size: 21, ampm: false)
+                stats(arrive, left, dist, color, size: 18, ampm: false)
             }
-            .frame(height: 60)
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Arrive at \(Fmt.arrival(remaining)), \(Fmt.duration(remaining)), \(Fmt.distance(meters)) to go")
@@ -592,16 +591,21 @@ struct TripBar: View {
         .padding(.bottom, 4)
     }
 
-    private func stat(_ big: Text, _ label: String, _ color: Color) -> some View {
-        VStack(spacing: 0) {
-            // Same height for all three, so the labels underneath line up even when one number shrinks to fit.
-            big.font(.system(size: 30, weight: .heavy)).foregroundColor(color)
-                .lineLimit(1).minimumScaleFactor(0.5)
-                .frame(height: 38, alignment: .bottom)
-            Text(label).font(.system(size: 14, weight: .medium)).foregroundColor(Vela.muted(scheme))
-                .lineLimit(1)
+    private func stats(_ arrive: (time: String, suffix: String), _ left: (value: String, unit: String),
+                       _ dist: (value: String, unit: String), _ color: Color, size: CGFloat, ampm: Bool) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            stat(Text(arrive.time) + Text(ampm ? arrive.suffix : "").font(.system(size: size * 0.53, weight: .bold)), "arrive", color, size)
+            stat(Text(left.value), left.unit, .primary, size)
+            stat(Text(dist.value), dist.unit, .primary, size)
         }
-        .frame(maxWidth: .infinity)
+        .fixedSize()
+    }
+
+    private func stat(_ big: Text, _ label: String, _ color: Color, _ size: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            big.font(.system(size: size, weight: .heavy)).monospacedDigit().foregroundColor(color).lineLimit(1)
+            Text(label).font(.system(size: 14, weight: .medium)).foregroundColor(Vela.muted(scheme)).lineLimit(1)
+        }
     }
 
     /** "9:18" and " pm" (nothing on a 24 hour clock), so the time stays big and the pm small. */
