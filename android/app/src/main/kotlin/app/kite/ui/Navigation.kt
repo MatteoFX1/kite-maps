@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -73,14 +74,34 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
     // Screenshot run: the end trip question.
     if (DemoScript.step == "endtrip") LaunchedEffect(Unit) { kotlinx.coroutines.delay(4000); confirmEnd = true }
 
-    val mainCards = if (nav.arrived) 0 else listOf(nav.cameraAhead != null, nav.wazeAhead != null, nav.averageCheck != null).count { it }
-    // With two other cards up, a police aircraft shrinks to a chip by the speed badge.
-    val aircraftAsChip = mainCards >= 2
+    // Every warning that's up, most important first. Only the first gets the big card, like Waze;
+    // the rest wait in one small pill. Whatever you'll reach first along the route wins, except a
+    // camera while you're over its limit, which always wins (that's the one that costs a fine).
+    // An average check and a police aircraft aren't a spot on the road ahead, so they only get the
+    // big card when nothing else is up.
+    val alertsUp = buildList {
+        if (nav.arrived) return@buildList
+        val ahead = listOfNotNull(nav.cameraAhead?.let { NavAlert.CAMERA to it.meters }, nav.wazeAhead?.let { NavAlert.WAZE to it.meters })
+        addAll(ahead.sortedBy { it.second }.map { it.first })
+        val cam = nav.cameraAhead
+        val limit = cam?.limitKmh ?: nav.speedLimitKmh
+        if (cam != null && limit != null && nav.speedMps * 3.6 > limit + 3 && indexOf(NavAlert.CAMERA) > 0) {
+            remove(NavAlert.CAMERA); add(0, NavAlert.CAMERA)
+        }
+        if (nav.averageCheck != null) add(NavAlert.AVERAGE)
+        if (nav.aircraftNear != null) add(NavAlert.AIRCRAFT)
+    }
+    // The warning shown for a few seconds after tapping the "also ahead" pill.
+    var peek by remember { mutableStateOf<NavAlert?>(null) }
+    LaunchedEffect(peek) { if (peek != null) { delay(4000); peek = null } }
+    val mainAlert = peek?.takeIf { it in alertsUp } ?: alertsUp.firstOrNull()
+    val others = alertsUp.filter { it != mainAlert }
+    // The voice choice just picked, shown by the speaker button for a moment.
+    var voiceNote by remember { mutableStateOf<VoiceMode?>(null) }
+    LaunchedEffect(voiceNote) { if (voiceNote != null) { delay(2500); voiceNote = null } }
     val risk = nav.policeRisk
-    val showRiskChip = risk != null && !nav.arrived && mainCards < 2 && PoliceRisk.level(risk) != PoliceRisk.Level.LOW
-    val chipShowing = showRiskChip || (nav.aircraftNear != null && !nav.arrived && aircraftAsChip)
-    // With a camera and a Waze report both up, the average check waits its turn.
-    val showAverage = !(nav.cameraAhead != null && nav.wazeAhead != null)
+    val showRiskChip = risk != null && !nav.arrived && PoliceRisk.level(risk) != PoliceRisk.Level.LOW
+    val chipShowing = showRiskChip
 
     fun etaText(): String {
         val left = nav.progress?.remainingSeconds ?: nav.route.durationSeconds
@@ -118,10 +139,15 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
                         model.endNavigation()
                     }
                 } else InstructionBanner(nav)
-                nav.cameraAhead?.takeIf { !nav.arrived }?.let { CameraCard(it, nav.speedMps * 3.6) }
-                nav.wazeAhead?.takeIf { !nav.arrived }?.let { w -> Box(Modifier.tap { nav.dismissWaze() }) { WazeCard(w) } }
-                nav.aircraftNear?.takeIf { !nav.arrived && !aircraftAsChip }?.let { AircraftCard(it.aircraft, it.meters) }
-                nav.averageCheck?.takeIf { !nav.arrived && showAverage }?.let { AverageCheckCard(it) }
+                // One warning at a time; the others wait in the pill under it.
+                when (mainAlert) {
+                    NavAlert.CAMERA -> nav.cameraAhead?.let { CameraCard(it, nav.speedMps * 3.6, nav.speedLimitKmh) }
+                    NavAlert.WAZE -> nav.wazeAhead?.let { w -> Box(Modifier.tap { nav.dismissWaze() }) { WazeCard(w) } }
+                    NavAlert.AVERAGE -> nav.averageCheck?.let { AverageCheckCard(it) }
+                    NavAlert.AIRCRAFT -> nav.aircraftNear?.let { AircraftCard(it.aircraft, it.meters) }
+                    null -> {}
+                }
+                if (others.isNotEmpty()) AlsoAheadPill(nav, others) { peek = others.first() }
                 if (nav.gpsLost && !nav.arrived) {
                     // In a tunnel the speed and the next turn stop moving: say why, so it doesn't look live.
                     Row(Modifier.align(Alignment.CenterHorizontally).height(44.dp).glass(CircleShape).padding(horizontal = 18.dp),
@@ -140,13 +166,31 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
             Spacer(Modifier.weight(1f))
             Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    nav.aircraftNear?.takeIf { !nav.arrived && aircraftAsChip }?.let { AircraftChip(it.aircraft, it.meters) }
                     // A Waze police card already says it louder; the chip comes back when it's gone.
                     if (showRiskChip && risk != null) PoliceRiskChip(risk)
                     SpeedBadge(nav.speedMps, nav.speedLimitKmh)
                 }
                 Spacer(Modifier.weight(1f))
-                MapFab(if (nav.muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp, size = 64.dp) { nav.muted = !nav.muted }
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    voiceNote?.let { note ->
+                        // Says which of the three the speaker is on now, for a moment.
+                        Column(Modifier.shadow(6.dp, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp)).background(hex(0x0F172A).copy(alpha = 0.95f))
+                            .padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(note.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Vela.accentText(true))
+                            Text(note.detail, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                        }
+                    }
+                    val icon = when (nav.voiceMode) {
+                        VoiceMode.ALL -> Icons.AutoMirrored.Filled.VolumeUp
+                        VoiceMode.ALERTS -> Icons.Filled.Notifications
+                        VoiceMode.OFF -> Icons.AutoMirrored.Filled.VolumeOff
+                    }
+                    MapFab(icon, tint = if (nav.voiceMode == VoiceMode.ALERTS) Vela.accentText(dark) else null, size = 64.dp,
+                        modifier = Modifier.semantics { contentDescription = "Voice: ${nav.voiceMode.title}" }) {
+                        nav.voiceMode = nav.voiceMode.next
+                        voiceNote = nav.voiceMode
+                    }
+                }
             }
             if (!nav.following) {
                 Row(Modifier.align(Alignment.CenterHorizontally).height(60.dp).shadow(8.dp, CircleShape).clip(CircleShape).background(Vela.accent(dark))
@@ -473,7 +517,7 @@ fun ArrivedCard(name: String, onPark: (() -> Unit)?, note: String?, done: () -> 
  * numbers and the limit it checks. It pulses as it appears, and turns red while you're over.
  */
 @Composable
-fun CameraCard(alert: CameraAlert, speedKmh: Double) {
+fun CameraCard(alert: CameraAlert, speedKmh: Double, roadLimitKmh: Double? = null) {
     val over = alert.limitKmh?.let { speedKmh > it + 3 } ?: false
     val left = (alert.meters / alert.startMeters).coerceIn(0.0, 1.0).toFloat()
     val fill = if (over) Vela.closed else if (alert.kind == RoadCamera.Kind.SPEED) Vela.camera else hex(0x8E44AD)
@@ -495,7 +539,8 @@ fun CameraCard(alert: CameraAlert, speedKmh: Double) {
                     Text(if (over) "Slow down" else if (alert.kind == RoadCamera.Kind.SPEED) "Speed camera" else "Plate camera",
                         fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
                 }
-                alert.limitKmh?.let { Box(Modifier.padding(start = 4.dp)) { SpeedLimitSign(it, 50.dp) } }
+                // The limit by the speed badge already says it: only shown here when the camera checks a different one.
+                alert.limitKmh?.takeIf { l -> roadLimitKmh?.let { abs(it - l) > 1 } ?: true }?.let { Box(Modifier.padding(start = 4.dp)) { SpeedLimitSign(it, 50.dp) } }
             }
             ProgressStrip(left, 5.dp)
         }
@@ -632,6 +677,34 @@ fun wazeLabel(k: WazeAlert.Kind, n: Int) = when (k) {
 private val aircraftBlue = hex(0x1E88E5)
 
 /** The aircraft card made small, for when the screen is already full of warnings. */
+/** The warnings that can take the big card while driving. */
+enum class NavAlert { CAMERA, WAZE, AVERAGE, AIRCRAFT }
+
+/** "Also ahead": the warnings waiting their turn, small, in one pill. Tap to peek at the next one. */
+@Composable
+fun AlsoAheadPill(nav: Navigator, alerts: List<NavAlert>, onTap: () -> Unit) {
+    Row(Modifier.height(44.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(hex(0x0F172A).copy(alpha = 0.92f))
+        .border(1.dp, Color.White.copy(alpha = 0.14f), CircleShape).tap(onTap).padding(horizontal = 16.dp)
+        .semantics { contentDescription = "Also ahead. Tap to show the next warning" },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Also ahead", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.75f))
+        for (a in alerts.take(3)) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            val label = when (a) {
+                NavAlert.CAMERA -> nav.cameraAhead?.let { CameraBadge(it.kind, 24.dp); Fmt.distance(it.meters) }
+                NavAlert.WAZE -> nav.wazeAhead?.let { WazeBadge(it.alert.kind, 24.dp); Fmt.distance(it.meters) }
+                NavAlert.AVERAGE -> nav.averageCheck?.let {
+                    Icon(Icons.Filled.Speed, null, tint = Color.White, modifier = Modifier.size(20.dp)); "Avg ${Fmt.speed(it.averageKmh)} ${Fmt.speedUnit}"
+                }
+                NavAlert.AIRCRAFT -> nav.aircraftNear?.let {
+                    Icon(if (it.aircraft.helicopter) Icons.Filled.Toys else Icons.Filled.Flight, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Fmt.distance(it.meters)
+                }
+            }
+            if (label != null) Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+        }
+    }
+}
+
 @Composable
 fun AircraftChip(aircraft: PoliceAircraft, meters: Double) {
     Row(Modifier.height(40.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(aircraftBlue).padding(horizontal = 14.dp),
