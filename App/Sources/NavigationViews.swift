@@ -59,6 +59,11 @@ struct NavigationOverlay: View {
         return PoliceRisk.level(risk) != .low
     }
 
+    /** iPhone SE and the like, where the banner, a warning card and the chips can't all fit. */
+    static var shortScreen: Bool {
+        (UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?.bounds.height ?? 800) < 700
+    }
+
     /** A chip above the speed badge sits where the road name goes, so the name steps aside for it. */
     private var chipShowing: Bool { showRiskChip }
 
@@ -136,7 +141,8 @@ struct NavigationOverlay: View {
                 VStack(alignment: .leading, spacing: 10) {
                     // A Waze police card already says it louder; the chip comes back when it's gone.
                     // Only worth a look while driving when it isn't low; it would otherwise sit by the road name.
-                    if showRiskChip, let risk = nav.policeRisk { PoliceRiskChip(score: risk) }
+                    // On a short phone (SE) a warning card plus lanes leaves no room: the chip gives way to the card.
+                    if showRiskChip, !(mainAlert != nil && Self.shortScreen), let risk = nav.policeRisk { PoliceRiskChip(score: risk) }
                     SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
                 }
                 Spacer()
