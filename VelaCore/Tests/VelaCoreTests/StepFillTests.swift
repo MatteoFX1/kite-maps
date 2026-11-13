@@ -169,4 +169,16 @@ final class StepFillTests: XCTestCase {
         StepMerge.addGoogleKinds(&steps, from: [Maneuver(type: .turnLeft, instruction: "Turn left", location: fork.location, alongMeters: 1010, distanceMeters: 0)], line: line)
         XCTAssertEqual(steps[0].type, .forkRight)
     }
+
+    func testSketchRedrawnWithTheSpokenExitCount() {
+        // Google said 2nd exit, the router's sketch counted 3: the picture follows the words.
+        let bent = [LatLng(50.0, -1.0), LatLng(50.009, -1.0), LatLng(50.009, -0.986)]
+        let at = Geo.project(LatLng(50.009, -1.0), on: bent).along
+        var m = Maneuver(type: .roundabout, instruction: "At the roundabout, take the 2nd exit", location: LatLng(50.009, -1.0), alongMeters: at, distanceMeters: 0)
+        m.exit = 2
+        m.roundabout = RoundaboutShape(exits: [270, 0, 90], taken: 2, clockwise: true, complete: false)
+        let r = Route(mode: .drive, polyline: bent, distanceMeters: Geo.length(bent), typicalSeconds: 60, trafficSeconds: nil, summary: nil,
+                      maneuvers: [m], source: "osm")
+        XCTAssertEqual(Roundabouts.settle(r).maneuvers[0].roundabout?.taken, 1)
+    }
 }
