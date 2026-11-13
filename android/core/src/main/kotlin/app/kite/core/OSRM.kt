@@ -96,6 +96,7 @@ object OSRM {
             val nameOnly = mutableSetOf<Int>()
             var along = 0.0
             val roads = LinkedHashMap<String, Double>()
+            var leftMotorway: String? = null
             val legs = r["legs"].asMaps() ?: emptyList()
             for ((li, leg) in legs.withIndex()) {
                 val steps = leg["steps"].asMaps() ?: emptyList()
@@ -116,8 +117,11 @@ object OSRM {
                     // The link road off a motorway roundabout often still carries the motorway's number (M3 J6
                     // into Basingstoke): having just left the M3, that exit isn't "onto M3".
                     val roundaboutStep = type in setOf("roundabout", "rotary", "roundabout turn", "exit roundabout", "exit rotary")
-                    val stepRoad = if (roundaboutStep && motorway != null && motorway == maneuvers.lastOrNull { it.road != null }?.road) null
-                        else name ?: ref
+                    // The fork and merge further up that link road carry the number too: still not the M3.
+                    val before = maneuvers.lastOrNull { it.road != null && it.type != ManeuverType.ROUNDABOUT }?.road
+                    if (motorway == null || motorway != leftMotorway) leftMotorway = null
+                    if (roundaboutStep && motorway != null && motorway == before) leftMotorway = motorway
+                    val stepRoad = if (leftMotorway != null) null else name ?: ref
                     (name ?: ref)?.let { roads[it] = (roads[it] ?: 0.0) + dist }
                     val at = loc(m["location"]) ?: Geo.point(line, along, cum)
                     val mt = maneuverType(type, modifier, Geo.drivesOnLeft(at))

@@ -119,6 +119,7 @@ public enum OSRM {
             var nameOnly: Set<Int> = []
             var along = 0.0
             var roads: [String: Double] = [:]
+            var leftMotorway: String?
             let legs = (r["legs"] as? [[String: Any]]) ?? []
             for (li, leg) in legs.enumerated() {
                 let steps = (leg["steps"] as? [[String: Any]]) ?? []
@@ -140,8 +141,11 @@ public enum OSRM {
                     // The link road off a motorway roundabout often still carries the motorway's number (M3 J6
                     // into Basingstoke): having just left the M3, that exit isn't "onto M3".
                     let roundaboutStep = ["roundabout", "rotary", "roundabout turn", "exit roundabout", "exit rotary"].contains(type)
-                    let stepRoad = roundaboutStep && motorway != nil && motorway == maneuvers.last(where: { $0.road != nil })?.road
-                        ? nil : name ?? ref
+                    // The fork and merge further up that link road carry the number too: still not the M3.
+                    let before = maneuvers.last(where: { $0.road != nil && $0.type != .roundabout })?.road
+                    if motorway == nil || motorway != leftMotorway { leftMotorway = nil }
+                    if roundaboutStep, let mw = motorway, mw == before { leftMotorway = mw }
+                    let stepRoad = leftMotorway != nil ? nil : name ?? ref
                     let dist = step["distance"] as? Double ?? 0
                     if let n = name ?? ref { roads[n, default: 0] += dist }
                     let loc = (m["location"] as? [Double]).map { LatLng($0[1], $0[0]) } ?? Geo.point(along: line, meters: along, cumulative: cum)
