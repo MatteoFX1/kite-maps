@@ -38,6 +38,12 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -375,14 +381,65 @@ fun TripBar(nav: Navigator, onEnd: () -> Unit, onSteps: () -> Unit) {
         Box(Modifier.size(64.dp).clip(CircleShape).background(if (dark) hex(0x3B1820) else hex(0xFEE2E2)).tap(onEnd), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Close, "End trip", tint = if (dark) hex(0xFCA5A5) else Vela.closed, modifier = Modifier.size(30.dp))
         }
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(Fmt.duration(remaining), fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, color = Vela.accentText(dark), maxLines = 1, lineHeight = 38.sp)
-            Text("${Fmt.distance(meters)} · ${Fmt.arrival(remaining)}", fontSize = 17.sp, fontWeight = FontWeight.Medium, color = Vela.muted(dark), maxLines = 1)
+        // Three big numbers side by side, like Waze: when you get there, minutes left, miles left.
+        // The arrival time turns orange (or red) when traffic is making you late.
+        val arrive = arrivalParts(remaining)
+        val left = timeParts(remaining)
+        val dist = distanceParts(meters)
+        val spoken = "Arrive at ${Fmt.arrival(remaining)}, ${Fmt.duration(remaining)}, ${Fmt.distance(meters)} to go"
+        Row(Modifier.weight(1f).clearAndSetSemantics { contentDescription = spoken }, verticalAlignment = Alignment.Top) {
+            TripStat(Modifier.weight(1.2f), buildAnnotatedString {
+                append(arrive.first)
+                if (arrive.second.isNotEmpty()) withStyle(SpanStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold)) { append(arrive.second) }
+            }, "arrive", delayColor(nav.route, dark))
+            TripStat(Modifier.weight(1f), AnnotatedString(left.first), left.second, primaryText)
+            TripStat(Modifier.weight(1f), AnnotatedString(dist.first), dist.second, primaryText)
         }
         Box(Modifier.size(64.dp).clip(CircleShape).background(Vela.chip(dark)).tap(onSteps), contentAlignment = Alignment.Center) {
             Icon(Icons.AutoMirrored.Filled.List, "Trip and steps", tint = primaryText, modifier = Modifier.size(30.dp))
         }
     }
+}
+
+@Composable
+private fun TripStat(modifier: Modifier, big: AnnotatedString, label: String, color: Color) {
+    val dark = LocalDark.current
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        AutoSizeText(big, color)
+        Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Vela.muted(dark), maxLines = 1)
+    }
+}
+
+/** Big text that shrinks a little (down to 60%) rather than cut off, like minimumScaleFactor on iPhone. */
+@Composable
+private fun AutoSizeText(text: AnnotatedString, color: Color) {
+    var size by remember(text) { mutableStateOf(30f) }
+    Text(text, fontSize = size.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, softWrap = false,
+        lineHeight = (size + 2).sp,
+        onTextLayout = { if (it.hasVisualOverflow && size > 18f) size -= 2f })
+}
+
+/** "9:18" and " pm" (nothing on a 24 hour clock), so the time stays big and the pm small. */
+internal fun arrivalParts(s: Double): Pair<String, String> {
+    val full = Fmt.arrival(s)
+    val syms = java.text.DateFormatSymbols.getInstance().amPmStrings
+    for (sym in syms) if (sym.isNotEmpty() && full.contains(sym)) {
+        return full.replace(sym, "").trim { it.isWhitespace() || it == '\u202F' || it == '\u00A0' } to " " + sym.lowercase()
+    }
+    return full to ""
+}
+
+/** "8" min, or "1:20" hr once it's an hour or more. */
+internal fun timeParts(s: Double): Pair<String, String> {
+    val mins = maxOf(1, Math.round(s / 60).toInt())
+    return if (mins < 60) "$mins" to "min" else String.format(java.util.Locale.US, "%d:%02d", mins / 60, mins % 60) to "hr"
+}
+
+/** "2.1" and "mi" from "2.1 mi". */
+internal fun distanceParts(m: Double): Pair<String, String> {
+    val s = Fmt.distance(m)
+    val i = s.lastIndexOf(' ')
+    return if (i < 0) s to "" else s.substring(0, i) to s.substring(i + 1)
 }
 
 @Composable

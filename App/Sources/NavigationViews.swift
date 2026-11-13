@@ -493,15 +493,21 @@ struct TripBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("End trip")
-            VStack(spacing: 1) {
-                Text(Fmt.duration(remaining)).font(.system(size: 36, weight: .heavy))
-                    .foregroundColor(Vela.accentText(scheme))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Text("\(Fmt.distance(meters)) · \(Fmt.arrival(remaining))").font(.system(size: 17, weight: .medium))
-                    .foregroundColor(Vela.muted(scheme))
-                    .lineLimit(1).minimumScaleFactor(0.8)
+            // Three big numbers side by side, like Waze: when you get there, minutes left, miles left.
+            // The arrival time turns orange (or red) when traffic is making you late.
+            let arrive = TripBar.arrivalParts(remaining)
+            let left = TripBar.timeParts(remaining)
+            let dist = TripBar.distanceParts(meters)
+            HStack(alignment: .top, spacing: 4) {
+                stat(Text(arrive.time) + Text(arrive.suffix).font(.system(size: 16, weight: .bold)),
+                     "arrive", TripBody.delayColor(nav.route, scheme))
+                    .layoutPriority(1)
+                stat(Text(left.value), left.unit, .primary)
+                stat(Text(dist.value), dist.unit, .primary)
             }
             .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Arrive at \(Fmt.arrival(remaining)), \(Fmt.duration(remaining)), \(Fmt.distance(meters)) to go")
             Button(action: onSteps) {
                 Image(systemName: "list.bullet")
                     .font(.system(size: 24, weight: .bold))
@@ -517,6 +523,42 @@ struct TripBar: View {
         .glass(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .padding(.horizontal, 12)
         .padding(.bottom, 4)
+    }
+
+    private func stat(_ big: Text, _ label: String, _ color: Color) -> some View {
+        VStack(spacing: 0) {
+            big.font(.system(size: 30, weight: .heavy)).foregroundColor(color)
+                .lineLimit(1).minimumScaleFactor(0.6)
+            Text(label).font(.system(size: 14, weight: .medium)).foregroundColor(Vela.muted(scheme))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /** "9:18" and " pm" (nothing on a 24 hour clock), so the time stays big and the pm small. */
+    static func arrivalParts(_ s: Double) -> (time: String, suffix: String) {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        let full = f.string(from: Date().addingTimeInterval(s))
+        for sym in [f.amSymbol, f.pmSymbol].compactMap({ $0 }) where !sym.isEmpty && full.contains(sym) {
+            let time = full.replacingOccurrences(of: sym, with: "").trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{202F}")))
+            return (time, " " + sym.lowercased())
+        }
+        return (full, "")
+    }
+
+    /** "8" min, or "1:20" hr once it's an hour or more. */
+    static func timeParts(_ s: Double) -> (value: String, unit: String) {
+        let mins = max(1, Int((s / 60).rounded()))
+        if mins < 60 { return ("\(mins)", "min") }
+        return (String(format: "%d:%02d", mins / 60, mins % 60), "hr")
+    }
+
+    /** "2.1" and "mi" from "2.1 mi". */
+    static func distanceParts(_ m: Double) -> (value: String, unit: String) {
+        let s = Fmt.distance(m)
+        guard let i = s.lastIndex(of: " ") else { return (s, "") }
+        return (String(s[..<i]), String(s[s.index(after: i)...]))
     }
 }
 
