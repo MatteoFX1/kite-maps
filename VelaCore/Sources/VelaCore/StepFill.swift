@@ -206,6 +206,18 @@ extension StepMerge {
      * both of them have. A quiet "the road's name changes" step right there takes the turn instead.
      */
     public static func addGoogleMissing(_ steps: inout [Maneuver], from google: [Maneuver], line: [LatLng]) {
+        // Near M6 J11 Google says "Use the lane 2nd from the left to stay on M6" (no turn type) and
+        // "Take the exit towards M6, Use the left lane" (no type at all) where the open router has
+        // nothing, as to it you just stay on the M6: lane advice like that is worth keeping.
+        let google = google.map { g -> Maneuver in
+            var g = g
+            if g.type == .unknown, g.instruction.hasPrefix("Take the exit") || g.instruction.hasPrefix("Exit at junction") {
+                let w = (g.instruction + " " + (g.laneHint ?? "")).lowercased()
+                if w.contains("left lane") || w.contains("from the left") { g.type = .rampLeft }
+                else if w.contains("right lane") || w.contains("from the right") { g.type = .rampRight }
+            }
+            return g
+        }
         let total = Geo.length(line)
         let cum = Geo.cumulative(line)
         // Merges too ("Merge onto M8"), except one into a lane that carries on to the next exit,
@@ -216,7 +228,7 @@ extension StepMerge {
                 let next = steps.first { !$0.silent && $0.alongMeters > g.alongMeters + 70 && $0.type != .depart }
                 return !(next.map { laneOn.contains($0.type) && $0.alongMeters - g.alongMeters < 1_000 } ?? false)
             }
-            return turnKinds.contains(g.type)
+            return turnKinds.contains(g.type) || (g.type == .straight && g.instruction.hasPrefix("Use the lane"))
         }
         guard !wanted.isEmpty else { return }
         func spoken() -> [Maneuver] { steps.filter { !$0.silent && $0.type != .depart && $0.type != .arrive } }

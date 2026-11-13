@@ -54,6 +54,9 @@ Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
 - **One exit, said once:** leaving a motorway could be announced twice, 150 m apart ("Exit at junction
   10", then "Take the exit"), when Google's directions and the map's both had it. Now it's one line,
   keeping the junction number and any lane advice.
+- **Lane advice where the map is silent:** on long motorway stretches where the map just says "stay
+  on the M6", Google's "Use the lane 2nd from the left to stay on M6" and the exit after it (near M6
+  junction 11) were left out. Now they're said and shown.
 - **Pasted coordinates stay in the box:** searching "50.9097, -1.4044" drops the pin and keeps the
   coordinates in the search box, instead of going back to an empty "Where to?".
 - **Road name above the trip bar on small phones:** on short screens (iPhone mini, small Android phones) the road you're on was

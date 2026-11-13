@@ -29,6 +29,21 @@ class StepFillTests {
         assertEquals(steps[2].alongMeters - steps[1].alongMeters, steps[1].distanceMeters, 0.1)
     }
 
+    @Test fun googleLaneAdviceTheRouterLeftOutIsAdded() {
+        // M6 J11: to the open router you just stay on the M6; Google gives lane advice and the exit.
+        val steps = ends(listOf(step(ManeuverType.FORK_RIGHT, "Keep right at the fork", 1000.0, road = "M6"),
+            step(ManeuverType.MERGE, "Take the slip road to M6", 4000.0)))
+        val google = listOf(step(ManeuverType.FORK_RIGHT, "Keep right at the fork", 1000.0),
+            step(ManeuverType.STRAIGHT, "Use the lane 2nd from the left to stay on M6", 2500.0),
+            step(ManeuverType.UNKNOWN, "Take the exit towards M6", 3200.0).apply { laneHint = "Use the left lane" },
+            step(ManeuverType.STRAIGHT, "Continue onto M6", 3600.0),
+            step(ManeuverType.MERGE, "Take the slip road to M6", 4000.0))
+        StepMerge.addGoogleMissing(steps, google, line)
+        assertEquals(listOf("Head out", "Keep right at the fork", "Use the lane 2nd from the left to stay on M6", "Take the exit towards M6",
+            "Take the slip road to M6", "You have arrived"), steps.map { it.instruction })
+        assertEquals(ManeuverType.RAMP_LEFT, steps[3].type)
+    }
+
     @Test fun driftedGoogleStepIsNotAddedTwice() {
         val steps = ends(listOf(step(ManeuverType.RAMP_LEFT, "Take exit 9 toward Redbourn", 2000.0),
             step(ManeuverType.ROUNDABOUT, "At the roundabout, take the 3rd exit", 2600.0, exit = 3)))

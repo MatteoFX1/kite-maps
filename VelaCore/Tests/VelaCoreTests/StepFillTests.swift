@@ -18,6 +18,19 @@ final class StepFillTests: XCTestCase {
         return all
     }
 
+    func testGoogleLaneAdviceTheRouterLeftOutIsAdded() {
+        // M6 J11: to the open router you just stay on the M6; Google gives lane advice and the exit.
+        var steps = ends([step(.forkRight, "Keep right at the fork", 1000, road: "M6"), step(.merge, "Take the slip road to M6", 4000)])
+        var exit = step(.unknown, "Take the exit towards M6", 3200)
+        exit.laneHint = "Use the left lane"
+        let google = [step(.forkRight, "Keep right at the fork", 1000), step(.straight, "Use the lane 2nd from the left to stay on M6", 2500),
+                      exit, step(.straight, "Continue onto M6", 3600), step(.merge, "Take the slip road to M6", 4000)]
+        StepMerge.addGoogleMissing(&steps, from: google, line: line)
+        XCTAssertEqual(steps.map(\.instruction), ["Head out", "Keep right at the fork", "Use the lane 2nd from the left to stay on M6",
+                                                  "Take the exit towards M6", "Take the slip road to M6", "You have arrived"])
+        XCTAssertEqual(steps[3].type, .rampLeft)
+    }
+
     func testGoogleTurnTheRouterLeftOutIsAdded() {
         // Spaghetti Junction: the router says nothing where the A38(M) splits; Google says keep right.
         var steps = ends([step(.merge, "Merge onto A38(M)", 1000, road: "A38(M)"), step(.straight, "Continue straight onto Gravelly Hill", 3000, road: "Gravelly Hill")])

@@ -209,6 +209,19 @@ fun StepMerge.dropFalseUTurns(steps: MutableList<Maneuver>, line: List<LatLng>) 
  * steps leave out on purpose.
  */
 fun StepMerge.addGoogleMissing(steps: MutableList<Maneuver>, google: List<Maneuver>, line: List<LatLng>) {
+    // Near M6 J11 Google says "Use the lane 2nd from the left to stay on M6" (no turn type) and
+    // "Take the exit towards M6, Use the left lane" (no type at all) where the open router has
+    // nothing, as to it you just stay on the M6: lane advice like that is worth keeping.
+    val google = google.map { g ->
+        if (g.type == ManeuverType.UNKNOWN && (g.instruction.startsWith("Take the exit") || g.instruction.startsWith("Exit at junction"))) {
+            val w = (g.instruction + " " + (g.laneHint ?: "")).lowercase()
+            when {
+                "left lane" in w || "from the left" in w -> g.copy(type = ManeuverType.RAMP_LEFT)
+                "right lane" in w || "from the right" in w -> g.copy(type = ManeuverType.RAMP_RIGHT)
+                else -> g
+            }
+        } else g
+    }
     val total = Geo.length(line)
     val cum = Geo.cumulative(line)
     val laneOn = setOf(ManeuverType.RAMP_LEFT, ManeuverType.RAMP_RIGHT, ManeuverType.FORK_LEFT, ManeuverType.FORK_RIGHT, ManeuverType.KEEP_LEFT, ManeuverType.KEEP_RIGHT)
@@ -216,7 +229,7 @@ fun StepMerge.addGoogleMissing(steps: MutableList<Maneuver>, google: List<Maneuv
         if (g.type == ManeuverType.MERGE) {
             val next = steps.firstOrNull { !it.silent && it.alongMeters > g.alongMeters + 70 && it.type != ManeuverType.DEPART }
             !(next != null && next.type in laneOn && next.alongMeters - g.alongMeters < 1_000)
-        } else g.type in turnKinds
+        } else g.type in turnKinds || (g.type == ManeuverType.STRAIGHT && g.instruction.startsWith("Use the lane"))
     }
     if (wanted.isEmpty()) return
     fun spoken() = steps.filter { !it.silent && !isEnd(it) }
