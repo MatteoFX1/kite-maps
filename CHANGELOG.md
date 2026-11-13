@@ -59,7 +59,7 @@ Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
   junction 11) were left out. Now they're said and shown.
 - **Everything fits on an iPhone SE:** with lane arrows, a camera warning and the police risk chip all
   up at once, the screen ran out of room and pushed the trip bar off the bottom. On short screens the
-  police chip now waits while a warning card is showing.
+  police chip and the "GPS signal lost" / "Rerouting" note wait while a warning card is showing.
 - **Camera tiles on the route:** "No photo right now" no longer sits on top of the "In 10 mi" label.
 - **Pasted coordinates stay in the box:** searching "50.9097, -1.4044" drops the pin and keeps the
   coordinates in the search box, instead of going back to an empty "Where to?".

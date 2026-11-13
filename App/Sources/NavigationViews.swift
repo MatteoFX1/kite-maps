@@ -109,7 +109,11 @@ struct NavigationOverlay: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .transition(.opacity)
                 }
-                if nav.gpsLost, !nav.arrived {
+                // On a short phone (SE) with a warning card and lane arrows up there's no room for a third
+                // row: the card matters more, and the GPS and rerouting notes come back once it's gone.
+                if mainAlert != nil && Self.shortScreen {
+                    EmptyView()
+                } else if nav.gpsLost, !nav.arrived {
                     // In a tunnel the speed and the next turn stop moving: say why, so it doesn't look live.
                     Label("GPS signal lost", systemImage: "location.slash.fill")
                         .font(.system(size: 18, weight: .bold))
