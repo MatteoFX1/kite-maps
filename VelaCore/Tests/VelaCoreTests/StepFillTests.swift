@@ -89,7 +89,7 @@ final class StepFillTests: XCTestCase {
         StepMerge.tidy(&a)
         XCTAssertEqual(a.filter { !$0.silent }.map(\.instruction), ["Head out", "Exit at junction 10", "You have arrived"])
         // Gravelly Hill J6: the second brings the lane.
-        var second = step(.rampLeft, "Exit at junction 6", 6295)
+        var second = step(.forkLeft, "Exit at junction 6", 6295)
         second.laneHint = "Use the left lane"
         var b = ends([step(.rampLeft, "Take exit 6 onto M6", 6165), second])
         StepMerge.tidy(&b)

@@ -335,7 +335,8 @@ extension StepMerge {
      */
     /** Leaving by a slip road: "Exit at junction 10", "Take exit 6 onto M6", "Take the exit toward Alton". */
     static func isExit(_ m: Maneuver) -> Bool {
-        (m.type == .rampLeft || m.type == .rampRight)
+        // Sometimes marked as a fork or a keep (Gravelly Hill J6): the words say it's the exit.
+        [.rampLeft, .rampRight, .forkLeft, .forkRight, .keepLeft, .keepRight].contains(m.type)
             && ["Exit at junction", "Take exit", "Take the exit"].contains { m.instruction.hasPrefix($0) }
     }
 
@@ -353,7 +354,7 @@ extension StepMerge {
             guard !steps[i].silent, steps[i].type != .depart, steps[i].type != .arrive else { continue }
             let w = steps[i].instruction
             let carryOn = steps[i].type == .straight && (w.hasPrefix("Continue") || w.hasPrefix("Stay on"))
-            if let p = prev, steps[i].alongMeters - steps[p].alongMeters < 200, steps[p].type == steps[i].type,
+            if let p = prev, steps[i].alongMeters - steps[p].alongMeters < 200, side(steps[p].type) == side(steps[i].type),
                isExit(steps[p]), isExit(steps[i]) {
                 // One slip road told twice ("Exit at junction 10", then "Take the exit" 160 m on, one from
                 // Google and one from the open router): the first, with whatever the second adds.

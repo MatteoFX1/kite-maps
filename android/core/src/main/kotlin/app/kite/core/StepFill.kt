@@ -332,7 +332,9 @@ fun StepMerge.addGoogleSigns(steps: MutableList<Maneuver>, google: List<Maneuver
  */
 /** Leaving by a slip road: "Exit at junction 10", "Take exit 6 onto M6", "Take the exit toward Alton". */
 private fun isExit(m: Maneuver): Boolean =
-    (m.type == ManeuverType.RAMP_LEFT || m.type == ManeuverType.RAMP_RIGHT) &&
+    // Sometimes marked as a fork or a keep (Gravelly Hill J6): the words say it's the exit.
+    m.type in setOf(ManeuverType.RAMP_LEFT, ManeuverType.RAMP_RIGHT, ManeuverType.FORK_LEFT, ManeuverType.FORK_RIGHT,
+        ManeuverType.KEEP_LEFT, ManeuverType.KEEP_RIGHT) &&
         listOf("Exit at junction", "Take exit", "Take the exit").any { m.instruction.startsWith(it) }
 
 /** Says which junction, road or place, not just "Take the exit". */
@@ -348,7 +350,7 @@ fun StepMerge.tidy(steps: MutableList<Maneuver>) {
             val w = s.instruction
             val carryOn = s.type == ManeuverType.STRAIGHT && (w.startsWith("Continue") || w.startsWith("Stay on"))
             val p = prev
-            if (p != null && s.alongMeters - steps[p].alongMeters < 200 && steps[p].type == s.type && isExit(steps[p]) && isExit(s)) {
+            if (p != null && s.alongMeters - steps[p].alongMeters < 200 && side(steps[p].type) == side(s.type) && isExit(steps[p]) && isExit(s)) {
                 // One slip road told twice ("Exit at junction 10", then "Take the exit" 160 m on, one from
                 // Google and one from the open router): the first, with whatever the second adds.
                 val a = steps[p]

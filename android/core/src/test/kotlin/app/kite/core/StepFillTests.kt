@@ -85,7 +85,7 @@ class StepFillTests {
         assertEquals(listOf("Head out", "Exit at junction 10", "You have arrived"), a.filter { !it.silent }.map { it.instruction })
         // Gravelly Hill J6: the second brings the lane.
         val b = ends(listOf(step(ManeuverType.RAMP_LEFT, "Take exit 6 onto M6", 6165.0),
-            step(ManeuverType.RAMP_LEFT, "Exit at junction 6", 6295.0).apply { laneHint = "Use the left lane" }))
+            step(ManeuverType.FORK_LEFT, "Exit at junction 6", 6295.0).apply { laneHint = "Use the left lane" }))
         StepMerge.tidy(b)
         val spoken = b.filter { !it.silent }
         assertEquals(listOf("Head out", "Take exit 6 onto M6", "You have arrived"), spoken.map { it.instruction })
