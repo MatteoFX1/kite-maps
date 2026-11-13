@@ -1011,13 +1011,22 @@ struct VelaMapView: UIViewRepresentable {
                     }
                     return
                 }
+                // Police and crashes sit on top and never join a bubble: a tap that touches one opens it,
+                // even with a bubble right next to it.
+                let alone = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-waze"])
+                if let id = alone.first?.attribute(forKey: "id") as? String,
+                   let a = self.wazeAlerts.first(where: { $0.id == id }) {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    self.model.wazeInfo = a
+                    return
+                }
                 // A numbered bubble: zoom in until it splits into its icons.
                 let bubbles = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-waze-group-bubble", "vela-cameras-bubble"])
                 if let b = bubbles.first {
                     map.setCenter(b.coordinate, zoomLevel: min(map.zoomLevel + 2, 15), animated: true)
                     return
                 }
-                let reports = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-waze", "vela-waze-group"])
+                let reports = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-waze-group"])
                 if let id = reports.first?.attribute(forKey: "id") as? String,
                    let a = self.wazeAlerts.first(where: { $0.id == id }) {
                     UISelectionFeedbackGenerator().selectionChanged()

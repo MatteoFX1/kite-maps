@@ -676,7 +676,6 @@ fun wazeLabel(k: WazeAlert.Kind, n: Int) = when (k) {
 
 private val aircraftBlue = hex(0x1E88E5)
 
-/** The aircraft card made small, for when the screen is already full of warnings. */
 /** The warnings that can take the big card while driving. */
 enum class NavAlert { CAMERA, WAZE, AVERAGE, AIRCRAFT }
 
@@ -707,6 +706,7 @@ fun AlsoAheadPill(nav: Navigator, alerts: List<NavAlert>, onTap: () -> Unit) {
     }
 }
 
+/** The aircraft card made small, for when the screen is already full of warnings. */
 @Composable
 fun AircraftChip(aircraft: PoliceAircraft, meters: Double) {
     Row(Modifier.height(40.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(aircraftBlue).padding(horizontal = 14.dp),

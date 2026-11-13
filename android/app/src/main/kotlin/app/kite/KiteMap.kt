@@ -808,6 +808,12 @@ class KiteMap(private val model: AppModel, private val context: Context) {
             }
             return true
         }
+        // Police and crashes sit on top and never join a bubble: a tap that touches one opens it,
+        // even with a bubble right next to it.
+        m.queryRenderedFeatures(box, "vela-waze").firstOrNull()?.let { f ->
+            val id = str(f, "id")
+            wazeAlerts.firstOrNull { it.id == id }?.let { view?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); model.wazeInfo = it; return true }
+        }
         // A numbered bubble: zoom in until it splits into its icons.
         m.queryRenderedFeatures(box, "vela-waze-group-bubble", "vela-cameras-bubble").firstOrNull()?.let { f ->
             (f.geometry() as? Point)?.let { p ->
@@ -816,7 +822,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
                 return true
             }
         }
-        m.queryRenderedFeatures(box, "vela-waze", "vela-waze-group").firstOrNull()?.let { f ->
+        m.queryRenderedFeatures(box, "vela-waze-group").firstOrNull()?.let { f ->
             val id = str(f, "id")
             wazeAlerts.firstOrNull { it.id == id }?.let { view?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); model.wazeInfo = it; return true }
         }
