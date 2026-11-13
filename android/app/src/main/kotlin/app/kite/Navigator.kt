@@ -12,6 +12,15 @@ import kotlin.math.*
 data class CameraAlert(val kind: RoadCamera.Kind, val meters: Double, val startMeters: Double, val limitKmh: Double?)
 data class WazeAhead(val alert: WazeAlert, val meters: Double, val startMeters: Double)
 data class AverageCheck(val limitKmh: Double?, val averageKmh: Double, val metersLeft: Double)
+/** The speaker button's three choices, like Waze. */
+enum class VoiceMode(val title: String, val detail: String) {
+    ALL("Voice on", "Turns and warnings"),
+    ALERTS("Alerts only", "Cameras and police, no turns"),
+    OFF("Voice off", "Nothing spoken");
+
+    val next: VoiceMode get() = when (this) { ALL -> ALERTS; ALERTS -> OFF; OFF -> ALL }
+}
+
 data class AircraftNear(val aircraft: PoliceAircraft, val meters: Double)
 
 private fun now() = System.currentTimeMillis()
@@ -27,10 +36,17 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     var progress by mutableStateOf<RouteTracker.Progress?>(null); private set
     var rerouting by mutableStateOf(false); private set
     var arrived by mutableStateOf(false); private set
-    private var mutedState = mutableStateOf(!AppSettings.voice)
-    var muted: Boolean
-        get() = mutedState.value
-        set(v) { mutedState.value = v; if (v) Voice.stop() }
+    private var voiceState = mutableStateOf(if (AppSettings.voice) VoiceMode.ALL else VoiceMode.OFF)
+    /** What the voice says: everything, only warnings (cameras, police, hazards), or nothing. */
+    var voiceMode: VoiceMode
+        get() = voiceState.value
+        set(v) {
+            voiceState.value = v
+            if (v == VoiceMode.OFF || (v == VoiceMode.ALERTS && !speakingAlert)) Voice.stop()
+        }
+    val muted: Boolean get() = voiceMode == VoiceMode.OFF
+    /** Whether what's being said now is a warning, so switching to "Alerts only" doesn't cut it off. */
+    private var speakingAlert = false
     /** The camera follows the user until they pan the map. */
     var following by mutableStateOf(true)
     var speedMps by mutableStateOf(0.0); private set
@@ -249,7 +265,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         checkStops(p)
         if (route.mode == TravelMode.DRIVE && AppSettings.speedingAlert &&
             speeding.update(if (loc.speedKnown) loc.speed * 3.6 else null, speedLimitKmh, loc.timeMillis / 1000.0)) {
-            speak("You're over the speed limit.")
+            speak("You're over the speed limit.", alert = true)
         }
     }
 
@@ -410,7 +426,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         if (AppSettings.cameraWarnings && cam.kind == RoadCamera.Kind.SPEED && !cam.quiet) {
             chime()
             if (!repeatRun) {
-                speak((if (cam.average) "Average speed camera ahead" else "Speed camera ahead") + (limit?.let { ", limit ${Fmt.spokenSpeed(it)}." } ?: "."))
+                speak((if (cam.average) "Average speed camera ahead" else "Speed camera ahead") + (limit?.let { ", limit ${Fmt.spokenSpeed(it)}." } ?: "."), alert = true)
             }
             cameraSpokenAt = now()
             cameraSpokenLimit = limit
@@ -474,7 +490,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         Voice.buzz()
         if (s.wazeVoice && !Voice.onCall) {
             chime()
-            speak("${next.alert.spoken.dropLast(1)}, in ${Fmt.spokenDistance(ahead)}.")
+            speak("${next.alert.spoken.dropLast(1)}, in ${Fmt.spokenDistance(ahead)}.", alert = true)
         }
     }
 
@@ -496,7 +512,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             since(riskSpokenAt) > 600 &&
             (live == 0 || PoliceRisk.level(PoliceRisk.score(ahead, riskPast ?: emptyList(), 0)) == PoliceRisk.Level.HIGH)) {
             riskSpokenAt = now()
-            speak("Police hotspot ahead.")
+            speak("Police hotspot ahead.", alert = true)
         }
     }
 
@@ -525,7 +541,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             if (spokenAircraft.add(a.id)) {
                 Voice.buzz()
                 chime()
-                if (!Voice.onCall) speak("${a.title} nearby.")
+                if (!Voice.onCall) speak("${a.title} nearby.", alert = true)
             }
         }
     }
@@ -552,7 +568,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             } else {
                 zoneEntry = null
                 averageCheck = null
-                if (AppSettings.cameraWarnings) speak("Average speed check ended.")
+                if (AppSettings.cameraWarnings) speak("Average speed check ended.", alert = true)
             }
         }
         val i = inside ?: return
@@ -571,7 +587,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
                 zoneEntry = ZoneEntry(z.startMeters, z.endMeters, now(), at, zk)
                 if (AppSettings.cameraWarnings) {
                     chime()
-                    speak("Average speed check for ${Fmt.spokenDistance(z.endMeters - at)}" + (limit?.let { ", limit ${Fmt.spokenSpeed(it)}." } ?: "."))
+                    speak("Average speed check for ${Fmt.spokenDistance(z.endMeters - at)}" + (limit?.let { ", limit ${Fmt.spokenSpeed(it)}." } ?: "."), alert = true)
                 }
             }
             zoneCarry = null
@@ -806,8 +822,9 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     /** Something the app needs to tell the driver mid-drive, where a notice wouldn't be seen. */
     fun say(text: String) = speak(text)
 
-    private fun speak(text: String, urgent: Boolean = false) {
-        if (muted || stopped) return
+    private fun speak(text: String, urgent: Boolean = false, alert: Boolean = false) {
+        if (stopped || !(voiceMode == VoiceMode.ALL || (voiceMode == VoiceMode.ALERTS && alert))) return
+        speakingAlert = alert
         Voice.say(text, urgent)
     }
 }

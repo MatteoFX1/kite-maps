@@ -18,26 +18,49 @@ struct NavigationOverlay: View {
         return "On my way to \(nav.destination.name), arriving around \(Fmt.arrival(left)) (\(Fmt.duration(left)) away).\(link)"
     }
 
-    /** Warning cards stacked under the banner (camera, Waze report, average check). */
-    private var mainCards: Int {
-        nav.arrived ? 0 : [nav.cameraAhead != nil, nav.wazeAhead != nil, nav.averageCheck != nil].filter { $0 }.count
+    /** The voice choice just picked, shown by the speaker button for a moment. */
+    @State private var voiceNote: VoiceMode?
+    /** The warning shown for a few seconds after tapping the "also ahead" pill. */
+    @State private var peek: NavAlert?
+
+    /**
+     * Every warning that's up, most important first. Only the first gets the big card, like Waze;
+     * the rest wait in one small pill. Whatever you'll reach first along the route wins, except a
+     * camera while you're over its limit, which always wins (that's the one that costs a fine).
+     * An average check and a police aircraft aren't a spot on the road ahead, so they only get the
+     * big card when nothing else is up.
+     */
+    private var alertsUp: [NavAlert] {
+        guard !nav.arrived else { return [] }
+        var ahead: [(NavAlert, Double)] = []
+        if let c = nav.cameraAhead { ahead.append((.camera, c.meters)) }
+        if let w = nav.wazeAhead { ahead.append((.waze, w.meters)) }
+        var list = ahead.sorted { $0.1 < $1.1 }.map(\.0)
+        if let c = nav.cameraAhead, let limit = c.limitKmh ?? nav.speedLimitKmh, nav.speedMps * 3.6 > limit + 3,
+           let i = list.firstIndex(of: .camera), i > 0 {
+            list.remove(at: i)
+            list.insert(.camera, at: 0)
+        }
+        if nav.averageCheck != nil { list.append(.average) }
+        if nav.aircraftNear != nil { list.append(.aircraft) }
+        return list
     }
 
-    /** With two other cards up, a police aircraft shrinks to a chip by the speed badge, so the
-     *  stack doesn't run into the map buttons. */
-    private var aircraftAsChip: Bool { mainCards >= 2 }
+    /** The one warning on the big card. */
+    private var mainAlert: NavAlert? {
+        let list = alertsUp
+        if let peek, list.contains(peek) { return peek }
+        return list.first
+    }
 
     /** The police risk chip, only worth a look while driving when it isn't low. */
     private var showRiskChip: Bool {
-        guard let risk = nav.policeRisk, !nav.arrived, mainCards < 2 else { return false }
+        guard let risk = nav.policeRisk, !nav.arrived else { return false }
         return PoliceRisk.level(risk) != .low
     }
 
     /** A chip above the speed badge sits where the road name goes, so the name steps aside for it. */
-    private var chipShowing: Bool { showRiskChip || (nav.aircraftNear != nil && !nav.arrived && aircraftAsChip) }
-
-    /** With a camera and a Waze report both up, the average check waits its turn: there's only so much screen. */
-    private var showAverage: Bool { !(nav.cameraAhead != nil && nav.wazeAhead != nil) }
+    private var chipShowing: Bool { showRiskChip }
 
     var body: some View {
         // One column, so however many warnings are up, they push the map buttons down rather than cover them.
@@ -50,23 +73,36 @@ struct NavigationOverlay: View {
                     InstructionBanner(nav: nav)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if let cam = nav.cameraAhead, !nav.arrived {
-                    CameraCard(alert: cam, speedKmh: nav.speedMps * 3.6)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                // One warning at a time; the others wait in the pill under it.
+                switch mainAlert {
+                case .camera?:
+                    if let cam = nav.cameraAhead {
+                        CameraCard(alert: cam, speedKmh: nav.speedMps * 3.6, roadLimitKmh: nav.speedLimitKmh)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                case .waze?:
+                    if let w = nav.wazeAhead {
+                        WazeCard(ahead: w)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .onTapGesture { withAnimation { nav.dismissWaze() } }
+                            .accessibilityHint("Tap to hide")
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                case .average?:
+                    if let check = nav.averageCheck { AverageCheckCard(check: check) }
+                case .aircraft?:
+                    if let air = nav.aircraftNear { AircraftCard(aircraft: air.aircraft, meters: air.meters) }
+                case nil:
+                    EmptyView()
                 }
-                if let w = nav.wazeAhead, !nav.arrived {
-                    WazeCard(ahead: w)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .onTapGesture { withAnimation { nav.dismissWaze() } }
-                        .accessibilityHint("Tap to hide")
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-                if let air = nav.aircraftNear, !nav.arrived, !aircraftAsChip {
-                    AircraftCard(aircraft: air.aircraft, meters: air.meters)
-                }
-                if let check = nav.averageCheck, !nav.arrived, showAverage {
-                    AverageCheckCard(check: check)
+                let others = alertsUp.filter { $0 != mainAlert }
+                if !others.isEmpty {
+                    AlsoAheadPill(nav: nav, alerts: others) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { peek = others.first }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity)
                 }
                 if nav.gpsLost, !nav.arrived {
                     // In a tunnel the speed and the next turn stop moving: say why, so it doesn't look live.
@@ -86,22 +122,48 @@ struct NavigationOverlay: View {
             .inSidePanel(panel)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: nav.cameraAhead?.startMeters)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: nav.wazeAhead?.alert.id)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: mainAlert)
+            .task(id: peek) {
+                // A peek at the next warning lasts a few seconds, then the nearest one comes back.
+                guard peek != nil else { return }
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { peek = nil }
+            }
 
             Spacer(minLength: 0)
 
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 10) {
-                    if let air = nav.aircraftNear, !nav.arrived, aircraftAsChip {
-                        AircraftChip(aircraft: air.aircraft, meters: air.meters)
-                    }
                     // A Waze police card already says it louder; the chip comes back when it's gone.
                     // Only worth a look while driving when it isn't low; it would otherwise sit by the road name.
                     if showRiskChip, let risk = nav.policeRisk { PoliceRiskChip(score: risk) }
                     SpeedBadge(mps: nav.speedMps, limitKmh: nav.speedLimitKmh)
                 }
                 Spacer()
-                MapFab(icon: nav.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", size: 64) { nav.muted.toggle() }
-                    .accessibilityLabel(nav.muted ? "Turn voice on" : "Mute voice")
+                VStack(alignment: .trailing, spacing: 10) {
+                    if let note = voiceNote {
+                        // Says which of the three the speaker is on now, for a moment.
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(note.title).font(.system(size: 18, weight: .bold)).foregroundColor(Vela.accentText(.dark))
+                            Text(note.detail).font(.system(size: 15, weight: .medium)).foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color(hex: 0x0F172A).opacity(0.95)))
+                        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottomTrailing)))
+                    }
+                    MapFab(icon: nav.voiceMode.icon, tint: nav.voiceMode == .alerts ? Vela.accentText(scheme) : .primary, size: 64) {
+                        nav.voiceMode = nav.voiceMode.next
+                        withAnimation(.easeOut(duration: 0.2)) { voiceNote = nav.voiceMode }
+                    }
+                    .accessibilityLabel("Voice: \(nav.voiceMode.title)")
+                    .accessibilityHint("Switches between voice on, alerts only and voice off")
+                }
+                .task(id: voiceNote) {
+                    guard voiceNote != nil else { return }
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    withAnimation(.easeIn(duration: 0.25)) { voiceNote = nil }
+                }
             }
             .padding(.horizontal, 16)
             if !nav.following {
@@ -493,15 +555,20 @@ struct TripBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("End trip")
-            VStack(spacing: 1) {
-                Text(Fmt.duration(remaining)).font(.system(size: 36, weight: .heavy))
-                    .foregroundColor(Vela.accentText(scheme))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Text("\(Fmt.distance(meters)) · \(Fmt.arrival(remaining))").font(.system(size: 17, weight: .medium))
-                    .foregroundColor(Vela.muted(scheme))
-                    .lineLimit(1).minimumScaleFactor(0.8)
+            // Three big numbers side by side, like Waze: when you get there, minutes left, miles left.
+            // The arrival time turns orange (or red) when traffic is making you late.
+            let arrive = TripBar.arrivalParts(remaining)
+            let left = TripBar.timeParts(remaining)
+            let dist = TripBar.distanceParts(meters)
+            HStack(alignment: .top, spacing: 4) {
+                stat(Text(arrive.time) + Text(arrive.suffix).font(.system(size: 16, weight: .bold)),
+                     "arrive", TripBody.delayColor(nav.route, scheme))
+                stat(Text(left.value), left.unit, .primary)
+                stat(Text(dist.value), dist.unit, .primary)
             }
             .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Arrive at \(Fmt.arrival(remaining)), \(Fmt.duration(remaining)), \(Fmt.distance(meters)) to go")
             Button(action: onSteps) {
                 Image(systemName: "list.bullet")
                     .font(.system(size: 24, weight: .bold))
@@ -517,6 +584,42 @@ struct TripBar: View {
         .glass(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .padding(.horizontal, 12)
         .padding(.bottom, 4)
+    }
+
+    private func stat(_ big: Text, _ label: String, _ color: Color) -> some View {
+        VStack(spacing: 0) {
+            big.font(.system(size: 30, weight: .heavy)).foregroundColor(color)
+                .lineLimit(1).minimumScaleFactor(0.6)
+            Text(label).font(.system(size: 14, weight: .medium)).foregroundColor(Vela.muted(scheme))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /** "9:18" and " pm" (nothing on a 24 hour clock), so the time stays big and the pm small. */
+    static func arrivalParts(_ s: Double) -> (time: String, suffix: String) {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        let full = f.string(from: Date().addingTimeInterval(s))
+        for sym in [f.amSymbol, f.pmSymbol].compactMap({ $0 }) where !sym.isEmpty && full.contains(sym) {
+            let time = full.replacingOccurrences(of: sym, with: "").trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{202F}")))
+            return (time, " " + sym.lowercased())
+        }
+        return (full, "")
+    }
+
+    /** "8" min, or "1:20" hr once it's an hour or more. */
+    static func timeParts(_ s: Double) -> (value: String, unit: String) {
+        let mins = max(1, Int((s / 60).rounded()))
+        if mins < 60 { return ("\(mins)", "min") }
+        return (String(format: "%d:%02d", mins / 60, mins % 60), "hr")
+    }
+
+    /** "2.1" and "mi" from "2.1 mi". */
+    static func distanceParts(_ m: Double) -> (value: String, unit: String) {
+        let s = Fmt.distance(m)
+        guard let i = s.lastIndex(of: " ") else { return (s, "") }
+        return (String(s[..<i]), String(s[s.index(after: i)...]))
     }
 }
 
@@ -585,6 +688,8 @@ struct ArrivedCard: View {
 struct CameraCard: View {
     let alert: CameraAlert
     let speedKmh: Double
+    /** The limit by the speed badge: when the camera checks the same one, it isn't shown twice. */
+    var roadLimitKmh: Double? = nil
     @State private var pulse = false
 
     var body: some View {
@@ -603,7 +708,9 @@ struct CameraCard: View {
                         .font(.system(size: 15, weight: .bold))
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
-                if let limit = alert.limitKmh { SpeedLimitSign(kmh: limit, size: 50).padding(.leading, 4) }
+                if let limit = alert.limitKmh, roadLimitKmh.map({ abs($0 - limit) > 1 }) ?? true {
+                    SpeedLimitSign(kmh: limit, size: 50).padding(.leading, 4)
+                }
             }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
@@ -825,6 +932,65 @@ struct PoliceRiskChip: View {
         .background(Capsule().fill(color))
         .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
         .accessibilityLabel("Police risk \(level.rawValue), \(score) out of 100")
+    }
+}
+
+/** The warnings that can take the big card while driving. */
+enum NavAlert: Equatable { case camera, waze, average, aircraft }
+
+/** "Also ahead": the warnings waiting their turn, small, in one pill. Tap to peek at the next one. */
+struct AlsoAheadPill: View {
+    @ObservedObject var nav: Navigator
+    let alerts: [NavAlert]
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                Text("Also ahead").font(.system(size: 15, weight: .semibold)).foregroundColor(.white.opacity(0.75))
+                // Two at most, so the pill never runs off the screen; "+1" for any more.
+                ForEach(alerts.prefix(2), id: \.self) { item($0) }
+                if alerts.count > 2 { Text("+\(alerts.count - 2)").font(.system(size: 16, weight: .heavy)) }
+            }
+            .foregroundColor(.white)
+            .lineLimit(1).minimumScaleFactor(0.8)
+            .padding(.horizontal, 16).frame(height: 44)
+            .background(Capsule().fill(Color(hex: 0x0F172A).opacity(0.92)))
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
+            .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows the next warning")
+    }
+
+    @ViewBuilder
+    private func item(_ a: NavAlert) -> some View {
+        HStack(spacing: 6) {
+            switch a {
+            case .camera:
+                if let c = nav.cameraAhead {
+                    CameraBadge(kind: c.kind, size: 24)
+                    Text(Fmt.distance(c.meters))
+                }
+            case .waze:
+                if let w = nav.wazeAhead {
+                    WazeBadge(kind: w.alert.kind, size: 24)
+                    Text(Fmt.distance(w.meters))
+                }
+            case .average:
+                if let c = nav.averageCheck {
+                    Image(systemName: "gauge.with.dots.needle.33percent").font(.system(size: 17, weight: .bold))
+                    Text("Avg \(Fmt.speed(c.averageKmh)) \(Fmt.speedUnit)")
+                }
+            case .aircraft:
+                if let air = nav.aircraftNear {
+                    Image(systemName: air.aircraft.helicopter ? "fanblades.fill" : "airplane").font(.system(size: 17, weight: .bold))
+                    Text(Fmt.distance(air.meters))
+                }
+            }
+        }
+        .font(.system(size: 16, weight: .bold)).monospacedDigit()
+        .lineLimit(1)
     }
 }
 
