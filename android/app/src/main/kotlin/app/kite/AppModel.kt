@@ -260,7 +260,8 @@ class AppModel {
                     query = target.name!!
                     resolve(Place(id = "link:${target.at.lat},${target.at.lng}", name = target.name!!, location = target.at, source = "osm"))
                 } else {
-                    query = ""
+                    // Keep where it is in the box, not an empty "Where to?" as if nothing was found.
+                    query = String.format(java.util.Locale.US, "%.5f, %.5f", target.at.lat, target.at.lng)
                     dropPin(target.at, "Shared location")
                 }
                 is MapLinks.Target.Search -> {

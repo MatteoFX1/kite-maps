@@ -278,7 +278,8 @@ final class AppModel: ObservableObject {
                 query = name
                 resolve(Place(id: "link:\(point.lat),\(point.lng)", name: name, location: point, source: "osm"))
             case let .spot(point, nil)?:
-                query = ""
+                // Keep where it is in the box, not an empty "Where to?" as if nothing was found.
+                query = String(format: "%.5f, %.5f", point.lat, point.lng)
                 dropPin(at: point, name: "Shared location")
             case let .search(q, near)?:
                 if let near, let map {

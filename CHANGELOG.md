@@ -51,6 +51,10 @@ Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
 - **Not "onto M3" when you've just left it:** at motorway roundabouts like M3 junction 6, the road
   into Basingstoke still carries the M3 number on the map, so Kite said "take the 1st exit onto M3".
   It now just says "take the 1st exit".
+- **Pasted coordinates stay in the box:** searching "50.9097, -1.4044" drops the pin and keeps the
+  coordinates in the search box, instead of going back to an empty "Where to?".
+- **Road name above the trip bar on small Android phones:** on narrow screens the road you're on was
+  half hidden behind the bar at the bottom.
 - **No made-up routes abroad:** directions to somewhere the backup map has no roads to (like
   California) no longer show a 1,280-mile drive that ends in Portugal. Kite says no route was found.
 - **New police heat map look ("blue lights"):** roads where police get reported now glow blue,

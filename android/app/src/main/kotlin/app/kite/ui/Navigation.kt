@@ -125,7 +125,10 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
         // The road you're on, just under the arrow.
         val road = nav.currentRoad
         if (nav.following && !nav.arrived && !chipShowing && road != null) {
-            Box(Modifier.fillMaxWidth().offset(y = NavGlide.carY(h.value).dp + 50.dp - 18.dp), contentAlignment = Alignment.TopCenter) {
+            // On a short phone (360 x 800) that spot is behind the trip bar: keep it just above the bar instead.
+            val barTop = h - WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() - 104.dp
+            val pillTop = minOf(NavGlide.carY(h.value).dp + 50.dp - 18.dp, barTop - 36.dp - 8.dp)
+            Box(Modifier.fillMaxWidth().offset(y = pillTop), contentAlignment = Alignment.TopCenter) {
                 Text(road, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = w - 240.dp).height(36.dp).clip(CircleShape)
                         .background(hex(0x0F172A).copy(alpha = 0.92f)).border(1.5.dp, hex(0x2DD4BF).copy(alpha = 0.8f), CircleShape)
