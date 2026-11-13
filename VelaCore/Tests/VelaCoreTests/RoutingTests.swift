@@ -415,3 +415,16 @@ final class DestinationSideTests: XCTestCase {
         XCTAssertFalse(SearchPb.build(query: "cafe", center: LatLng(51.4779, 0.00003)).contains("e-"))
     }
 }
+
+final class MotorwayLinkNameTests: XCTestCase {
+    // M3 J6 into Basingstoke: the slip, the roundabout and the link road up to the A339 all carry ref M3.
+    func testALinkRoadThatKeepsTheMotorwayNumberIsNotOntoTheMotorway() throws {
+        let json = "{\"routes\":[{\"geometry\":\"_t`w`B~j|`AwvIwwPwgDwdHolFgEovA~p@\",\"distance\":1903,\"duration\":120,\"legs\":[{\"steps\":[{\"maneuver\":{\"type\":\"depart\",\"modifier\":\"straight\",\"location\":[-1.08,51.25]},\"name\":\"\",\"ref\":\"M3\",\"distance\":700},{\"maneuver\":{\"type\":\"off ramp\",\"modifier\":\"slight left\",\"location\":[-1.0709,51.2555]},\"name\":\"\",\"ref\":\"M3\",\"distance\":454},{\"maneuver\":{\"type\":\"rotary\",\"modifier\":\"straight\",\"exit\":1,\"location\":[-1.0662,51.2582]},\"name\":\"\",\"ref\":\"M3\",\"distance\":11},{\"maneuver\":{\"type\":\"exit rotary\",\"modifier\":\"straight\",\"exit\":1,\"location\":[-1.0662,51.2583]},\"name\":\"\",\"ref\":\"M3\",\"distance\":416},{\"maneuver\":{\"type\":\"merge\",\"modifier\":\"slight right\",\"location\":[-1.0669,51.2634]},\"name\":\"Ringway East\",\"ref\":\"A339\",\"distance\":322},{\"maneuver\":{\"type\":\"arrive\",\"modifier\":\"straight\",\"location\":[-1.0669,51.2634]},\"name\":\"Ringway East\",\"ref\":\"A339\",\"distance\":0}]}]}]}"
+        let steps = try XCTUnwrap(OSRM.parse(Data(json.utf8), mode: .drive).first).maneuvers
+        let ring = try XCTUnwrap(steps.first { $0.instruction.hasPrefix("At the roundabout") })
+        XCTAssertEqual(ring.instruction, "At the roundabout, take the 1st exit")
+        XCTAssertNil(ring.road)
+        XCTAssertFalse(steps.contains { $0.instruction.contains("Exit the roundabout onto M3") })
+        XCTAssertTrue(steps.contains { $0.instruction.contains("Ringway East") })
+    }
+}

@@ -137,16 +137,21 @@ public enum OSRM {
                     let ref = ref0?.split(separator: ";").first.map { String($0).trimmingCharacters(in: .whitespaces) }
                     let motorway = ref.flatMap { r in r.range(of: #"^(M\d+|A\d+\(M\))$"#, options: .regularExpression) != nil ? r : nil }
                     let name = motorway ?? (step["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    // The link road off a motorway roundabout often still carries the motorway's number (M3 J6
+                    // into Basingstoke): having just left the M3, that exit isn't "onto M3".
+                    let roundaboutStep = ["roundabout", "rotary", "roundabout turn", "exit roundabout", "exit rotary"].contains(type)
+                    let stepRoad = roundaboutStep && motorway != nil && motorway == maneuvers.last(where: { $0.road != nil })?.road
+                        ? nil : name ?? ref
                     let dist = step["distance"] as? Double ?? 0
                     if let n = name ?? ref { roads[n, default: 0] += dist }
                     let loc = (m["location"] as? [Double]).map { LatLng($0[1], $0[0]) } ?? Geo.point(along: line, meters: along, cumulative: cum)
                     let mt = maneuverType(type, modifier, leftTraffic: Geo.drivesOnLeft(loc))
                     let signs = Signs(destinations: step["destinations"] as? String, exits: step["exits"] as? String,
                                       from: maneuvers.last?.road)
-                    var man = Maneuver(type: mt, instruction: instruction(type: type, modifier: modifier, road: name ?? ref,
+                    var man = Maneuver(type: mt, instruction: instruction(type: type, modifier: modifier, road: stepRoad,
                                                                          exit: m["exit"] as? Int, mode: mode, signs: signs),
                                        location: loc, alongMeters: min(along, cum.last ?? along),
-                                       distanceMeters: dist, road: name ?? ref, laneHint: nil)
+                                       distanceMeters: dist, road: stepRoad, laneHint: nil)
                     man.lanes = lanes(step)
                     man.exit = m["exit"] as? Int
                     if type == "roundabout" || type == "rotary" {

@@ -113,13 +113,18 @@ object OSRM {
                     val ref = ref0?.split(";")?.firstOrNull()?.trim()
                     val motorway = ref?.takeIf { Regex("^(M\\d+|A\\d+\\(M\\))$").containsMatchIn(it) }
                     val name = motorway ?: (step["name"] as? String)?.ifEmpty { null }
+                    // The link road off a motorway roundabout often still carries the motorway's number (M3 J6
+                    // into Basingstoke): having just left the M3, that exit isn't "onto M3".
+                    val roundaboutStep = type in setOf("roundabout", "rotary", "roundabout turn", "exit roundabout", "exit rotary")
+                    val stepRoad = if (roundaboutStep && motorway != null && motorway == maneuvers.lastOrNull { it.road != null }?.road) null
+                        else name ?: ref
                     (name ?: ref)?.let { roads[it] = (roads[it] ?: 0.0) + dist }
                     val at = loc(m["location"]) ?: Geo.point(line, along, cum)
                     val mt = maneuverType(type, modifier, Geo.drivesOnLeft(at))
                     val signs = Signs(step["destinations"] as? String, step["exits"] as? String, maneuvers.lastOrNull()?.road)
                     val exit = m["exit"].int()
-                    val man = Maneuver(mt, instruction(type, modifier, name ?: ref, exit, mode, signs), at,
-                        min(along, cum.last()), dist, name ?: ref)
+                    val man = Maneuver(mt, instruction(type, modifier, stepRoad, exit, mode, signs), at,
+                        min(along, cum.last()), dist, stepRoad)
                     man.lanes = lanes(step)
                     man.exit = exit
                     if (type == "roundabout" || type == "rotary") {
