@@ -27,6 +27,12 @@ Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
   Wide Lane" 11 m later is now "Turn right onto Wide Lane"), a turn that keeps you on the same
   road says "to stay on", keep-left and keep-right steps show a keep arrow instead of a full turn,
   and a turn where the road bends away is no longer called "Continue straight".
+- **Fewer wrong turns at the start:** setting off near a junction, Kite could say "Make a U-turn,
+  then turn sharp right" where you just bear left (Romsey). That false U-turn is gone.
+- **The way the road really goes:** where the map said "Keep right at the fork" but the road turns
+  left (Castle Lane West, Bournemouth), Kite now says "Turn left".
+- **Roundabout pictures match the words:** the picture could draw the 3rd exit while Kite said
+  "take the 2nd exit". The picture now always counts the same exit as the voice.
 
 - **New police heat map look ("blue lights"):** roads where police get reported now glow blue,
   turning violet and pink at the worst spots, instead of a muddy yellow-to-red haze that looked
