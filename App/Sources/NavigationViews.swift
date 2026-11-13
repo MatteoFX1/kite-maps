@@ -610,13 +610,13 @@ struct TripBar: View {
     /** The gap between the three numbers. */
     static let statGap: CGFloat = 14
 
-    /** The biggest size (30, 27, 24 with am/pm, then 24, 21, 18 without) where all three fit in `width`. */
+    /** The biggest size (30 down to 21 with am/pm, then 21, 18 without) where all three fit in `width`. */
     static func fit(_ arrive: (time: String, suffix: String), _ left: String, _ dist: String, width: CGFloat) -> (size: CGFloat, ampm: Bool) {
         func w(_ s: String, _ size: CGFloat, _ weight: UIFont.Weight) -> CGFloat {
             ceil((s as NSString).size(withAttributes: [.font: UIFont.monospacedDigitSystemFont(ofSize: size, weight: weight)]).width)
         }
         let label = w("arrive", 14, .medium)
-        let candidates: [(CGFloat, Bool)] = [(30, true), (27, true), (24, true), (24, false), (21, false), (18, false)]
+        let candidates: [(CGFloat, Bool)] = [(30, true), (27, true), (24, true), (22, true), (21, true), (21, false), (18, false)]
         for (size, ampm) in candidates {
             let first = w(arrive.time, size, .heavy) + (ampm && !arrive.suffix.isEmpty ? w(arrive.suffix, size * 0.53, .bold) : 0)
             let total = max(first, label) + max(w(left, size, .heavy), 30) + max(w(dist, size, .heavy), 30) + statGap * 2
