@@ -722,6 +722,15 @@ final class Navigator: ObservableObject {
     /** Tapping the Waze card puts it away; the report still won't be warned about again. */
     func dismissWaze() { wazeAhead = nil }
 
+    /** For the build's screenshots: standstill traffic up the road, shown small over the trip bar. */
+    func showDemoTraffic() {
+        demoAlerts = true
+        let here = progress.map { Geo.point(along: route.polyline, meters: $0.alongMeters + 130) } ?? route.polyline.first ?? LatLng(0, 0)
+        let a = WazeAlert(id: "demo-jam", kind: .jam, subtype: "JAM_STAND_STILL_TRAFFIC", location: here,
+                          street: "A335", reportedAt: Date().addingTimeInterval(-4 * 60), thumbsUp: 1, reliability: 7)
+        wazeAhead = WazeAhead(alert: a, meters: 130, startMeters: 600)
+    }
+
     /** For the build's screenshots: police reported up the road. */
     func showDemoWaze() {
         demoAlerts = true

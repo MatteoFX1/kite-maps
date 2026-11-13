@@ -19,6 +19,10 @@ Fixes from Matteo's drive on 0.7.11 (Wide Lane, Southampton), checked on 80 junc
 - **Police heat map shows danger spots only:** it used to light up nearly every main road, so
   colour stopped meaning much. Now only the places where police are reported most often glow,
   drawn bolder so they stand out. Zoomed out, a city shows its worst roads instead of a web.
+- **Calmer traffic alerts:** a traffic jam ahead no longer gets a big red card as loud as a speed
+  camera. It's now a small line just above the arrival time ("Standstill traffic in 140 yd"),
+  so the top of the screen stays for your next turn and cameras. Tap it to hide it. Police,
+  crashes and other reports are unchanged.
 
 ## 0.7.11 (iPhone and Android)
 

@@ -82,9 +82,10 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
     // camera while you're over its limit, which always wins (that's the one that costs a fine).
     // An average check and a police aircraft aren't a spot on the road ahead, so they only get the
     // big card when nothing else is up.
+    // Traffic jams don't get a card up top: they show as a small line over the trip bar instead.
     val alertsUp = buildList {
         if (nav.arrived) return@buildList
-        val ahead = listOfNotNull(nav.cameraAhead?.let { NavAlert.CAMERA to it.meters }, nav.wazeAhead?.let { NavAlert.WAZE to it.meters })
+        val ahead = listOfNotNull(nav.cameraAhead?.let { NavAlert.CAMERA to it.meters }, nav.wazeAhead?.takeIf { it.alert.kind != WazeAlert.Kind.JAM }?.let { NavAlert.WAZE to it.meters })
         addAll(ahead.sortedBy { it.second }.map { it.first })
         val cam = nav.cameraAhead
         val limit = cam?.limitKmh ?: nav.speedLimitKmh
@@ -210,6 +211,9 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
                     Text("Re-centre", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Vela.onAccent(dark))
                 }
             }
+            // A traffic jam ahead: small and calm over the trip bar, so the top stays for turns and cameras.
+            val jam = nav.wazeAhead?.takeIf { it.alert.kind == WazeAlert.Kind.JAM && !nav.arrived && !confirmEnd }
+            if (jam != null) TrafficLine(jam, Modifier.align(Alignment.CenterHorizontally).tap { nav.dismissWaze() })
             // Arriving answers the question: the trip bar's Done takes over.
             AnimatedContent(confirmEnd && !nav.arrived, label = "tripbar") { asking ->
                 if (asking) EndTripCard(nav.destination.name, onKeep = { confirmEnd = false }, onEnd = { model.endNavigation() })
@@ -584,6 +588,20 @@ val WazeAlert.reportedText: String
         }
         return "Reported $w"
     }
+
+/** A traffic jam ahead, kept small and calm just over the trip bar: "Standstill traffic in 140 yd". */
+@Composable
+fun TrafficLine(ahead: WazeAhead, modifier: Modifier = Modifier) {
+    val dark = LocalDark.current
+    val ink = if (dark) hex(0xFF8A80) else Vela.closed
+    Row(modifier.height(40.dp).shadow(5.dp, CircleShape).clip(CircleShape)
+        .background(if (dark) hex(0x0F172A).copy(alpha = 0.92f) else Color.White.copy(alpha = 0.95f)).padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        WazeBadge(ahead.alert.kind, 22.dp)
+        Text("${ahead.alert.title} in ${Fmt.distance(ahead.meters)}", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = ink,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
 
 /** A Waze report on the road ahead, as loud as the camera card, in the report's own color. */
 @Composable

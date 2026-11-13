@@ -647,6 +647,15 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         speedMps = mph / 2.23694
     }
 
+    /** For the build's screenshots: standstill traffic up the road, shown small over the trip bar. */
+    fun showDemoTraffic() {
+        demoAlerts = true
+        val here = progress?.let { Geo.point(route.polyline, it.alongMeters + 130) } ?: route.polyline.firstOrNull() ?: LatLng(0.0, 0.0)
+        val a = WazeAlert(id = "demo-jam", kind = WazeAlert.Kind.JAM, subtype = "JAM_STAND_STILL_TRAFFIC", location = here, street = "A335",
+            reportedAtMillis = System.currentTimeMillis() - 4 * 60_000, thumbsUp = 1, reliability = 7)
+        wazeAhead = WazeAhead(a, 130.0, 600.0)
+    }
+
     fun showDemoWaze() {
         demoAlerts = true
         val here = progress?.let { Geo.point(route.polyline, it.alongMeters + 300) } ?: route.polyline.firstOrNull() ?: LatLng(0.0, 0.0)
