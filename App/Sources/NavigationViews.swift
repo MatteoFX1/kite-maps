@@ -622,7 +622,7 @@ struct TripBar: View {
         for (size, ampm) in candidates {
             let first = w(arrive.time, size, .heavy) + (ampm && !arrive.suffix.isEmpty ? w(arrive.suffix, size * 0.53, .bold) : 0)
             let total = max(first, label) + max(w(left.value, size, .heavy), leftLabel) + max(w(dist.value, size, .heavy), distLabel) + statGap * 2
-            if total <= width - 4 { return (size, ampm) }
+            if total <= width - 1 { return (size, ampm) }
         }
         return (18, false)
     }
