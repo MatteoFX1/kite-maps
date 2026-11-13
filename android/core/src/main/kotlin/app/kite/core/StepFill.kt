@@ -343,12 +343,12 @@ fun StepMerge.addGoogleSigns(steps: MutableList<Maneuver>, google: List<Maneuver
  * Ln" 11 m later is one turn; the same turn twice 8 m apart is one turn; "Continue onto" the road
  * you're already on says nothing; a turn that keeps you on the same road is "to stay on" it.
  */
-/** Leaving by a slip road: "Exit at junction 10", "Take exit 6 onto M6", "Take the exit toward Alton". */
+/** Leaving by a slip road: "Exit at junction 10", "Take exit 6 onto M6", "Use the lane 2nd from the left to take the exit towards M25". */
 private fun isExit(m: Maneuver): Boolean =
     // Sometimes marked as a fork or a keep (Gravelly Hill J6): the words say it's the exit.
     m.type in setOf(ManeuverType.RAMP_LEFT, ManeuverType.RAMP_RIGHT, ManeuverType.FORK_LEFT, ManeuverType.FORK_RIGHT,
         ManeuverType.KEEP_LEFT, ManeuverType.KEEP_RIGHT) &&
-        listOf("Exit at junction", "Take exit", "Take the exit").any { m.instruction.startsWith(it) }
+        Regex("\\b[Ee]xit\\b").containsMatchIn(m.instruction)
 
 /** Says which junction, road or place, not just "Take the exit". */
 private fun saysWhere(w: String): Boolean = w.any { it.isDigit() } || w.contains(" toward") || w.contains(" onto ")

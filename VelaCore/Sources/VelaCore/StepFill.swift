@@ -345,11 +345,11 @@ extension StepMerge {
      * Lane" then "Turn right onto Coldhams Lane" 8 m on is one turn; "Continue onto" the road
      * you're already on says nothing; a turn that keeps you on the same road is "to stay on" it.
      */
-    /** Leaving by a slip road: "Exit at junction 10", "Take exit 6 onto M6", "Take the exit toward Alton". */
+    /** Leaving by a slip road: "Exit at junction 10", "Take exit 6 onto M6", "Use the lane 2nd from the left to take the exit towards M25". */
     static func isExit(_ m: Maneuver) -> Bool {
         // Sometimes marked as a fork or a keep (Gravelly Hill J6): the words say it's the exit.
         [.rampLeft, .rampRight, .forkLeft, .forkRight, .keepLeft, .keepRight].contains(m.type)
-            && ["Exit at junction", "Take exit", "Take the exit"].contains { m.instruction.hasPrefix($0) }
+            && m.instruction.range(of: #"\b[Ee]xit\b"#, options: .regularExpression) != nil
     }
 
     /** Says which junction, road or place, not just "Take the exit". */

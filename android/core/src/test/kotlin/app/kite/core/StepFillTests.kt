@@ -109,6 +109,11 @@ class StepFillTests {
         val c = ends(listOf(step(ManeuverType.RAMP_LEFT, "Take the exit", 1000.0), step(ManeuverType.RAMP_LEFT, "Take the exit toward Alton", 1120.0)))
         StepMerge.tidy(c)
         assertEquals(listOf("Head out", "Take the exit toward Alton", "You have arrived"), c.filter { !it.silent }.map { it.instruction })
+        // Lane advice that leads to the exit counts too, and keeps its words.
+        val e = ends(listOf(step(ManeuverType.RAMP_LEFT, "Use the lane 2nd from the left to take the exit towards M25", 91705.0 - 88000),
+            step(ManeuverType.RAMP_LEFT, "Take the exit toward M25", 91904.0 - 88000)))
+        StepMerge.tidy(e)
+        assertEquals(listOf("Head out", "Use the lane 2nd from the left to take the exit towards M25", "You have arrived"), e.filter { !it.silent }.map { it.instruction })
         // Two real exits further apart both stay.
         val d = ends(listOf(step(ManeuverType.RAMP_LEFT, "Take exit 4", 1000.0), step(ManeuverType.RAMP_LEFT, "Take the exit toward Alton", 1400.0)))
         StepMerge.tidy(d)

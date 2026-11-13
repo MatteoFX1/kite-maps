@@ -113,6 +113,10 @@ final class StepFillTests: XCTestCase {
         var c = ends([step(.rampLeft, "Take the exit", 1000), step(.rampLeft, "Take the exit toward Alton", 1120)])
         StepMerge.tidy(&c)
         XCTAssertEqual(c.filter { !$0.silent }.map(\.instruction), ["Head out", "Take the exit toward Alton", "You have arrived"])
+        // Lane advice that leads to the exit counts too, and keeps its words.
+        var e = ends([step(.rampLeft, "Use the lane 2nd from the left to take the exit towards M25", 3705), step(.rampLeft, "Take the exit toward M25", 3904)])
+        StepMerge.tidy(&e)
+        XCTAssertEqual(e.filter { !$0.silent }.map(\.instruction), ["Head out", "Use the lane 2nd from the left to take the exit towards M25", "You have arrived"])
         // Two real exits further apart both stay.
         var d = ends([step(.rampLeft, "Take exit 4", 1000), step(.rampLeft, "Take the exit toward Alton", 1400)])
         StepMerge.tidy(&d)
