@@ -17,7 +17,13 @@ final class Navigator: ObservableObject {
     @Published private(set) var progress: RouteTracker.Progress?
     @Published private(set) var rerouting = false
     @Published private(set) var arrived = false
-    @Published var muted: Bool { didSet { if muted { speech.stopSpeaking(at: .immediate) } } }
+    /** What the voice says: everything, only warnings (cameras, police, hazards), or nothing. */
+    @Published var voiceMode: VoiceMode {
+        didSet { if voiceMode == .off || (voiceMode == .alerts && !speakingAlert) { speech.stopSpeaking(at: .immediate) } }
+    }
+    var muted: Bool { voiceMode == .off }
+    /** Whether what's being said now is a warning, so switching to "Alerts only" doesn't cut it off. */
+    private var speakingAlert = false
     /** The camera follows the user until they pan the map. */
     @Published var following = true
     @Published private(set) var speedMps: Double = 0
@@ -141,7 +147,7 @@ final class Navigator: ObservableObject {
         self.destination = destination
         self.stops = stops
         tracker = RouteTracker(route: route)
-        muted = !settings.voice
+        voiceMode = settings.voice ? .all : .off
         avoidHighways = settings.avoidHighways
         avoidTolls = settings.avoidTolls
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
@@ -272,7 +278,7 @@ final class Navigator: ObservableObject {
         checkStops(p)
         if route.mode == .drive, AppSettings.shared.speedingAlert,
            speeding.update(speedKmh: loc.speed >= 0 ? loc.speed * 3.6 : nil, limitKmh: speedLimitKmh, now: loc.timestamp.timeIntervalSince1970) {
-            speak("You're over the speed limit.")
+            speak("You're over the speed limit.", alert: true)
         }
     }
 
@@ -449,7 +455,7 @@ final class Navigator: ObservableObject {
         if AppSettings.shared.cameraWarnings, cam.kind == .speed, !cam.quiet {
             chime()
             if !repeatRun {
-                speak((cam.average ? "Average speed camera ahead" : "Speed camera ahead") + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+                speak((cam.average ? "Average speed camera ahead" : "Speed camera ahead") + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."), alert: true)
             }
             cameraSpokenAt = Date()
             cameraSpokenLimit = limit
@@ -528,7 +534,7 @@ final class Navigator: ObservableObject {
         if s.wazeVoice && !onCall {
             chime()
             // "Police reported ahead, in 400 yards."
-            speak("\(String(next.alert.spoken.dropLast())), in \(Fmt.spokenDistance(ahead)).")
+            speak("\(String(next.alert.spoken.dropLast())), in \(Fmt.spokenDistance(ahead)).", alert: true)
         }
     }
 
@@ -551,7 +557,7 @@ final class Navigator: ObservableObject {
         if PoliceRisk.level(score) == .high, was != .high, s.wazeVoice, !onCall, Date().timeIntervalSince(riskSpokenAt) > 600,
            live == 0 || PoliceRisk.level(PoliceRisk.score(ahead: ahead, past: riskPast ?? [], live: 0)) == .high {
             riskSpokenAt = Date()
-            speak("Police hotspot ahead.")
+            speak("Police hotspot ahead.", alert: true)
         }
     }
 
@@ -580,7 +586,7 @@ final class Navigator: ObservableObject {
                 self.spokenAircraft.insert(a.id)
                 UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 self.chime()
-                if !self.onCall { self.speak("\(a.title) nearby.") }
+                if !self.onCall { self.speak("\(a.title) nearby.", alert: true) }
             }
         }
     }
@@ -611,7 +617,7 @@ final class Navigator: ObservableObject {
             } else {
                 zoneEntry = nil
                 averageCheck = nil
-                if AppSettings.shared.cameraWarnings { speak("Average speed check ended.") }
+                if AppSettings.shared.cameraWarnings { speak("Average speed check ended.", alert: true) }
             }
         }
         guard let i = inside else { return }
@@ -627,7 +633,7 @@ final class Navigator: ObservableObject {
                 zoneEntry = (z.startMeters, z.endMeters, Date(), at, z.kmh)
                 if AppSettings.shared.cameraWarnings {
                     chime()
-                    speak("Average speed check for \(Fmt.spokenDistance(z.endMeters - at))" + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+                    speak("Average speed check for \(Fmt.spokenDistance(z.endMeters - at))" + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."), alert: true)
                 }
             }
             zoneCarry = nil
@@ -900,8 +906,9 @@ final class Navigator: ObservableObject {
     /** Something the app needs to tell the driver mid-drive, where a notice wouldn't be seen. */
     func say(_ text: String) { speak(text) }
 
-    private func speak(_ text: String, urgent: Bool = false) {
-        guard !muted, !stopped else { return }
+    private func speak(_ text: String, urgent: Bool = false, alert: Bool = false) {
+        guard !stopped, voiceMode == .all || (voiceMode == .alerts && alert) else { return }
+        speakingAlert = alert
         if urgent && speech.isSpeaking { speech.stopSpeaking(at: .word) }
         try? AVAudioSession.sharedInstance().setActive(true)
         let said = SpokenText.forVoice(text)
@@ -940,6 +947,16 @@ final class SpeechDone: NSObject, AVSpeechSynthesizerDelegate {
 
 extension String {
     var lowercasedFirst: String { prefix(1).lowercased() + dropFirst() }
+}
+
+/** The speaker button's three choices, like Waze. */
+enum VoiceMode: Equatable {
+    case all, alerts, off
+
+    var next: VoiceMode { self == .all ? .alerts : self == .alerts ? .off : .all }
+    var icon: String { self == .all ? "speaker.wave.2.fill" : self == .alerts ? "bell.fill" : "speaker.slash.fill" }
+    var title: String { self == .all ? "Voice on" : self == .alerts ? "Alerts only" : "Voice off" }
+    var detail: String { self == .all ? "Turns and warnings" : self == .alerts ? "Cameras and police, no turns" : "Nothing spoken" }
 }
 
 struct CameraAlert: Equatable {

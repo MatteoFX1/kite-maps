@@ -68,6 +68,36 @@ struct VelaMapView: UIViewRepresentable {
     final class Coordinator: NSObject, MLNMapViewDelegate, UIGestureRecognizerDelegate {
         /** What the browse map asked Waze and got, for checking a test run afterwards. */
         static let trace = Logger(subsystem: "app.vela.ios", category: "trace")
+
+        /** Reports that always keep their own icon, never joining a numbered bubble. */
+        static let neverGrouped: Set<WazeAlert.Kind> = [.police, .accident]
+
+        /** Icons close together join into one bubble up to zoom 13 (a whole town in view); closer in, every icon shows. */
+        static let groupOptions: [MLNShapeSourceOption: Any] = [
+            .clustered: true, .clusterRadius: 44, .maximumZoomLevelForClustering: 13,
+        ]
+
+        /** The numbered bubble for a group: a dark circle with a colored ring, bigger for more. */
+        static func addGroupBubbles(_ style: MLNStyle, source: MLNShapeSource, id: String, ring: UIColor, minZoom: Float) {
+            let bubble = MLNCircleStyleLayer(identifier: "\(id)-bubble", source: source)
+            bubble.predicate = NSPredicate(format: "cluster == YES")
+            bubble.circleColor = NSExpression(forConstantValue: UIColor(hex: 0x0F172A))
+            bubble.circleOpacity = NSExpression(forConstantValue: 0.92)
+            bubble.circleStrokeColor = NSExpression(forConstantValue: ring)
+            bubble.circleStrokeWidth = NSExpression(forConstantValue: 3)
+            bubble.circleRadius = NSExpression(mglJSONObject: ["step", ["get", "point_count"], 14, 10, 17, 50, 21])
+            bubble.minimumZoomLevel = minZoom
+            style.addLayer(bubble)
+            let count = MLNSymbolStyleLayer(identifier: "\(id)-count", source: source)
+            count.predicate = NSPredicate(format: "cluster == YES")
+            count.text = NSExpression(mglJSONObject: ["to-string", ["get", "point_count"]])
+            count.textFontNames = NSExpression(forConstantValue: ["Noto Sans Bold"])
+            count.textFontSize = NSExpression(forConstantValue: 13)
+            count.textColor = NSExpression(forConstantValue: UIColor.white)
+            count.textAllowsOverlap = NSExpression(forConstantValue: true)
+            count.minimumZoomLevel = minZoom
+            style.addLayer(count)
+        }
         let model: AppModel
         var dark = false
         private var styleReady = false
@@ -299,9 +329,11 @@ struct VelaMapView: UIViewRepresentable {
             style.addLayer(live)
 
             // Speed cameras and plate readers, from zoom 12 in.
-            let camSrc = MLNShapeSource(identifier: "vela-cameras", shape: nil, options: nil)
+            // Zoomed out over a busy city, cameras close together join into one bubble with a number.
+            let camSrc = MLNShapeSource(identifier: "vela-cameras", shape: nil, options: Self.groupOptions)
             style.addSource(camSrc)
             let cams = MLNSymbolStyleLayer(identifier: "vela-cameras", source: camSrc)
+            cams.predicate = NSPredicate(format: "cluster != YES")
             cams.iconImageName = NSExpression(forKeyPath: "icon")
             cams.iconAllowsOverlap = NSExpression(forConstantValue: true)
             // Big enough to notice at a glance, and bigger again for the ones on your route.
@@ -313,6 +345,7 @@ struct VelaMapView: UIViewRepresentable {
                                                           17, ["case", big, 1.65, 1.15]])
             cams.minimumZoomLevel = 11
             style.addLayer(cams)
+            Self.addGroupBubbles(style, source: camSrc, id: "vela-cameras", ring: UIColor(hex: 0xFF8A00), minZoom: 11)
 
             // Waze: a glow where police get reported (under), and live reports as badges (over).
             let heatSrc = MLNShapeSource(identifier: "vela-waze-heat", shape: nil, options: nil)
@@ -338,6 +371,19 @@ struct VelaMapView: UIViewRepresentable {
             waze.iconOpacity = NSExpression(forKeyPath: "op")
             waze.minimumZoomLevel = 11
             style.addLayer(waze)
+            // Every other report (closures, hazards, jams) joins into numbered bubbles when zoomed
+            // out, so a busy city stays readable. Police and crashes above always stay on their own.
+            let groupSrc = MLNShapeSource(identifier: "vela-waze-group", shape: nil, options: Self.groupOptions)
+            style.addSource(groupSrc)
+            let group = MLNSymbolStyleLayer(identifier: "vela-waze-group", source: groupSrc)
+            group.predicate = NSPredicate(format: "cluster != YES")
+            group.iconImageName = NSExpression(forKeyPath: "icon")
+            group.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            group.iconScale = waze.iconScale
+            group.iconOpacity = NSExpression(forKeyPath: "op")
+            group.minimumZoomLevel = 11
+            style.insertLayer(group, below: waze)
+            Self.addGroupBubbles(style, source: groupSrc, id: "vela-waze-group", ring: UIColor(hex: 0xEF4444), minZoom: 11)
 
             // My places: home, work, the parked car and saved places, under the result pins.
             let mineSrc = MLNShapeSource(identifier: "vela-mine", shape: nil, options: nil)
@@ -600,7 +646,7 @@ struct VelaMapView: UIViewRepresentable {
             let ids = Set(wazeAlerts.map(\.id))
             let all = wazeAlerts + live.filter { !ids.contains($0.id) }
             let shown = s.wazeOn && s.wazeOnMap ? all.filter { s.shows($0) } : []
-            let features: [MLNPointFeature] = shown.map { a in
+            let feature: (WazeAlert) -> MLNPointFeature = { a in
                 let f = MLNPointFeature()
                 f.coordinate = CLLocationCoordinate2D(latitude: a.location.lat, longitude: a.location.lng)
                 // Fresh reports solid, fading to half over two hours, like Highway Radar's.
@@ -608,7 +654,11 @@ struct VelaMapView: UIViewRepresentable {
                 f.attributes = ["id": a.id, "icon": "waze-\(a.kind.rawValue)", "op": max(0.5, 1 - age / 14_400)]
                 return f
             }
-            (style.source(withIdentifier: "vela-waze") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: features)
+            // Police and crashes matter most, so they never get grouped into a bubble.
+            let alone = shown.filter { Self.neverGrouped.contains($0.kind) }
+            let grouped = shown.filter { !Self.neverGrouped.contains($0.kind) }
+            (style.source(withIdentifier: "vela-waze") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: alone.map(feature))
+            (style.source(withIdentifier: "vela-waze-group") as? MLNShapeSource)?.shape = MLNShapeCollectionFeature(shapes: grouped.map(feature))
             // The heat map comes from Highway Radar's tiles now (see HighwayHeat), not from the
             // reports this phone has seen, which took a week of driving to fill.
             style.layer(withIdentifier: "vela-waze-heat")?.isVisible = false
@@ -961,7 +1011,13 @@ struct VelaMapView: UIViewRepresentable {
                     }
                     return
                 }
-                let reports = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-waze"])
+                // A numbered bubble: zoom in until it splits into its icons.
+                let bubbles = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-waze-group-bubble", "vela-cameras-bubble"])
+                if let b = bubbles.first {
+                    map.setCenter(b.coordinate, zoomLevel: min(map.zoomLevel + 2, 15), animated: true)
+                    return
+                }
+                let reports = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-waze", "vela-waze-group"])
                 if let id = reports.first?.attribute(forKey: "id") as? String,
                    let a = self.wazeAlerts.first(where: { $0.id == id }) {
                     UISelectionFeedbackGenerator().selectionChanged()
