@@ -327,3 +327,10 @@ func mergeCheck() async {
     }
     print("merges said \(said), lane gains made quiet \(quiet)")
 }
+
+/** `vela-probe sv lat lng heading`: the Street View picture nearest a point, looking that way (for checking painted lanes). */
+func streetViewShot() async {
+    let a = CommandLine.arguments.dropFirst(2).compactMap(Double.init)
+    guard a.count == 3, let p = await StreetView.find(near: LatLng(a[0], a[1]), radius: 40) else { print("none"); return }
+    print(StreetView.thumbnailURL(p, heading: a[2], width: 1024, height: 576).absoluteString)
+}

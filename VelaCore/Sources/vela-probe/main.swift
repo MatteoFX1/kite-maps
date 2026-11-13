@@ -85,6 +85,10 @@ if args.count > 1, args[1] == "merges" {
     await mergeCheck()
     exit(0)
 }
+if args.count > 1, args[1] == "sv" {
+    await streetViewShot()
+    exit(0)
+}
 if args.count > 1, args[1] == "turns" {
     await turnAudit()
     exit(0)

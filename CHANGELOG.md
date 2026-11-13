@@ -3,6 +3,20 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.12 (iPhone and Android)
+
+Fixes from Matteo's drive on 0.7.11 (Wide Lane, Southampton), checked on 80 junctions.
+
+- **No "Merge" where nobody merges:** where a slip road just becomes an extra lane (the M5 at
+  Almondsbury goes from 3 lanes to 4, and the same on the M25 at junctions 15 and 21 and the M8
+  in Glasgow), Kite no longer says "Merge onto…". It checks how many lanes every road at the
+  join has, and only says merge when a lane really ends.
+- **Steps Google calls merges by mistake:** "Slight right onto the M1 slip road" and "Take the slip
+  road to A463" were shown with a merge arrow. They now get the right arrow.
+- **Roundabout lanes when the map server is down:** the OpenStreetMap server Kite asks for each
+  roundabout's lanes was down on and off for two days, and Kite then guessed 2 lanes everywhere.
+  It now gets the number of lanes from the faster server it already uses for speed limits.
+
 ## 0.7.11 (iPhone and Android)
 
 Another check of the basics on both phones, with the bugs it found fixed, and turn-by-turn checked
