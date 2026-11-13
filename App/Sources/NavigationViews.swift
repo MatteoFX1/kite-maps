@@ -949,9 +949,12 @@ struct AlsoAheadPill: View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 Text("Also ahead").font(.system(size: 15, weight: .semibold)).foregroundColor(.white.opacity(0.75))
-                ForEach(alerts.prefix(3), id: \.self) { item($0) }
+                // Two at most, so the pill never runs off the screen; "+1" for any more.
+                ForEach(alerts.prefix(2), id: \.self) { item($0) }
+                if alerts.count > 2 { Text("+\(alerts.count - 2)").font(.system(size: 16, weight: .heavy)) }
             }
             .foregroundColor(.white)
+            .lineLimit(1).minimumScaleFactor(0.8)
             .padding(.horizontal, 16).frame(height: 44)
             .background(Capsule().fill(Color(hex: 0x0F172A).opacity(0.92)))
             .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))

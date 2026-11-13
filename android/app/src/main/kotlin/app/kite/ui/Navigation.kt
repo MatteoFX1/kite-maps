@@ -688,7 +688,8 @@ fun AlsoAheadPill(nav: Navigator, alerts: List<NavAlert>, onTap: () -> Unit) {
         .semantics { contentDescription = "Also ahead. Tap to show the next warning" },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Also ahead", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.75f))
-        for (a in alerts.take(3)) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // Two at most, so the pill never runs off the screen; "+1" for any more.
+        for (a in alerts.take(2)) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             val label = when (a) {
                 NavAlert.CAMERA -> nav.cameraAhead?.let { CameraBadge(it.kind, 24.dp); Fmt.distance(it.meters) }
                 NavAlert.WAZE -> nav.wazeAhead?.let { WazeBadge(it.alert.kind, 24.dp); Fmt.distance(it.meters) }
@@ -702,6 +703,7 @@ fun AlsoAheadPill(nav: Navigator, alerts: List<NavAlert>, onTap: () -> Unit) {
             }
             if (label != null) Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
         }
+        if (alerts.size > 2) Text("+${alerts.size - 2}", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
     }
 }
 
