@@ -545,7 +545,9 @@ class AppModel {
                     var e = it.errors
                     if (r.routes.isEmpty()) e = e + (m to Connectivity.explain(
                         if (r.error == "No route found.") "No route found." else "Couldn't get a route just now. Try again in a moment."))
-                    it.copy(loading = it.loading - m, routes = it.routes + (m to r.routes), errors = e)
+                    // The fastest first, so it's the one picked (a bike route marked "Slower route" was picked
+                    // while one 5 min faster sat below it).
+                    it.copy(loading = it.loading - m, routes = it.routes + (m to r.routes.sortedBy { x -> x.durationSeconds }), errors = e)
                 }
                 if (m == directions?.mode) {
                     frameRoute()

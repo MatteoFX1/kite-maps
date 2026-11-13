@@ -443,7 +443,10 @@ fun TripBar(nav: Navigator, onEnd: () -> Unit, onSteps: () -> Unit) {
         val spoken = "Arrive at ${Fmt.arrival(remaining)}, ${Fmt.duration(remaining)}, ${Fmt.distance(meters)} to go"
         // The biggest size where all three fit with a gap between them, all three the same size
         // (so they share a line), dropping the small "am"/"pm" only when even that won't fit.
-        BoxWithConstraints(Modifier.weight(1f).clearAndSetSemantics { contentDescription = spoken }, contentAlignment = Alignment.Center) {
+        // There: no "1 min · 20 yd" left over from the last moment of the drive.
+        if (nav.arrived) Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Text("Arrived", fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, color = Vela.accentText(dark))
+        } else BoxWithConstraints(Modifier.weight(1f).clearAndSetSemantics { contentDescription = spoken }, contentAlignment = Alignment.Center) {
             val measurer = rememberTextMeasurer()
             val gap = 14.dp
             val avail = with(LocalDensity.current) { maxWidth.toPx() - 2 * gap.toPx() }

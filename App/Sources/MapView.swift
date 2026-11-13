@@ -317,16 +317,19 @@ struct VelaMapView: UIViewRepresentable {
             style.addLayer(sigs)
 
             // Live camera photos, under the speed cameras: Windy webcams from zoom 6 (a region), road
-            // cameras from zoom 9 (a city). Overlapping dots hide each other, so zoomed out stays readable.
-            let liveSrc = MLNShapeSource(identifier: "vela-livecams", shape: nil, options: nil)
+            // cameras from zoom 9 (a city). Zoomed out over a busy city (central London) they join into
+            // numbered blue bubbles, like the speed cameras (Matteo, 2026-11-13).
+            let liveSrc = MLNShapeSource(identifier: "vela-livecams", shape: nil, options: Self.groupOptions)
             style.addSource(liveSrc)
             let live = MLNSymbolStyleLayer(identifier: "vela-livecams", source: liveSrc)
+            live.predicate = NSPredicate(format: "cluster != YES")
             live.iconImageName = NSExpression(forKeyPath: "icon")
             live.iconAllowsOverlap = NSExpression(forConstantValue: false)
             live.iconPadding = NSExpression(forConstantValue: 2)
             live.iconScale = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 6, 0.6, 9, 0.7, 13, 0.9, 16, 1.05])
             live.minimumZoomLevel = Float(LiveCams.webcamMinZoom)
             style.addLayer(live)
+            Self.addGroupBubbles(style, source: liveSrc, id: "vela-livecams", ring: UIColor(hex: 0x3B82F6), minZoom: Float(LiveCams.webcamMinZoom))
 
             // Speed cameras and plate readers, from zoom 12 in.
             // Zoomed out over a busy city, cameras close together join into one bubble with a number.
@@ -1021,7 +1024,7 @@ struct VelaMapView: UIViewRepresentable {
                     return
                 }
                 // A numbered bubble: zoom in until it splits into its icons.
-                let bubbles = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-waze-group-bubble", "vela-cameras-bubble"])
+                let bubbles = map.visibleFeatures(in: box, styleLayerIdentifiers: ["vela-waze-group-bubble", "vela-cameras-bubble", "vela-livecams-bubble"])
                 if let b = bubbles.first {
                     map.setCenter(b.coordinate, zoomLevel: min(map.zoomLevel + 2, 15), animated: true)
                     return

@@ -224,15 +224,15 @@ class KiteMap(private val model: AppModel, private val context: Context) {
     }
 
     /** The numbered bubble for a group: a dark circle with a colored ring, bigger for more. */
-    private fun groupBubbles(style: Style, id: String, ring: Int) {
+    private fun groupBubbles(style: Style, id: String, ring: Int, from: Float = 11f) {
         val count = get("point_count")
         style.addLayer(CircleLayer("$id-bubble", id).withProperties(
             circleColor(Color.rgb(0x0F, 0x17, 0x2A)), circleOpacity(0.92f),
             circleStrokeColor(Color.rgb(ring shr 16 and 0xFF, ring shr 8 and 0xFF, ring and 0xFF)), circleStrokeWidth(3f),
-            circleRadius(step(count, literal(14f), stop(10, 17f), stop(50, 21f)))).apply { minZoom = 11f; setFilter(has("point_count")) })
+            circleRadius(step(count, literal(14f), stop(10, 17f), stop(50, 21f)))).apply { minZoom = from; setFilter(has("point_count")) })
         style.addLayer(SymbolLayer("$id-count", id).withProperties(
             textField(Expression.toString(count)), textFont(arrayOf("Noto Sans Bold")), textSize(13f),
-            textColor(Color.WHITE), textAllowOverlap(true), textIgnorePlacement(true)).apply { minZoom = 11f; setFilter(has("point_count")) })
+            textColor(Color.WHITE), textAllowOverlap(true), textIgnorePlacement(true)).apply { minZoom = from; setFilter(has("point_count")) })
     }
 
     private fun addVelaLayers(style: Style) {
@@ -300,12 +300,14 @@ class KiteMap(private val model: AppModel, private val context: Context) {
             iconSize(interpolate(linear(), zoom(), stop(14, 0.75f), stop(17, 1.0f)))).apply { minZoom = 14f })
 
         // Live camera photos, under the speed cameras: Windy webcams from zoom 6 (a region), road
-        // cameras from zoom 9 (a city). Overlapping dots hide each other, so zoomed out stays readable.
-        src("vela-livecams")
+        // cameras from zoom 9 (a city). Zoomed out over a busy city (central London) they join into
+        // numbered blue bubbles, like the speed cameras (Matteo, 2026-11-13).
+        grouped("vela-livecams")
         style.addLayer(SymbolLayer("vela-livecams", "vela-livecams").withProperties(
             iconImage(get("icon")), iconAllowOverlap(false), iconPadding(2f),
             iconSize(interpolate(linear(), zoom(), stop(6, 0.6f), stop(9, 0.7f), stop(13, 0.9f), stop(16, 1.05f))))
-            .apply { minZoom = LiveCams.WEBCAM_MIN_ZOOM.toFloat() })
+            .apply { minZoom = LiveCams.WEBCAM_MIN_ZOOM.toFloat(); setFilter(not(has("point_count"))) })
+        groupBubbles(style, "vela-livecams", 0x3B82F6, LiveCams.WEBCAM_MIN_ZOOM.toFloat())
 
         // Zoomed out over a busy city, cameras close together join into one bubble with a number.
         grouped("vela-cameras")
@@ -815,7 +817,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
             wazeAlerts.firstOrNull { it.id == id }?.let { view?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); model.wazeInfo = it; return true }
         }
         // A numbered bubble: zoom in until it splits into its icons.
-        m.queryRenderedFeatures(box, "vela-waze-group-bubble", "vela-cameras-bubble").firstOrNull()?.let { f ->
+        m.queryRenderedFeatures(box, "vela-waze-group-bubble", "vela-cameras-bubble", "vela-livecams-bubble").firstOrNull()?.let { f ->
             (f.geometry() as? Point)?.let { p ->
                 m.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(
                     org.maplibre.android.geometry.LatLng(p.latitude(), p.longitude()), min(m.cameraPosition.zoom + 2, 15.0)))

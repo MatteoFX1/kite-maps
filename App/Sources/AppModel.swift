@@ -596,7 +596,9 @@ final class AppModel: ObservableObject {
                                                 heading: m == .drive ? heading : nil, alternatives: true)
                 guard directions?.destination.id == d.destination.id, routesRequest == req else { return }
                 directions?.loading.remove(m)
-                directions?.routes[m] = r.routes
+                // The fastest first, so it's the one picked (Matteo, 2026-11-13: a bike route marked
+                // "Slower route" was picked while one 5 min faster sat below it).
+                directions?.routes[m] = r.routes.sorted { $0.durationSeconds < $1.durationSeconds }
                 if r.routes.isEmpty {
                     directions?.errors[m] = Connectivity.explain(r.error == "No route found." ? "No route found." : "Couldn't get a route just now. Try again in a moment.")
                 }

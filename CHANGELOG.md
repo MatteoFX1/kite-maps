@@ -61,6 +61,11 @@ Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
   up at once, the screen ran out of room and pushed the trip bar off the bottom. On short screens the
   police chip and the "GPS signal lost" / "Rerouting" note wait while a warning card is showing.
 - **Camera tiles on the route:** "No photo right now" no longer sits on top of the "In 10 mi" label.
+- **Fastest route picked first:** directions now open on the quickest route for every way of
+  travelling (cycling could open on one marked "Slower route" with a faster one below it).
+- **"Arrived" in the bottom bar:** once you're there it says so, instead of "1 min · 20 yd".
+- **Live camera bubbles:** zoomed out over a busy city, the blue live camera dots join into numbered
+  bubbles like the speed cameras; tap one to zoom in.
 - **Pasted coordinates stay in the box:** searching "50.9097, -1.4044" drops the pin and keeps the
   coordinates in the search box, instead of going back to an empty "Where to?".
 - **Road name above the trip bar on small phones:** on short screens (iPhone mini, small Android phones) the road you're on was

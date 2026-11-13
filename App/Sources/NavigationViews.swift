@@ -583,15 +583,24 @@ struct TripBar: View {
             // (so they share a line), dropping the small "am"/"pm" only when even that won't fit.
             let color = TripBody.delayColor(nav.route, scheme)
             // Measured against the real width, so am/pm only goes when it truly doesn't fit.
-            GeometryReader { g in
-                let pick = TripBar.fit(arrive, left, dist, width: g.size.width)
-                stats(arrive, left, dist, color, size: pick.size, ampm: pick.ampm)
-                    .frame(width: g.size.width, height: g.size.height)
+            if nav.arrived {
+                // There: no "1 min · 20 yd" left over from the last moment of the drive.
+                Text("Arrived")
+                    .font(.system(size: 30, weight: .heavy))
+                    .foregroundColor(Vela.accentText(scheme))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 60)
+            } else {
+                GeometryReader { g in
+                    let pick = TripBar.fit(arrive, left, dist, width: g.size.width)
+                    stats(arrive, left, dist, color, size: pick.size, ampm: pick.ampm)
+                        .frame(width: g.size.width, height: g.size.height)
+                }
+                .frame(height: 60)
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Arrive at \(Fmt.arrival(remaining)), \(Fmt.duration(remaining)), \(Fmt.distance(meters)) to go")
             }
-            .frame(height: 60)
-            .frame(maxWidth: .infinity)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Arrive at \(Fmt.arrival(remaining)), \(Fmt.duration(remaining)), \(Fmt.distance(meters)) to go")
             Button(action: onSteps) {
                 Image(systemName: "list.bullet")
                     .font(.system(size: 24, weight: .bold))
