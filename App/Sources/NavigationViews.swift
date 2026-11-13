@@ -560,12 +560,18 @@ struct TripBar: View {
             let arrive = TripBar.arrivalParts(remaining)
             let left = TripBar.timeParts(remaining)
             let dist = TripBar.distanceParts(meters)
-            HStack(alignment: .top, spacing: 4) {
-                stat(Text(arrive.time) + Text(arrive.suffix).font(.system(size: 16, weight: .bold)),
-                     "arrive", TripBody.delayColor(nav.route, scheme))
-                stat(Text(left.value), left.unit, .primary)
-                stat(Text(dist.value), dist.unit, .primary)
+            // The arrival time gets a wider share, since "10:42 pm" is longer than "8" or "2.1".
+            GeometryReader { g in
+                HStack(spacing: 0) {
+                    stat(Text(arrive.time) + Text(arrive.suffix).font(.system(size: 16, weight: .bold)),
+                         "arrive", TripBody.delayColor(nav.route, scheme))
+                        .frame(width: g.size.width * 0.42)
+                    stat(Text(left.value), left.unit, .primary).frame(width: g.size.width * 0.29)
+                    stat(Text(dist.value), dist.unit, .primary).frame(width: g.size.width * 0.29)
+                }
+                .frame(maxHeight: .infinity)
             }
+            .frame(height: 60)
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Arrive at \(Fmt.arrival(remaining)), \(Fmt.duration(remaining)), \(Fmt.distance(meters)) to go")
@@ -588,8 +594,10 @@ struct TripBar: View {
 
     private func stat(_ big: Text, _ label: String, _ color: Color) -> some View {
         VStack(spacing: 0) {
+            // Same height for all three, so the labels underneath line up even when one number shrinks to fit.
             big.font(.system(size: 30, weight: .heavy)).foregroundColor(color)
-                .lineLimit(1).minimumScaleFactor(0.6)
+                .lineLimit(1).minimumScaleFactor(0.5)
+                .frame(height: 38, alignment: .bottom)
             Text(label).font(.system(size: 14, weight: .medium)).foregroundColor(Vela.muted(scheme))
                 .lineLimit(1)
         }
@@ -946,14 +954,14 @@ struct AlsoAheadPill: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
-                Text("Also ahead").font(.system(size: 15, weight: .semibold)).foregroundColor(.white.opacity(0.75))
-                // Two at most, so the pill never runs off the screen; "+1" for any more.
-                ForEach(alerts.prefix(2), id: \.self) { item($0) }
-                if alerts.count > 2 { Text("+\(alerts.count - 2)").font(.system(size: 16, weight: .heavy)) }
+            // Two at most, with "+1" for any more. On a small phone the words "Also ahead" go first,
+            // then the second warning, so the pill never runs off the screen.
+            ViewThatFits(in: .horizontal) {
+                row(label: true, shown: 2)
+                row(label: false, shown: 2)
+                row(label: false, shown: 1)
             }
             .foregroundColor(.white)
-            .lineLimit(1).minimumScaleFactor(0.8)
             .padding(.horizontal, 16).frame(height: 44)
             .background(Capsule().fill(Color(hex: 0x0F172A).opacity(0.92)))
             .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
@@ -961,6 +969,16 @@ struct AlsoAheadPill: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint("Shows the next warning")
+    }
+
+    private func row(label: Bool, shown: Int) -> some View {
+        HStack(spacing: 12) {
+            if label { Text("Also ahead").font(.system(size: 15, weight: .semibold)).foregroundColor(.white.opacity(0.75)) }
+            ForEach(alerts.prefix(shown), id: \.self) { item($0) }
+            if alerts.count > shown { Text("+\(alerts.count - shown)").font(.system(size: 16, weight: .heavy)) }
+        }
+        .lineLimit(1)
+        .fixedSize()
     }
 
     @ViewBuilder
