@@ -210,7 +210,7 @@ struct NavigationOverlay: View {
                         .overlay(Capsule().strokeBorder(Color(hex: 0x2DD4BF).opacity(0.8), lineWidth: 1.5))
                         // Between the speed sign and the mute button, which sit level with it now the car is lower.
                         .frame(maxWidth: panel > 0 ? g.size.width - panel - 80 : g.size.width - 240)
-                        .position(x: panel + (g.size.width - panel) / 2, y: NavGlide.carY(g.size.height) + 50)
+                        .position(x: panel + (g.size.width - panel) / 2, y: roadPillY(g.size.height))
                 }
             }
             .ignoresSafeArea()
@@ -534,6 +534,15 @@ struct EndTripCard: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 4)
     }
+}
+
+/**
+ * Where the road-name pill sits: just under the car, but on a phone with little height (iPhone mini)
+ * that touches the trip bar, so it's kept 8 pt above the bar (100 tall, 4 off the bottom).
+ */
+private func roadPillY(_ height: CGFloat) -> CGFloat {
+    let safeBottom = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?.safeAreaInsets.bottom ?? 0
+    return min(NavGlide.carY(height) + 50, height - safeBottom - 104 - 8 - 18)
 }
 
 struct TripBar: View {
