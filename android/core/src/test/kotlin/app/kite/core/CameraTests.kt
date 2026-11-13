@@ -246,4 +246,17 @@ class CameraTests {
         assertEquals(3, Roundabouts.withEntryLanes(listOf(m), e)?.get(0)?.roundabout?.entryLanes)
         assertNull(Roundabouts.withEntryLanes(listOf(m.copy(roundabout = m.roundabout!!.copy(entryLanes = 2))), e))
     }
+
+    @Test fun mergeJoinsFromTheMatcher() {
+        val json = """{"shape":"_ibE_ibE_ibE?_ibE?","edges":[
+ {"lane_count":1,"begin_shape_index":0,"end_shape_index":1,"end_node":{"intersecting_edges":[{"driveability":"backward","begin_heading":61}]}},
+ {"lane_count":4,"begin_shape_index":1,"end_shape_index":2,"end_node":{"intersecting_edges":[{"driveability":"forward","begin_heading":200}]}},
+ {"lane_count":4,"begin_shape_index":2,"end_shape_index":3}]}"""
+        val j = Merges.joins(json.toByteArray())
+        assertEquals(2, j.size)
+        assertEquals(1, j[0].inLanes)
+        assertEquals(4, j[0].outLanes)
+        assertEquals(listOf(61.0), j[0].others)
+        assertEquals(emptyList(), j[1].others)
+    }
 }

@@ -81,6 +81,10 @@ if args.count > 1, args[1] == "adoptcheck" {
     await adoptCheck()
     exit(0)
 }
+if args.count > 1, args[1] == "merges" {
+    await mergeCheck()
+    exit(0)
+}
 if args.count > 1, args[1] == "turns" {
     await turnAudit()
     exit(0)

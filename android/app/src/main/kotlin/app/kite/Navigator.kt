@@ -84,6 +84,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     private var fullRoadData = false
     private var matchedLimits = false
     private var matchedWays: List<Overpass.LimitWay> = emptyList()
+    /** Merges on this route that are really a lane gain (where along the route), said nothing. */
+    private var quietMerges: Set<Double> = emptySet()
     /** The road matcher's lane counts into each roundabout on this route. */
     private var entryLanes: List<RoundaboutEntry> = emptyList()
     var onFinished: (() -> Unit)? = null
@@ -290,6 +292,16 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     private fun loadRoundabouts() {
         if (route.mode == TravelMode.WALK) return
         val start = route
+        quietMerges = emptySet()
+        // "Merge onto…" only where a lane really ends: a slip road that becomes a lane of its own is said nothing.
+        if (route.mode == TravelMode.DRIVE && start.maneuvers.any { it.type == ManeuverType.MERGE && !it.silent }) {
+            scope.launch {
+                val gains = Merges.laneGains(start.maneuvers.map { it.copy() }, start.polyline) ?: return@launch
+                if (route.id != start.id) return@launch
+                quietMerges = gains
+                useSteps(route.maneuvers)
+            }
+        }
         scope.launch {
             var r = start
             Roundabouts.addMinis(r.deep())?.let { withMinis ->
@@ -308,7 +320,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     }
 
     /** New steps on the same route line: what was already said stays said, step by step. */
-    private fun useSteps(steps: List<Maneuver>) {
+    private fun useSteps(steps0: List<Maneuver>) {
+        val steps = steps0.map { if (it.type == ManeuverType.MERGE && it.alongMeters in quietMerges) it.copy(silent = true) else it }
         val old = route.maneuvers
         fun moved(i: Int): Int? {
             if (i >= old.size) return null

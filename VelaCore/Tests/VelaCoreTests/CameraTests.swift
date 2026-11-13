@@ -218,6 +218,22 @@ final class ValhallaTests: XCTestCase {
         XCTAssertNil(Roundabouts.withEntryLanes([m], p.entries))
     }
 
+    /** Almondsbury (M4 onto the M5 south): a 1-lane slip road joins and the road out has 4 lanes; a road only leaving isn't a join. */
+    func testMergeJoinsFromTheMatcher() {
+        let json = """
+        {"shape":"_ibE_ibE_ibE?_ibE?","edges":[
+         {"lane_count":1,"begin_shape_index":0,"end_shape_index":1,"end_node":{"intersecting_edges":[{"driveability":"backward","begin_heading":61}]}},
+         {"lane_count":4,"begin_shape_index":1,"end_shape_index":2,"end_node":{"intersecting_edges":[{"driveability":"forward","begin_heading":200}]}},
+         {"lane_count":4,"begin_shape_index":2,"end_shape_index":3}]}
+        """
+        let j = Merges.joins(Data(json.utf8))
+        XCTAssertEqual(j.count, 2)
+        XCTAssertEqual(j[0].inLanes, 1)
+        XCTAssertEqual(j[0].outLanes, 4)
+        XCTAssertEqual(j[0].others, [61])
+        XCTAssertEqual(j[1].others, [])
+    }
+
     /** A British road mapped "maxspeed=30" with no unit is 30 mph, not 19; elsewhere 30 stays km/h. */
     func testBritishUnitlessLimitIsMph() {
         let eastleigh = LatLng(50.9613, -1.3705), paris = LatLng(48.85, 2.35), dublin = LatLng(53.35, -6.26)

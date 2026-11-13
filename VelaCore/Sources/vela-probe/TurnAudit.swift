@@ -309,3 +309,21 @@ func adoptCheck() async {
     }
     print("OK counts of \(drives.count): \(ok)")
 }
+
+/** `vela-probe merges`: every merge on the junction drives, and whether the road matcher calls it a lane gain (said nothing). */
+func mergeCheck() async {
+    var said = 0, quiet = 0
+    let only = ProcessInfo.processInfo.environment["ONLY"]
+    for (name, a, b) in turnDrives + turnDrives2 where only == nil || name.contains(only!) {
+        guard let x = await Directions.routes(from: a, to: b, mode: .drive).routes.first else { continue }
+        let merges = x.maneuvers.filter { $0.type == .merge && !$0.silent }
+        guard !merges.isEmpty else { continue }
+        let after = await Merges.quietLaneGains(x.maneuvers, line: x.polyline) ?? x.maneuvers
+        for m in merges {
+            let q = after.first { $0.alongMeters == m.alongMeters }?.silent == true
+            if q { quiet += 1 } else { said += 1 }
+            print(String(format: "%@  %@  '%@'  %.5f,%.5f", q ? "QUIET" : "MERGE", name, m.instruction, m.location.lat, m.location.lng))
+        }
+    }
+    print("merges said \(said), lane gains made quiet \(quiet)")
+}

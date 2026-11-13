@@ -218,6 +218,20 @@ object DirectionsParser {
         // "Keep right to stay on A38(M)" comes marked as a turn: it's a keep, and its arrow should say so.
         if (text.startsWith("Keep left") && m.type in setOf(ManeuverType.TURN_LEFT, ManeuverType.SLIGHT_LEFT)) m.type = ManeuverType.KEEP_LEFT
         if (text.startsWith("Keep right") && m.type in setOf(ManeuverType.TURN_RIGHT, ManeuverType.SLIGHT_RIGHT)) m.type = ManeuverType.KEEP_RIGHT
+        // Marked as a merge but not one ("Slight right onto the M1 slip road", "Take the slip road to A463 N").
+        if (m.type == ManeuverType.MERGE && !text.startsWith("Merge")) {
+            val l = text.lowercase()
+            val left = l.contains(" left"); val right = l.contains(" right")
+            when {
+                l.startsWith("slight") -> m.type = if (left) ManeuverType.SLIGHT_LEFT else if (right) ManeuverType.SLIGHT_RIGHT else m.type
+                l.startsWith("keep") -> m.type = if (left) ManeuverType.KEEP_LEFT else if (right) ManeuverType.KEEP_RIGHT else m.type
+                l.startsWith("turn") -> m.type = if (left) ManeuverType.TURN_LEFT else if (right) ManeuverType.TURN_RIGHT else m.type
+                l.startsWith("take") && (l.contains("ramp") || l.contains("slip road") || l.contains("exit")) -> {
+                    m.type = if (left) ManeuverType.RAMP_LEFT else if (right) ManeuverType.RAMP_RIGHT else ManeuverType.RAMP_LEFT
+                    m.sideUnknown = !left && !right
+                }
+            }
+        }
         if ((token?.uppercase() ?: "") in setOf("ON_RAMP", "OFF_RAMP", "RAMP") && side == null) {
             m.type = ManeuverType.RAMP_LEFT
             m.sideUnknown = true
