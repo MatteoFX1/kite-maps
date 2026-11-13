@@ -338,11 +338,6 @@ fun StepMerge.addGoogleSigns(steps: MutableList<Maneuver>, google: List<Maneuver
     }
 }
 
-/**
- * Steps that say the same thing twice, or nothing: "Turn right" then "Continue straight onto Wide
- * Ln" 11 m later is one turn; the same turn twice 8 m apart is one turn; "Continue onto" the road
- * you're already on says nothing; a turn that keeps you on the same road is "to stay on" it.
- */
 /** Leaving by a slip road: "Exit at junction 10", "Take exit 6 onto M6", "Use the lane 2nd from the left to take the exit towards M25". */
 private fun isExit(m: Maneuver): Boolean =
     // Sometimes marked as a fork or a keep (Gravelly Hill J6): the words say it's the exit.
@@ -353,6 +348,11 @@ private fun isExit(m: Maneuver): Boolean =
 /** Says which junction, road or place, not just "Take the exit". */
 private fun saysWhere(w: String): Boolean = w.any { it.isDigit() } || w.contains(" toward") || w.contains(" onto ")
 
+/**
+ * Steps that say the same thing twice, or nothing: "Turn right" then "Continue straight onto Wide
+ * Ln" 11 m later is one turn; the same turn twice 8 m apart is one turn; "Continue onto" the road
+ * you're already on says nothing; a turn that keeps you on the same road is "to stay on" it.
+ */
 fun StepMerge.tidy(steps: MutableList<Maneuver>) {
     var prev: Int? = null
     var road: String? = null

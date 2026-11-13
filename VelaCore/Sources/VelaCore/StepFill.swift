@@ -339,12 +339,6 @@ extension StepMerge {
         }
     }
 
-    /**
-     * Steps that say the same thing twice, or nothing: "Turn right" then "Continue straight onto
-     * Wide Ln" 11 m later is one turn, "Turn right onto Wide Ln"; "Turn slight right onto Coldhams
-     * Lane" then "Turn right onto Coldhams Lane" 8 m on is one turn; "Continue onto" the road
-     * you're already on says nothing; a turn that keeps you on the same road is "to stay on" it.
-     */
     /** Leaving by a slip road: "Exit at junction 10", "Take exit 6 onto M6", "Use the lane 2nd from the left to take the exit towards M25". */
     static func isExit(_ m: Maneuver) -> Bool {
         // Sometimes marked as a fork or a keep (Gravelly Hill J6): the words say it's the exit.
@@ -357,6 +351,12 @@ extension StepMerge {
         w.rangeOfCharacter(from: .decimalDigits) != nil || w.contains(" toward") || w.contains(" onto ")
     }
 
+    /**
+     * Steps that say the same thing twice, or nothing: "Turn right" then "Continue straight onto
+     * Wide Ln" 11 m later is one turn, "Turn right onto Wide Ln"; "Turn slight right onto Coldhams
+     * Lane" then "Turn right onto Coldhams Lane" 8 m on is one turn; "Continue onto" the road
+     * you're already on says nothing; a turn that keeps you on the same road is "to stay on" it.
+     */
     public static func tidy(_ steps: inout [Maneuver]) {
         var prev: Int?
         var road: String?
