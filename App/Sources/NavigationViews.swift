@@ -563,14 +563,13 @@ struct TripBar: View {
             // The biggest size where all three fit with a gap between them, all three the same size
             // (so they share a line), dropping the small "am"/"pm" only when even that won't fit.
             let color = TripBody.delayColor(nav.route, scheme)
-            ViewThatFits(in: .horizontal) {
-                stats(arrive, left, dist, color, size: 30, ampm: true)
-                stats(arrive, left, dist, color, size: 27, ampm: true)
-                stats(arrive, left, dist, color, size: 24, ampm: true)
-                stats(arrive, left, dist, color, size: 24, ampm: false)
-                stats(arrive, left, dist, color, size: 21, ampm: false)
-                stats(arrive, left, dist, color, size: 18, ampm: false)
+            // Measured against the real width, so am/pm only goes when it truly doesn't fit.
+            GeometryReader { g in
+                let pick = TripBar.fit(arrive, left.value, dist.value, width: g.size.width)
+                stats(arrive, left, dist, color, size: pick.size, ampm: pick.ampm)
+                    .frame(width: g.size.width, height: g.size.height)
             }
+            .frame(height: 60)
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Arrive at \(Fmt.arrival(remaining)), \(Fmt.duration(remaining)), \(Fmt.distance(meters)) to go")
@@ -593,7 +592,7 @@ struct TripBar: View {
 
     private func stats(_ arrive: (time: String, suffix: String), _ left: (value: String, unit: String),
                        _ dist: (value: String, unit: String), _ color: Color, size: CGFloat, ampm: Bool) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: TripBar.statGap) {
             stat(Text(arrive.time) + Text(ampm ? arrive.suffix : "").font(.system(size: size * 0.53, weight: .bold)), "arrive", color, size)
             stat(Text(left.value), left.unit, .primary, size)
             stat(Text(dist.value), dist.unit, .primary, size)
@@ -606,6 +605,24 @@ struct TripBar: View {
             big.font(.system(size: size, weight: .heavy)).monospacedDigit().foregroundColor(color).lineLimit(1)
             Text(label).font(.system(size: 14, weight: .medium)).foregroundColor(Vela.muted(scheme)).lineLimit(1)
         }
+    }
+
+    /** The gap between the three numbers. */
+    static let statGap: CGFloat = 14
+
+    /** The biggest size (30, 27, 24 with am/pm, then 24, 21, 18 without) where all three fit in `width`. */
+    static func fit(_ arrive: (time: String, suffix: String), _ left: String, _ dist: String, width: CGFloat) -> (size: CGFloat, ampm: Bool) {
+        func w(_ s: String, _ size: CGFloat, _ weight: UIFont.Weight) -> CGFloat {
+            ceil((s as NSString).size(withAttributes: [.font: UIFont.monospacedDigitSystemFont(ofSize: size, weight: weight)]).width)
+        }
+        let label = w("arrive", 14, .medium)
+        let candidates: [(CGFloat, Bool)] = [(30, true), (27, true), (24, true), (24, false), (21, false), (18, false)]
+        for (size, ampm) in candidates {
+            let first = w(arrive.time, size, .heavy) + (ampm && !arrive.suffix.isEmpty ? w(arrive.suffix, size * 0.53, .bold) : 0)
+            let total = max(first, label) + max(w(left, size, .heavy), 30) + max(w(dist, size, .heavy), 30) + statGap * 2
+            if total <= width - 4 { return (size, ampm) }
+        }
+        return (18, false)
     }
 
     /** "9:18" and " pm" (nothing on a 24 hour clock), so the time stays big and the pm small. */
