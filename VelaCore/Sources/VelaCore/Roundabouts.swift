@@ -53,7 +53,7 @@ public enum Roundabouts {
                 changed = true
             } else if let out, let s = m.roundabout, s.exits.indices.contains(s.taken), angleGap(s.exits[s.taken], out) > 1 {
                 // The router's sketch, pointed at the way out found from the circle.
-                r.maneuvers[i].roundabout = angleGap(s.exits[s.taken], out) < 50 ? aim(s, at: out)
+                r.maneuvers[i].roundabout = angleGap(s.exits[s.taken], out) < 50 && (m.exit == nil || s.taken + 1 == m.exit) ? aim(s, at: out)
                     : spread(to: out, exit: m.exit ?? 1, clockwise: clockwise)
                 changed = true
             }
@@ -85,7 +85,9 @@ public enum Roundabouts {
                 continue
             }
             guard let out = exitAngle(route.polyline, cumulative: cum, along: m.alongMeters, leaving: wayOff(r.maneuvers, i)) else { continue }
-            if let s = m.roundabout, s.exits.indices.contains(s.taken), angleGap(s.exits[s.taken], out) < 50 {
+            // A sketch that counts a different exit from the words (Google's number put on the router's
+            // sketch: "2nd exit" drawn as the 3rd, Romsey) is drawn again with the spoken count.
+            if let s = m.roundabout, s.exits.indices.contains(s.taken), angleGap(s.exits[s.taken], out) < 50, m.exit == nil || s.taken + 1 == m.exit {
                 r.maneuvers[i].roundabout = aim(s, at: out)
             } else {
                 r.maneuvers[i].roundabout = spread(to: out, exit: m.exit ?? 1, clockwise: Geo.drivesOnLeft(m.location))

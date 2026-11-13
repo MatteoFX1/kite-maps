@@ -214,7 +214,8 @@ struct ModeTabs: View {
                     .accessibilityLabel(m.label)
             }
             tile(icon: "tram.fill", on: state.transit, loading: state.trips == nil,
-                 time: state.trips?.map(\.durationSeconds).min().map(Fmt.shortDuration)) { model.showTransit() }
+                 // The same trip the header shows (the picked one, else the first), so the two never disagree.
+                 time: (state.pickedTrip ?? state.trips?.first).map { Fmt.shortDuration($0.durationSeconds) }) { model.showTransit() }
                 .accessibilityLabel("Transit")
         }
     }

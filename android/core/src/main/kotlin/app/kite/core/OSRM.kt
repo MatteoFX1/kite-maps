@@ -50,11 +50,11 @@ object OSRM {
     }
 
     /** The open router forced through points sampled off [line] (Google's route), so its steps follow the same roads. */
-    suspend fun routeVia(line: List<LatLng>, mode: TravelMode): Route? {
+    suspend fun routeVia(line: List<LatLng>, mode: TravelMode, spacing: Double = 1_500.0, maxVias: Int = 12): Route? {
         if (line.size < 2) return null
         val cum = Geo.cumulative(line)
         val total = cum.last()
-        val vias = min(12, (total / 1_500).toInt())
+        val vias = min(maxVias, (total / spacing).toInt())
         val pts = mutableListOf(line[0])
         val bearings = mutableListOf(bearing(line, cum, 0.0))
         for (i in 1..vias) {
@@ -96,6 +96,7 @@ object OSRM {
             val nameOnly = mutableSetOf<Int>()
             var along = 0.0
             val roads = LinkedHashMap<String, Double>()
+            var leftMotorway: String? = null
             val legs = r["legs"].asMaps() ?: emptyList()
             for ((li, leg) in legs.withIndex()) {
                 val steps = leg["steps"].asMaps() ?: emptyList()
@@ -113,13 +114,21 @@ object OSRM {
                     val ref = ref0?.split(";")?.firstOrNull()?.trim()
                     val motorway = ref?.takeIf { Regex("^(M\\d+|A\\d+\\(M\\))$").containsMatchIn(it) }
                     val name = motorway ?: (step["name"] as? String)?.ifEmpty { null }
+                    // The link road off a motorway roundabout often still carries the motorway's number (M3 J6
+                    // into Basingstoke): having just left the M3, that exit isn't "onto M3".
+                    val roundaboutStep = type in setOf("roundabout", "rotary", "roundabout turn", "exit roundabout", "exit rotary")
+                    // The fork and merge further up that link road carry the number too: still not the M3.
+                    val before = maneuvers.lastOrNull { it.road != null && it.type != ManeuverType.ROUNDABOUT }?.road
+                    if (motorway == null || motorway != leftMotorway) leftMotorway = null
+                    if (roundaboutStep && motorway != null && motorway == before) leftMotorway = motorway
+                    val stepRoad = if (leftMotorway != null) null else name ?: ref
                     (name ?: ref)?.let { roads[it] = (roads[it] ?: 0.0) + dist }
                     val at = loc(m["location"]) ?: Geo.point(line, along, cum)
                     val mt = maneuverType(type, modifier, Geo.drivesOnLeft(at))
                     val signs = Signs(step["destinations"] as? String, step["exits"] as? String, maneuvers.lastOrNull()?.road)
                     val exit = m["exit"].int()
-                    val man = Maneuver(mt, instruction(type, modifier, name ?: ref, exit, mode, signs), at,
-                        min(along, cum.last()), dist, name ?: ref)
+                    val man = Maneuver(mt, instruction(type, modifier, stepRoad, exit, mode, signs), at,
+                        min(along, cum.last()), dist, stepRoad)
                     man.lanes = lanes(step)
                     man.exit = exit
                     if (type == "roundabout" || type == "rotary") {
@@ -443,11 +452,19 @@ object Directions {
                     val plain = deadline(wait) { osrmTask.await().getOrNull() } ?: emptyList()
                     val spare = plain.toMutableList()
                     for (i in g.indices) {
-                        val steps = StepMerge.adopt(vias[i]?.let { listOf(it) + plain } ?: plain, g[i].polyline)
+                        val candidates = vias[i]?.let { listOf(it) + plain } ?: plain
+                        // Google's step positions are only trustworthy when its steps cover the whole line.
+                        val complete = g[i].stepsComplete
+                        val steps = StepMerge.adopt(candidates, g[i].polyline)
+                            ?: if (complete) StepMerge.adoptPiecewise(candidates, g[i].maneuvers, g[i].polyline) else null
                         if (steps != null) {
-                            if (g[i].stepsComplete) {
+                            StepMerge.dropFalseUTurns(steps, g[i].polyline)
+                            if (complete) {
                                 StepMerge.addGoogleLaneHints(steps, g[i].maneuvers)
                                 StepMerge.addGoogleExits(steps, g[i].maneuvers)
+                                StepMerge.addGoogleKinds(steps, g[i].maneuvers, g[i].polyline)
+                                StepMerge.addGoogleMissing(steps, g[i].maneuvers, g[i].polyline)
+                                StepMerge.addGoogleSigns(steps, g[i].maneuvers)
                             }
                             g[i].maneuvers = steps
                             g[i].stepsComplete = true
@@ -460,6 +477,7 @@ object Directions {
                     }
                     for (i in g.indices) {
                         for (m in g[i].maneuvers) if (m.type == ManeuverType.ROUNDABOUT && m.exit == null) m.exit = DirectionsParser.exitNumber(m.instruction)
+                        StepMerge.tidy(g[i].maneuvers)
                         g[i] = Roundabouts.settle(g[i])
                         // Britain and Ireland ("slip road" is British).
                         if (a.lat in 49.8..61.0 && a.lng in -11.0..2.0) for (m in g[i].maneuvers) m.instruction = British.words(m.instruction)
@@ -474,9 +492,18 @@ object Directions {
             }
         }
         val o = osrmTask.await()
-        o.getOrNull()?.let { if (it.isNotEmpty()) return@coroutineScope Result(it.map { r -> Roundabouts.settle(r) }) }
+        // The open router only knows Europe: asked for somewhere it has no roads to (California, an
+        // island with no ferry), it snaps the end to its nearest road, and Southampton to Davis came
+        // back as 1,280 miles to Cabo da Roca in Portugal. A route that stops miles short isn't one.
+        o.getOrNull()?.filter { reaches(it.polyline, a, b) }?.let { if (it.isNotEmpty()) return@coroutineScope Result(it.map { r -> StepMerge.tidy(r.maneuvers); Roundabouts.settle(r) }) }
         o.exceptionOrNull()?.let { err = it.message }
         Result(emptyList(), err ?: "No route found.")
+    }
+
+    /** Whether [line] starts and ends within 5 km of where it was asked to go from and to. */
+    fun reaches(line: List<LatLng>, a: LatLng, b: LatLng): Boolean {
+        val first = line.firstOrNull() ?: return false
+        return first.distanceTo(a) < 5_000 && line.last().distanceTo(b) < 5_000
     }
 
     /** Whether [line] sets off more than a right angle away from [heading]: back the way the car came. */

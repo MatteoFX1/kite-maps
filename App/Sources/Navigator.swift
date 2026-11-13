@@ -17,7 +17,13 @@ final class Navigator: ObservableObject {
     @Published private(set) var progress: RouteTracker.Progress?
     @Published private(set) var rerouting = false
     @Published private(set) var arrived = false
-    @Published var muted: Bool { didSet { if muted { speech.stopSpeaking(at: .immediate) } } }
+    /** What the voice says: everything, only warnings (cameras, police, hazards), or nothing. */
+    @Published var voiceMode: VoiceMode {
+        didSet { if voiceMode == .off || (voiceMode == .alerts && !speakingAlert) { speech.stopSpeaking(at: .immediate) } }
+    }
+    var muted: Bool { voiceMode == .off }
+    /** Whether what's being said now is a warning, so switching to "Alerts only" doesn't cut it off. */
+    private var speakingAlert = false
     /** The camera follows the user until they pan the map. */
     @Published var following = true
     @Published private(set) var speedMps: Double = 0
@@ -141,7 +147,7 @@ final class Navigator: ObservableObject {
         self.destination = destination
         self.stops = stops
         tracker = RouteTracker(route: route)
-        muted = !settings.voice
+        voiceMode = settings.voice ? .all : .off
         avoidHighways = settings.avoidHighways
         avoidTolls = settings.avoidTolls
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
@@ -160,8 +166,8 @@ final class Navigator: ObservableObject {
         }
         // The first step with how far it is ("In 300 yards, turn left"), so a turn a little way off
         // doesn't sound like it's right here.
-        let firstWords = first.map { f in f.alongMeters < 40 || f.type == .arrive ? "\(f.instruction)."
-            : "In \(Fmt.spokenDistance(f.alongMeters)), \(f.instruction.lowercasedFirst)." } ?? ""
+        let firstWords = first.map { f in f.alongMeters < 40 || f.type == .arrive ? "\(f.spokenWords)."
+            : "In \(Fmt.spokenDistance(f.alongMeters)), \(f.spokenWords.lowercasedFirst)." } ?? ""
         speak("Starting route to \(destination.name). " + firstWords)
         // That was the heads-up for the first step: don't say it again a moment later, but still
         // say the turn itself as it comes up.
@@ -195,9 +201,24 @@ final class Navigator: ObservableObject {
         return road?.isEmpty == false ? road : nil
     }
 
+    /**
+     * ", then turn right onto King Street" when the step after [i] comes so soon after it (70 m)
+     * there's no time to be told on its own, the way Waze says both together. Not for leaving a
+     * roundabout (said with the roundabout) or arriving.
+     */
+    private func thenWords(_ i: Int) -> String {
+        guard route.mode == .drive, i < route.maneuvers.count,
+              let j = route.maneuvers[(i + 1)...].firstIndex(where: { !$0.silent }) else { return "" }
+        let a = route.maneuvers[i], b = route.maneuvers[j]
+        guard !b.leavesRoundabout, b.type != .arrive, b.alongMeters - a.alongMeters < 70 else { return "" }
+        return ", then \(b.spokenWords.lowercasedFirst)"
+    }
+
     /** The one after next, for the "Then" line when two turns come close together. */
     var thenManeuver: Maneuver? {
-        guard let i = progress?.nextIndex, let j = route.maneuvers[(i + 1)...].firstIndex(where: { !$0.silent }) else { return nil }
+        // The route can be swapped a moment before the progress catches up: never read past its steps.
+        guard let i = progress?.nextIndex, i < route.maneuvers.count,
+              let j = route.maneuvers[(i + 1)...].firstIndex(where: { !$0.silent }) else { return nil }
         let a = route.maneuvers[i], b = route.maneuvers[j]
         // Leaving a roundabout is part of the roundabout, not a turn of its own.
         if b.leavesRoundabout { return nil }
@@ -272,7 +293,7 @@ final class Navigator: ObservableObject {
         checkStops(p)
         if route.mode == .drive, AppSettings.shared.speedingAlert,
            speeding.update(speedKmh: loc.speed >= 0 ? loc.speed * 3.6 : nil, limitKmh: speedLimitKmh, now: loc.timestamp.timeIntervalSince1970) {
-            speak("You're over the speed limit.")
+            speak("You're over the speed limit.", alert: true)
         }
     }
 
@@ -355,7 +376,13 @@ final class Navigator: ObservableObject {
                     self.route.speedLimits = partial
                 }
             }
-            guard let found, self.route.id == id, !found.limits.isEmpty else { return false }
+            guard let found, self.route.id == id, !found.limits.isEmpty else {
+                // A long drive's later miles didn't come back (the server timed out on one piece): the
+                // first miles were already shown, but the rest must still come from the road data below,
+                // or the sign stays blank past the first 25 km for the whole drive.
+                if self.route.id == id { self.matchedLimits = false }
+                return false
+            }
             self.matchedLimits = true
             self.route.speedLimits = found.limits
             self.matchedWays = found.ways
@@ -449,7 +476,7 @@ final class Navigator: ObservableObject {
         if AppSettings.shared.cameraWarnings, cam.kind == .speed, !cam.quiet {
             chime()
             if !repeatRun {
-                speak((cam.average ? "Average speed camera ahead" : "Speed camera ahead") + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+                speak((cam.average ? "Average speed camera ahead" : "Speed camera ahead") + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."), alert: true)
             }
             cameraSpokenAt = Date()
             cameraSpokenLimit = limit
@@ -528,7 +555,7 @@ final class Navigator: ObservableObject {
         if s.wazeVoice && !onCall {
             chime()
             // "Police reported ahead, in 400 yards."
-            speak("\(String(next.alert.spoken.dropLast())), in \(Fmt.spokenDistance(ahead)).")
+            speak("\(String(next.alert.spoken.dropLast())), in \(Fmt.spokenDistance(ahead)).", alert: true)
         }
     }
 
@@ -551,7 +578,7 @@ final class Navigator: ObservableObject {
         if PoliceRisk.level(score) == .high, was != .high, s.wazeVoice, !onCall, Date().timeIntervalSince(riskSpokenAt) > 600,
            live == 0 || PoliceRisk.level(PoliceRisk.score(ahead: ahead, past: riskPast ?? [], live: 0)) == .high {
             riskSpokenAt = Date()
-            speak("Police hotspot ahead.")
+            speak("Police hotspot ahead.", alert: true)
         }
     }
 
@@ -580,7 +607,7 @@ final class Navigator: ObservableObject {
                 self.spokenAircraft.insert(a.id)
                 UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 self.chime()
-                if !self.onCall { self.speak("\(a.title) nearby.") }
+                if !self.onCall { self.speak("\(a.title) nearby.", alert: true) }
             }
         }
     }
@@ -611,7 +638,7 @@ final class Navigator: ObservableObject {
             } else {
                 zoneEntry = nil
                 averageCheck = nil
-                if AppSettings.shared.cameraWarnings { speak("Average speed check ended.") }
+                if AppSettings.shared.cameraWarnings { speak("Average speed check ended.", alert: true) }
             }
         }
         guard let i = inside else { return }
@@ -627,7 +654,7 @@ final class Navigator: ObservableObject {
                 zoneEntry = (z.startMeters, z.endMeters, Date(), at, z.kmh)
                 if AppSettings.shared.cameraWarnings {
                     chime()
-                    speak("Average speed check for \(Fmt.spokenDistance(z.endMeters - at))" + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."))
+                    speak("Average speed check for \(Fmt.spokenDistance(z.endMeters - at))" + (limit.map { ", limit \(Fmt.spokenSpeed($0))." } ?? "."), alert: true)
                 }
             }
             zoneCarry = nil
@@ -709,7 +736,7 @@ final class Navigator: ObservableObject {
             if m.leavesRoundabout, let r = route.maneuvers[..<i].last(where: { $0.type == .roundabout }),
                m.alongMeters - r.alongMeters < 150 { return }
             // The turn itself matters more than whatever is still being said.
-            speak(m.instruction, urgent: true)
+            speak(m.spokenWords + thenWords(i), urgent: true)
         } else if m.leavesRoundabout {
             // Already said with the roundabout ("take the 3rd exit"): only "exit" itself, as it comes up.
             return
@@ -722,13 +749,13 @@ final class Navigator: ObservableObject {
             } ?? ""
             // "In 200 yards, your destination is on the left", the way Google says it.
             let words = m.type == .arrive ? destinationSide.map { "your destination is on the \($0)" } ?? "your destination is ahead"
-                : m.instruction.lowercasedFirst
-            speak("In \(Fmt.spokenDistance(d)), \(words)\(lane)")
+                : m.spokenWords.lowercasedFirst
+            speak("In \(Fmt.spokenDistance(d)), \(words)\(m.type == .arrive ? "" : thenWords(i))\(lane)")
         } else if d <= far && d > near + 150 && stage < 1 && m.type != .arrive {
             spokenStage[i] = 1
             // On a phone call only what's needed now is said; the early heads-up would talk over it.
             if onCall { return }
-            speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
+            speak("In \(Fmt.spokenDistance(d)), \(m.spokenWords.lowercasedFirst)")
         } else if drive && d > 3000 && stage < 1 && !toldContinue.contains(i) && justPassed(p) {
             // A long way to the next turn, like after joining a motorway: say so once, the way
             // Google does ("Continue on M27 for 7 miles"), so a quiet stretch doesn't feel lost.
@@ -753,7 +780,9 @@ final class Navigator: ObservableObject {
         Task {
             let r = await Directions.routes(from: from, to: to, mode: .drive, avoidHighways: hw, avoidTolls: tolls, via: via, heading: course)
             self.trafficLoading = false
-            guard let fresh = r.routes.first, self.route.id == id, !self.rerouting, let now = self.progress,
+            // Arrived (or ended) while asking: no new route, and no "Found a faster route" in the car park.
+            guard !self.stopped, !self.arrived,
+                  let fresh = r.routes.first, self.route.id == id, !self.rerouting, let now = self.progress,
                   planned > 0, fresh.trafficSeconds != nil else { return }
             let current = now.remainingSeconds
             let saving = current - fresh.durationSeconds
@@ -798,7 +827,7 @@ final class Navigator: ObservableObject {
             speak(continueWords(d))
         } else {
             spokenStage[i] = d <= near ? 2 : 1
-            speak("In \(Fmt.spokenDistance(d)), \(m.instruction.lowercasedFirst)")
+            speak("In \(Fmt.spokenDistance(d)), \(m.spokenWords.lowercasedFirst)")
         }
     }
 
@@ -858,6 +887,8 @@ final class Navigator: ObservableObject {
                                             heading: course)
             guard !self.stopped, req == self.rerouteRequest else { return }
             self.rerouting = false
+            // Parked at the destination while the new route was loading: the trip is over, keep it that way.
+            if self.arrived { return }
             guard let fresh = r.routes.first else {
                 // The stop just added couldn't be routed to: say so, and don't keep it as if it were on the way.
                 if let adding, let i = self.stops.firstIndex(where: { $0.id == adding.id }) {
@@ -900,8 +931,9 @@ final class Navigator: ObservableObject {
     /** Something the app needs to tell the driver mid-drive, where a notice wouldn't be seen. */
     func say(_ text: String) { speak(text) }
 
-    private func speak(_ text: String, urgent: Bool = false) {
-        guard !muted, !stopped else { return }
+    private func speak(_ text: String, urgent: Bool = false, alert: Bool = false) {
+        guard !stopped, voiceMode == .all || (voiceMode == .alerts && alert) else { return }
+        speakingAlert = alert
         if urgent && speech.isSpeaking { speech.stopSpeaking(at: .word) }
         try? AVAudioSession.sharedInstance().setActive(true)
         let said = SpokenText.forVoice(text)
@@ -938,8 +970,31 @@ final class SpeechDone: NSObject, AVSpeechSynthesizerDelegate {
     }
 }
 
+extension Maneuver {
+    /**
+     * What the voice says for this step: a roundabout's way off too, as the banner shows it, so it's
+     * "take the 3rd exit onto West End Road" and not just "take the 3rd exit" (the open router's
+     * roundabout steps often leave the road out of the words).
+     */
+    var spokenWords: String {
+        guard type == .roundabout, !leavesRoundabout, let r = road?.trimmingCharacters(in: .whitespaces), !r.isEmpty,
+              !instruction.contains(" onto "), !instruction.contains(" toward") else { return instruction }
+        return instruction + " onto \(r)"
+    }
+}
+
 extension String {
     var lowercasedFirst: String { prefix(1).lowercased() + dropFirst() }
+}
+
+/** The speaker button's three choices, like Waze. */
+enum VoiceMode: Equatable {
+    case all, alerts, off
+
+    var next: VoiceMode { self == .all ? .alerts : self == .alerts ? .off : .all }
+    var icon: String { self == .all ? "speaker.wave.2.fill" : self == .alerts ? "bell.fill" : "speaker.slash.fill" }
+    var title: String { self == .all ? "Voice on" : self == .alerts ? "Alerts only" : "Voice off" }
+    var detail: String { self == .all ? "Turns and warnings" : self == .alerts ? "Cameras and police, no turns" : "Nothing spoken" }
 }
 
 struct CameraAlert: Equatable {

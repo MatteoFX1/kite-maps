@@ -143,8 +143,16 @@ enum Fmt {
 
     /** A limit for the voice: "30 miles per hour" (to the posted 5), "50 kilometers per hour". */
     static func spokenSpeed(_ kmh: Double) -> String {
-        if metric { return "\(Int((kmh / 5).rounded()) * 5) kilometers per hour" }
-        return "\(Int((kmh / 1.609344 / 5).rounded()) * 5) miles per hour"
+        if metric { return "\(max(5, Int((kmh / 5).rounded()) * 5)) kilometers per hour" }
+        return "\(postedMph(kmh)) miles per hour"
+    }
+
+    /**
+     * A limit in mph as the sign shows it, to the nearest 5. Never 0: a road mapped "walk" (about
+     * 7 km/h, a car park or a living street) would round down to a "0" sign; the lowest sign is 5.
+     */
+    static func postedMph(_ kmh: Double) -> Int {
+        max(5, Int((kmh / 1.609344 / 5).rounded()) * 5)
     }
 
     /** A speed in the user's units, without the unit. */

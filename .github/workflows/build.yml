@@ -346,6 +346,28 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo transituk
           sleep 40
           xcrun simctl io "$DEV" screenshot shots/transituk.png
+          # The smallest iPhone still sold (SE, 667 pt tall): everything at once has to fit, and the
+          # route's camera tiles. Never fails the build if this runner has no SE.
+          SE=$(xcrun simctl create KiteSE com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation 2>/dev/null) || SE=""
+          if [ -n "$SE" ]; then
+            xcrun simctl shutdown "$DEV" || true
+            xcrun simctl boot "$SE" && xcrun simctl bootstatus "$SE" -b
+            xcrun simctl ui "$SE" appearance dark
+            xcrun simctl install "$SE" simbuild/Build/Products/Debug-iphonesimulator/Kite.app
+            xcrun simctl privacy "$SE" grant location app.vela.ios || true
+            xcrun simctl location "$SE" set 38.5449,-121.7405
+            xcrun simctl launch --terminate-running-process "$SE" app.vela.ios -demo allalerts
+            sleep 48
+            xcrun simctl io "$SE" screenshot shots/se-allalerts.png
+            xcrun simctl location "$SE" set 50.9097,-1.4044
+            xcrun simctl launch --terminate-running-process "$SE" app.vela.ios -demo livecamroute
+            sleep 60
+            xcrun simctl io "$SE" screenshot shots/se-livecamroute.png
+            xcrun simctl location "$SE" set 56.4120,-3.4700
+            xcrun simctl launch --terminate-running-process "$SE" app.vela.ios -demo roundabout
+            sleep 50
+            xcrun simctl io "$SE" screenshot shots/se-roundabout.png
+          fi
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
         with:

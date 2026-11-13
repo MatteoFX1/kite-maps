@@ -186,9 +186,9 @@ fun KiteDock(model: AppModel, modifier: Modifier = Modifier) {
 fun HeatLegend() {
     Row(Modifier.height(28.dp).glass(CircleShape).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Icon(Icons.Filled.LocalFireDepartment, null, tint = Color(0xFFDC2626), modifier = Modifier.size(13.dp))
+        Icon(Icons.Filled.LocalFireDepartment, null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(13.dp))
         Text("Police", fontSize = KType.caption2, fontWeight = FontWeight.SemiBold, color = primaryText)
-        Box(Modifier.size(54.dp, 6.dp).clip(CircleShape).background(Brush.horizontalGradient(listOf(Color(0xFFFFD600), Color(0xFFF97316), Color(0xFFDC2626)))))
+        Box(Modifier.size(54.dp, 6.dp).clip(CircleShape).background(Brush.horizontalGradient(listOf(Color(0xFF3B82F6), Color(0xFF8B5CF6), Color(0xFFE879F9)))))
         Text("often", fontSize = KType.caption2, color = secondaryText)
     }
 }

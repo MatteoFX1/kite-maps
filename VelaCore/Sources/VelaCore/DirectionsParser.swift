@@ -205,6 +205,9 @@ enum DirectionsParser {
         var m = Maneuver(type: mapType(token, side: side, severity: severity),
                          instruction: text.isEmpty ? "Continue" : text,
                          location: LatLng(0, 0), alongMeters: 0, distanceMeters: meters, road: road, laneHint: lane)
+        // "Keep right to stay on A38(M)" comes marked as a turn: it's a keep, and its arrow should say so.
+        if text.hasPrefix("Keep left"), [.turnLeft, .slightLeft].contains(m.type) { m.type = .keepLeft }
+        if text.hasPrefix("Keep right"), [.turnRight, .slightRight].contains(m.type) { m.type = .keepRight }
         // A slip road with no side ("Take the M3 slip road" is ON_RAMP alone): not a merge, whatever
         // the side turns out to be. Until the line says which, the left (where most leave in Britain).
         if ["ON_RAMP", "OFF_RAMP", "RAMP"].contains(token?.uppercased() ?? ""), side == nil {
@@ -245,7 +248,10 @@ enum DirectionsParser {
             if sharp { return lr(.sharpLeft, .sharpRight, .straight) }
             return lr(.turnLeft, .turnRight, .straight)
         case "UTURN", "UTURN_LEFT", "UTURN_RIGHT": return .uturn
-        case "STRAIGHT", "CONTINUE", "NAME_CHANGE": return .straight
+        case "STRAIGHT", "CONTINUE", "NAME_CHANGE":
+            // "Station Rd turns slightly right and becomes Mount Pleasant Ln": the road bends, and the arrow should too.
+            if left || right { return slight ? lr(.slightLeft, .slightRight, .straight) : sharp ? lr(.sharpLeft, .sharpRight, .straight) : lr(.turnLeft, .turnRight, .straight) }
+            return .straight
         case "MERGE", "MERGE_LEFT", "MERGE_RIGHT": return .merge
         case "FORK", "FORK_LEFT", "FORK_RIGHT": return lr(.forkLeft, .forkRight, .straight)
         case "ON_RAMP", "OFF_RAMP", "RAMP", "RAMP_LEFT", "ON_RAMP_LEFT", "OFF_RAMP_LEFT",

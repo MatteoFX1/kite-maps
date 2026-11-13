@@ -73,6 +73,18 @@ if args.count > 1, args[1] == "roundabouts" {
     await overnightAudit()
     exit(0)
 }
+if args.count > 1, args[1] == "steps" {
+    await stepsCompare()
+    exit(0)
+}
+if args.count > 1, args[1] == "adoptcheck" {
+    await adoptCheck()
+    exit(0)
+}
+if args.count > 1, args[1] == "turns" {
+    await turnAudit()
+    exit(0)
+}
 if args.count > 1, args[1] == "ramps" {
     await rampAudit()
     exit(0)

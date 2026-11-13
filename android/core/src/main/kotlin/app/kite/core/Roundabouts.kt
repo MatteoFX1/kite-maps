@@ -52,7 +52,7 @@ object Roundabouts {
                 m.roundabout = out?.let { aim(s, it) } ?: s
                 changed = true
             } else if (out != null && sketch != null && sketch.taken in sketch.exits.indices && angleGap(sketch.exits[sketch.taken], out) > 1) {
-                m.roundabout = if (angleGap(sketch.exits[sketch.taken], out) < 50) aim(sketch, out)
+                m.roundabout = if (angleGap(sketch.exits[sketch.taken], out) < 50 && (m.exit == null || sketch.taken + 1 == m.exit)) aim(sketch, out)
                 else spread(out, m.exit ?: 1, clockwise)
                 changed = true
             }
@@ -79,7 +79,8 @@ object Roundabouts {
             }
             val out = exitAngle(route.polyline, cum, m.alongMeters, wayOff(r.maneuvers, i)) ?: continue
             val s = m.roundabout
-            m.roundabout = if (s != null && s.taken in s.exits.indices && angleGap(s.exits[s.taken], out) < 50) aim(s, out)
+            // A sketch that counts a different exit from the words is drawn again with the spoken count.
+            m.roundabout = if (s != null && s.taken in s.exits.indices && angleGap(s.exits[s.taken], out) < 50 && (m.exit == null || s.taken + 1 == m.exit)) aim(s, out)
             else spread(out, m.exit ?: 1, Geo.drivesOnLeft(m.location))
         }
         return r

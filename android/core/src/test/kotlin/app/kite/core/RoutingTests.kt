@@ -305,4 +305,23 @@ class RoutingTests {
         assertNull(Geo.sideAtEnd(ll(50.901, -1.400), line))
         assertNull(Geo.sideAtEnd(ll(50.910, -1.3996), line))
     }
+
+    @Test fun aLinkRoadThatKeepsTheMotorwayNumberIsNotOntoTheMotorway() {
+        // M3 J6 into Basingstoke: the slip, the roundabout and the link road up to the A339 all carry ref M3.
+        val json = "{\"routes\":[{\"geometry\":\"_t`w`B~j|`AwvIwwPwgDwdHolFgEovA~p@\",\"distance\":1903,\"duration\":120,\"legs\":[{\"steps\":[{\"maneuver\":{\"type\":\"depart\",\"modifier\":\"straight\",\"location\":[-1.08,51.25]},\"name\":\"\",\"ref\":\"M3\",\"distance\":700},{\"maneuver\":{\"type\":\"off ramp\",\"modifier\":\"slight left\",\"location\":[-1.0709,51.2555]},\"name\":\"\",\"ref\":\"M3\",\"distance\":454},{\"maneuver\":{\"type\":\"rotary\",\"modifier\":\"straight\",\"exit\":1,\"location\":[-1.0662,51.2582]},\"name\":\"\",\"ref\":\"M3\",\"distance\":11},{\"maneuver\":{\"type\":\"exit rotary\",\"modifier\":\"straight\",\"exit\":1,\"location\":[-1.0662,51.2583]},\"name\":\"\",\"ref\":\"M3\",\"distance\":416},{\"maneuver\":{\"type\":\"fork\",\"modifier\":\"slight right\",\"location\":[-1.0661,51.2620]},\"name\":\"\",\"ref\":\"M3\",\"distance\":166},{\"maneuver\":{\"type\":\"merge\",\"modifier\":\"slight right\",\"location\":[-1.0669,51.2634]},\"name\":\"Ringway East\",\"ref\":\"A339\",\"distance\":322},{\"maneuver\":{\"type\":\"arrive\",\"modifier\":\"straight\",\"location\":[-1.0669,51.2634]},\"name\":\"Ringway East\",\"ref\":\"A339\",\"distance\":0}]}]}]}"
+        val steps = OSRM.parse(json.toByteArray(), TravelMode.DRIVE).first().maneuvers
+        val ring = steps.first { it.instruction.startsWith("At the roundabout") }
+        assertEquals("At the roundabout, take the 1st exit", ring.instruction)
+        assertNull(ring.road)
+        assertFalse(steps.any { it.instruction.contains("Exit the roundabout onto M3") })
+        assertTrue(steps.any { it.instruction.contains("Ringway East") })
+        assertFalse(steps.any { it.instruction.contains("stay on M3") || it.instruction.contains("fork onto M3") })
+    }
+
+    @Test fun aRoundaboutOntoAMotorwayFromAnotherRoadStillSaysIt() {
+        val json = "{\"routes\":[{\"geometry\":\"_t`w`B~j|`AwvIwwPwgDwdHolFgEovA~p@\",\"distance\":1903,\"duration\":120,\"legs\":[{\"steps\":[{\"maneuver\":{\"type\":\"depart\",\"modifier\":\"straight\",\"location\":[-1.08,51.25]},\"name\":\"\",\"ref\":\"A27\",\"distance\":700},{\"maneuver\":{\"type\":\"off ramp\",\"modifier\":\"slight left\",\"location\":[-1.0709,51.2555]},\"name\":\"\",\"ref\":\"A27\",\"distance\":454},{\"maneuver\":{\"type\":\"rotary\",\"modifier\":\"straight\",\"exit\":1,\"location\":[-1.0662,51.2582]},\"name\":\"\",\"ref\":\"M27\",\"distance\":11},{\"maneuver\":{\"type\":\"exit rotary\",\"modifier\":\"straight\",\"exit\":1,\"location\":[-1.0662,51.2583]},\"name\":\"\",\"ref\":\"M27\",\"distance\":416},{\"maneuver\":{\"type\":\"merge\",\"modifier\":\"slight right\",\"location\":[-1.0669,51.2634]},\"name\":\"Ringway East\",\"ref\":\"A339\",\"distance\":322},{\"maneuver\":{\"type\":\"arrive\",\"modifier\":\"straight\",\"location\":[-1.0669,51.2634]},\"name\":\"Ringway East\",\"ref\":\"A339\",\"distance\":0}]}]}]}"
+        val steps = OSRM.parse(json.toByteArray(), TravelMode.DRIVE).first().maneuvers
+        assertTrue(steps.any { it.instruction == "At the roundabout, take the 1st exit onto M27" })
+        assertTrue(steps.any { it.instruction == "Exit the roundabout onto M27" })
+    }
 }

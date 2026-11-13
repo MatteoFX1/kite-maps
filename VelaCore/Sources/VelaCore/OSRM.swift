@@ -70,11 +70,11 @@ public enum OSRM {
      * The open router forced through points sampled off [line] (Google's route), so its
      * turn-by-turn follows the same roads, the way Vela gets readable steps for Google routes.
      */
-    public static func routeVia(_ line: [LatLng], mode: TravelMode) async throws -> Route? {
+    public static func routeVia(_ line: [LatLng], mode: TravelMode, spacing: Double = 1_500, maxVias: Int = 12) async throws -> Route? {
         guard line.count >= 2 else { return nil }
         let cum = Geo.cumulative(line)
         let total = cum.last ?? 0
-        let vias = min(12, Int(total / 1_500))
+        let vias = min(maxVias, Int(total / spacing))
         var pts = [line[0]]
         var bearings = [bearing(line, cum, at: 0)]
         for i in stride(from: 1, through: vias, by: 1) {
@@ -119,6 +119,7 @@ public enum OSRM {
             var nameOnly: Set<Int> = []
             var along = 0.0
             var roads: [String: Double] = [:]
+            var leftMotorway: String?
             let legs = (r["legs"] as? [[String: Any]]) ?? []
             for (li, leg) in legs.enumerated() {
                 let steps = (leg["steps"] as? [[String: Any]]) ?? []
@@ -137,16 +138,24 @@ public enum OSRM {
                     let ref = ref0?.split(separator: ";").first.map { String($0).trimmingCharacters(in: .whitespaces) }
                     let motorway = ref.flatMap { r in r.range(of: #"^(M\d+|A\d+\(M\))$"#, options: .regularExpression) != nil ? r : nil }
                     let name = motorway ?? (step["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    // The link road off a motorway roundabout often still carries the motorway's number (M3 J6
+                    // into Basingstoke): having just left the M3, that exit isn't "onto M3".
+                    let roundaboutStep = ["roundabout", "rotary", "roundabout turn", "exit roundabout", "exit rotary"].contains(type)
+                    // The fork and merge further up that link road carry the number too: still not the M3.
+                    let before = maneuvers.last(where: { $0.road != nil && $0.type != .roundabout })?.road
+                    if motorway == nil || motorway != leftMotorway { leftMotorway = nil }
+                    if roundaboutStep, let mw = motorway, mw == before { leftMotorway = mw }
+                    let stepRoad = leftMotorway != nil ? nil : name ?? ref
                     let dist = step["distance"] as? Double ?? 0
                     if let n = name ?? ref { roads[n, default: 0] += dist }
                     let loc = (m["location"] as? [Double]).map { LatLng($0[1], $0[0]) } ?? Geo.point(along: line, meters: along, cumulative: cum)
                     let mt = maneuverType(type, modifier, leftTraffic: Geo.drivesOnLeft(loc))
                     let signs = Signs(destinations: step["destinations"] as? String, exits: step["exits"] as? String,
                                       from: maneuvers.last?.road)
-                    var man = Maneuver(type: mt, instruction: instruction(type: type, modifier: modifier, road: name ?? ref,
+                    var man = Maneuver(type: mt, instruction: instruction(type: type, modifier: modifier, road: stepRoad,
                                                                          exit: m["exit"] as? Int, mode: mode, signs: signs),
                                        location: loc, alongMeters: min(along, cum.last ?? along),
-                                       distanceMeters: dist, road: name ?? ref, laneHint: nil)
+                                       distanceMeters: dist, road: stepRoad, laneHint: nil)
                     man.lanes = lanes(step)
                     man.exit = m["exit"] as? Int
                     if type == "roundabout" || type == "rotary" {
@@ -516,11 +525,18 @@ public enum Directions {
                 })).flatMap { $0 } ?? []
                 var spare = plain
                 for i in g.indices {
-                    if var steps = StepMerge.adopt(vias[i].map { [$0] + plain } ?? plain, onto: g[i].polyline) {
-                        // Google's step positions are only trustworthy when its steps cover the whole line.
-                        if g[i].stepsComplete {
+                    let candidates = vias[i].map { [$0] + plain } ?? plain
+                    // Google's step positions are only trustworthy when its steps cover the whole line.
+                    let complete = g[i].stepsComplete
+                    if var steps = StepMerge.adopt(candidates, onto: g[i].polyline)
+                        ?? (complete ? StepMerge.adoptPiecewise(candidates, google: g[i].maneuvers, onto: g[i].polyline) : nil) {
+                        StepMerge.dropFalseUTurns(&steps, line: g[i].polyline)
+                        if complete {
                             StepMerge.addGoogleLaneHints(&steps, from: g[i].maneuvers)
                             StepMerge.addGoogleExits(&steps, from: g[i].maneuvers)
+                            StepMerge.addGoogleKinds(&steps, from: g[i].maneuvers, line: g[i].polyline)
+                            StepMerge.addGoogleMissing(&steps, from: g[i].maneuvers, line: g[i].polyline)
+                            StepMerge.addGoogleSigns(&steps, from: g[i].maneuvers)
                         }
                         g[i].maneuvers = steps
                         g[i].stepsComplete = true
@@ -537,6 +553,7 @@ public enum Directions {
                     for j in g[i].maneuvers.indices where g[i].maneuvers[j].type == .roundabout && g[i].maneuvers[j].exit == nil {
                         g[i].maneuvers[j].exit = DirectionsParser.exitNumber(in: g[i].maneuvers[j].instruction)
                     }
+                    StepMerge.tidy(&g[i].maneuvers)
                     g[i] = Roundabouts.settle(g[i])
                     // Britain and Ireland ("slip road" is British; Australia says "ramp" too).
                     if (49.8...61).contains(a.lat), (-11...2).contains(a.lng) {
@@ -549,8 +566,17 @@ public enum Directions {
             err = error.localizedDescription
         } }
         do {
-            let o = try await osrmTask.value
-            if !o.isEmpty { return Result(routes: o.map(Roundabouts.settle)) }
+            // The open router only knows Europe: asked for somewhere it has no roads to (California,
+            // an island with no ferry), it snaps the end to its nearest road, and Southampton to Davis
+            // came back as 1,280 miles to Cabo da Roca in Portugal. A route that stops miles short isn't one.
+            let o = try await osrmTask.value.filter { reaches($0.polyline, from: a, to: b) }
+            if !o.isEmpty {
+                return Result(routes: o.map { r in
+                    var r = r
+                    StepMerge.tidy(&r.maneuvers)
+                    return Roundabouts.settle(r)
+                })
+            }
         } catch {
             err = error.localizedDescription
         }
@@ -573,6 +599,12 @@ func deadline<T: Sendable>(_ seconds: Double, _ op: @escaping @Sendable () async
 }
 
 extension Directions {
+    /** Whether [line] starts and ends within 5 km of where it was asked to go from and to. */
+    public static func reaches(_ line: [LatLng], from a: LatLng, to b: LatLng) -> Bool {
+        guard let first = line.first, let last = line.last else { return false }
+        return first.distance(to: a) < 5_000 && last.distance(to: b) < 5_000
+    }
+
     /** Whether [line] sets off more than a right angle away from [heading]: back the way the car came. */
     public static func startsBehind(_ line: [LatLng], heading: Double) -> Bool {
         guard line.count >= 2 else { return false }
@@ -630,7 +662,7 @@ public enum StepMerge {
     }
 
     /** Whether [route] keeps within 30 m of [line] everywhere (checked every 50 m), ends aside. */
-    static func follows(_ route: [LatLng], _ line: [LatLng], cumulative cum: [Double]) -> Bool {
+    public static func follows(_ route: [LatLng], _ line: [LatLng], cumulative cum: [Double]) -> Bool {
         guard route.count >= 2 else { return false }
         let rc = Geo.cumulative(route)
         let total = rc.last ?? 0

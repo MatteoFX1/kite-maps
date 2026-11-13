@@ -113,7 +113,7 @@ class RoundaboutTests {
         val s2 = Roundabouts.settle(route(west, listOf(m()))).maneuvers[0].roundabout!!
         assertTrue(Roundabouts.angleGap(s2.exits[s2.taken], 270.0) < 15)
 
-        val sketched = route(line, listOf(m().also { it.roundabout = RoundaboutShape(listOf(265.0, 5.0), 1, clockwise = true, complete = false) }))
+        val sketched = route(line, listOf(m().also { it.roundabout = RoundaboutShape(listOf(265.0, 5.0), 1, clockwise = true, complete = false); it.exit = 2 }))
         val kept = Roundabouts.settle(sketched).maneuvers[0].roundabout!!
         assertEquals(2, kept.exits.size)
         assertTrue(Roundabouts.angleGap(kept.exits[0], 265.0) < 10)

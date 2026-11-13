@@ -206,7 +206,8 @@ fun ModeTabs(model: AppModel, state: DirectionsState) {
                 state.routes[m]?.firstOrNull()?.let { Fmt.shortDuration(it.durationSeconds) }) { model.setMode(m) }
         }
         ModeTile(Icons.Filled.Tram, state.transit, state.trips == null,
-            state.trips?.minOfOrNull { it.durationSeconds }?.let { Fmt.shortDuration(it) }) { model.showTransit() }
+            // The same trip the header shows (the picked one, else the first), so the two never disagree.
+            (state.pickedTrip ?: state.trips?.firstOrNull())?.let { Fmt.shortDuration(it.durationSeconds) }) { model.showTransit() }
     }
 }
 

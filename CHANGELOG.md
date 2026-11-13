@@ -3,6 +3,87 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.11 (iPhone and Android)
+
+Another check of the basics on both phones, with the bugs it found fixed, and turn-by-turn checked
+on 40 of Britain's trickiest junctions (Spaghetti Junction, both Magic Roundabouts, Hanger Lane,
+Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
+
+- **No more missing turns:** Kite said nothing where the A38(M) splits at Spaghetti Junction
+  ("Keep right to stay on A38(M)"), skipped the second of two roundabouts close together (Six
+  Ways, Erdington), and left out some merges ("Merge onto M8"). Turns the map's directions leave
+  out are now filled in from Google's.
+- **Lanes and signs on more routes:** on about half the test routes, one stretch where the map's
+  directions went a slightly different way made Kite drop them for the whole trip, losing the
+  painted lanes and road signs. Now only that stretch uses Google's directions.
+- **Junction numbers:** motorway exits say the number as well as where they go, like "Take exit 4
+  toward The Midlands and London", and a bare "Take the exit" gets the sign's destination
+  ("towards Emsworth").
+- **Two close turns said together:** when the next turn comes within about 70 m, Kite says both,
+  Waze style: "Turn left, then turn right onto King Street".
+- **Roundabouts Google knows about:** where the map only says "Turn right" but there's a
+  roundabout (Otterbourne Hill), Kite now says "At the roundabout, take the 2nd exit".
+- **Cleaner steps:** one turn is no longer told twice ("Turn right", then "Continue straight onto
+  Wide Lane" 11 m later is now "Turn right onto Wide Lane"), a turn that keeps you on the same
+  road says "to stay on", keep-left and keep-right steps show a keep arrow instead of a full turn,
+  and a turn where the road bends away is no longer called "Continue straight".
+- **Fewer wrong turns at the start:** setting off near a junction, Kite could say "Make a U-turn,
+  then turn sharp right" where you just bear left (Romsey). That false U-turn is gone.
+- **The way the road really goes:** where the map said "Keep right at the fork" but the road turns
+  left (Castle Lane West, Bournemouth), Kite now says "Turn left".
+- **Roundabout pictures match the words:** the picture could draw the 3rd exit while Kite said
+  "take the 2nd exit". The picture now always counts the same exit as the voice.
+- **Big arrival time:** the bar at the bottom shows three big numbers side by side, like Waze:
+  when you'll get there, minutes left and miles left. The arrival time turns orange or red when
+  traffic is making you late.
+- **One warning at a time:** only the nearest warning gets the big card; any others wait in a small
+  "Also ahead" pill under it (tap it for a quick look). A camera you're speeding towards always
+  comes first. The camera card no longer shows the same limit as the sign next to it.
+- **Voice: On, Alerts only, Off:** the speaker button now has a middle setting that says cameras,
+  police and hazards but not the turns, and shows which one you picked for a moment.
+- **Tidier map:** zoomed out over a busy town, cameras and minor reports close together join into
+  one bubble with a number (tap it to zoom in). Police and crashes always keep their own icon.
+- **Long drives load again:** on a long trip like Southampton to Newcastle, when the map's own
+  directions server was slow (often at night), Kite could sit on "Finding routes…" for minutes.
+  The step that lines its turns up with Google's route now takes a fraction of a second.
+- **Roundabouts say the road:** the voice now says "take the 3rd exit onto West End Road", like the
+  banner, instead of sometimes leaving the road off.
+- **Not "onto M3" when you've just left it:** at motorway roundabouts like M3 junction 6, the road
+  into Basingstoke still carries the M3 number on the map, so Kite said "take the 1st exit onto M3".
+  It now just says "take the 1st exit".
+- **One exit, said once:** leaving a motorway could be announced twice, 150 m apart ("Exit at junction
+  10", then "Take the exit"), when Google's directions and the map's both had it. Now it's one line,
+  keeping the junction number and any lane advice.
+- **Lane advice where the map is silent:** on long motorway stretches where the map just says "stay
+  on the M6", Google's "Use the lane 2nd from the left to stay on M6" and the exit after it (near M6
+  junction 11) were left out. Now they're said and shown.
+- **Everything fits on an iPhone SE:** with lane arrows, a camera warning and the police risk chip all
+  up at once, the screen ran out of room and pushed the trip bar off the bottom. On short screens the
+  police chip and the "GPS signal lost" / "Rerouting" note wait while a warning card is showing.
+- **Camera tiles on the route:** "No photo right now" no longer sits on top of the "In 10 mi" label.
+- **Fastest route picked first:** directions now open on the quickest route for every way of
+  travelling (cycling could open on one marked "Slower route" with a faster one below it).
+- **"Arrived" in the bottom bar:** once you're there it says so, instead of "1 min · 20 yd".
+- **Live camera bubbles:** zoomed out over a busy city, the blue live camera dots join into numbered
+  bubbles like the speed cameras; tap one to zoom in.
+- **Pasted coordinates stay in the box:** searching "50.9097, -1.4044" drops the pin and keeps the
+  coordinates in the search box, instead of going back to an empty "Where to?".
+- **Road name above the trip bar on small phones:** on short screens (iPhone mini, small Android phones) the road you're on was
+  touching or half hidden behind the bar at the bottom.
+- **No made-up routes abroad:** directions to somewhere the backup map has no roads to (like
+  California) no longer show a 1,280-mile drive that ends in Portugal. Kite says no route was found.
+- **New police heat map look ("blue lights"):** roads where police get reported now glow blue,
+  turning violet and pink at the worst spots, instead of a muddy yellow-to-red haze that looked
+  like traffic jams. Quiet roads stay clear, and closer in it follows the roads sharply instead
+  of going blurry.
+- **Speed limits on long drives:** if the speed limit service stopped answering partway through
+  a long route, the sign could stay blank after the first 25 km for the rest of the drive. Kite
+  now fills in the rest from its other map source, like it does when that service is down.
+- **After arriving:** a new route or "Found a faster route" that was still loading when you
+  arrived no longer starts the trip up again in the car park.
+- **Speed limit sign:** a car park or "walking pace" road no longer shows a "0" mph sign (or says
+  "limit 0 miles per hour"); it shows 5, the lowest sign there is.
+
 ## 0.7.10 (iPhone and Android)
 
 Live cameras, finished off after checking them against the request (GitHub #15).

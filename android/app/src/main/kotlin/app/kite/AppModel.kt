@@ -260,7 +260,8 @@ class AppModel {
                     query = target.name!!
                     resolve(Place(id = "link:${target.at.lat},${target.at.lng}", name = target.name!!, location = target.at, source = "osm"))
                 } else {
-                    query = ""
+                    // Keep where it is in the box, not an empty "Where to?" as if nothing was found.
+                    query = String.format(java.util.Locale.US, "%.5f, %.5f", target.at.lat, target.at.lng)
                     dropPin(target.at, "Shared location")
                 }
                 is MapLinks.Target.Search -> {
@@ -544,7 +545,9 @@ class AppModel {
                     var e = it.errors
                     if (r.routes.isEmpty()) e = e + (m to Connectivity.explain(
                         if (r.error == "No route found.") "No route found." else "Couldn't get a route just now. Try again in a moment."))
-                    it.copy(loading = it.loading - m, routes = it.routes + (m to r.routes), errors = e)
+                    // The fastest first, so it's the one picked (a bike route marked "Slower route" was picked
+                    // while one 5 min faster sat below it).
+                    it.copy(loading = it.loading - m, routes = it.routes + (m to r.routes.sortedBy { x -> x.durationSeconds }), errors = e)
                 }
                 if (m == directions?.mode) {
                     frameRoute()

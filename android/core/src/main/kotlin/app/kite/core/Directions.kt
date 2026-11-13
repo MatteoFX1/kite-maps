@@ -215,6 +215,9 @@ object DirectionsParser {
         }
         text = text.capitalizedFirst()
         val m = Maneuver(mapType(token, side, severity), text.ifEmpty { "Continue" }, LatLng(0.0, 0.0), 0.0, meters, road, lane)
+        // "Keep right to stay on A38(M)" comes marked as a turn: it's a keep, and its arrow should say so.
+        if (text.startsWith("Keep left") && m.type in setOf(ManeuverType.TURN_LEFT, ManeuverType.SLIGHT_LEFT)) m.type = ManeuverType.KEEP_LEFT
+        if (text.startsWith("Keep right") && m.type in setOf(ManeuverType.TURN_RIGHT, ManeuverType.SLIGHT_RIGHT)) m.type = ManeuverType.KEEP_RIGHT
         if ((token?.uppercase() ?: "") in setOf("ON_RAMP", "OFF_RAMP", "RAMP") && side == null) {
             m.type = ManeuverType.RAMP_LEFT
             m.sideUnknown = true
@@ -254,7 +257,13 @@ object DirectionsParser {
                 else -> lr(ManeuverType.TURN_LEFT, ManeuverType.TURN_RIGHT, ManeuverType.STRAIGHT)
             }
             "UTURN", "UTURN_LEFT", "UTURN_RIGHT" -> ManeuverType.UTURN
-            "STRAIGHT", "CONTINUE", "NAME_CHANGE" -> ManeuverType.STRAIGHT
+            // "Station Rd turns slightly right and becomes Mount Pleasant Ln": the road bends, and the arrow should too.
+            "STRAIGHT", "CONTINUE", "NAME_CHANGE" -> when {
+                !left && !right -> ManeuverType.STRAIGHT
+                slight -> lr(ManeuverType.SLIGHT_LEFT, ManeuverType.SLIGHT_RIGHT, ManeuverType.STRAIGHT)
+                sharp -> lr(ManeuverType.SHARP_LEFT, ManeuverType.SHARP_RIGHT, ManeuverType.STRAIGHT)
+                else -> lr(ManeuverType.TURN_LEFT, ManeuverType.TURN_RIGHT, ManeuverType.STRAIGHT)
+            }
             "MERGE", "MERGE_LEFT", "MERGE_RIGHT" -> ManeuverType.MERGE
             "FORK", "FORK_LEFT", "FORK_RIGHT" -> lr(ManeuverType.FORK_LEFT, ManeuverType.FORK_RIGHT, ManeuverType.STRAIGHT)
             "ON_RAMP", "OFF_RAMP", "RAMP", "RAMP_LEFT", "ON_RAMP_LEFT", "OFF_RAMP_LEFT",

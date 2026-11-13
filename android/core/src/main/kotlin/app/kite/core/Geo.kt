@@ -53,16 +53,20 @@ object Geo {
         if (line.size < 2) return line.firstOrNull() ?: LatLng(0.0, 0.0)
         val c = cum ?: cumulative(line)
         if (meters <= 0) return line[0]
-        for (i in 1 until line.size) {
-            if (c[i] >= meters) {
-                val seg = c[i] - c[i - 1]
-                val f = if (seg > 0) (meters - c[i - 1]) / seg else 0.0
-                val a = line[i - 1]
-                val b = line[i]
-                return LatLng(a.lat + (b.lat - a.lat) * f, a.lng + (b.lng - a.lng) * f)
-            }
+        if (meters >= c[line.size - 1]) return line[line.size - 1]
+        // The first point at or past [meters], found by halving (a long drive's line has thousands of points).
+        var lo = 1
+        var hi = line.size - 1
+        while (lo < hi) {
+            val mid = (lo + hi) / 2
+            if (c[mid] >= meters) hi = mid else lo = mid + 1
         }
-        return line[line.size - 1]
+        val i = lo
+        val seg = c[i] - c[i - 1]
+        val f = if (seg > 0) (meters - c[i - 1]) / seg else 0.0
+        val a = line[i - 1]
+        val b = line[i]
+        return LatLng(a.lat + (b.lat - a.lat) * f, a.lng + (b.lng - a.lng) * f)
     }
 
     /** The part of [line] between two along-distances. */

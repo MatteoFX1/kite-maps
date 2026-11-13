@@ -71,6 +71,11 @@ struct LiveCamPhotoView: View {
             switch loader.state {
             case .loading:
                 ProgressView().tint(.white)
+            case .failed where !showsAge:
+                // The small route tile: its "In 10 mi" badge sits at the bottom, so just the icon, up out of its way.
+                Image(systemName: "video.slash.fill").font(.system(size: 22)).foregroundColor(.white.opacity(0.7))
+                    .offset(y: -10)
+                    .accessibilityLabel("No photo right now")
             case .failed:
                 VStack(spacing: 8) {
                     Image(systemName: "video.slash.fill").font(.system(size: 24)).foregroundColor(.white.opacity(0.7))

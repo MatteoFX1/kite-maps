@@ -104,6 +104,9 @@ fun LiveCamPhoto(state: LiveCamPhotoState, modifier: Modifier = Modifier, corner
                 Image(bmp.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 if (showsAge) Box(Modifier.align(Alignment.TopStart).padding(8.dp)) { PhotoAgePill(state.taken) }
             }
+            // The small route tile: its "In 10 mi" badge sits at the bottom, so just the icon, up out of its way.
+            state.failed && !showsAge -> Icon(Icons.Filled.VideocamOff, "No photo right now", tint = Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.size(24.dp).offset(y = (-10).dp))
             state.failed -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Filled.VideocamOff, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(26.dp))
                 Text("No photo right now", color = Color.White.copy(alpha = 0.85f), fontSize = KType.footnote, fontWeight = FontWeight.SemiBold)

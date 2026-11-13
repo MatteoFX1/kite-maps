@@ -12,6 +12,15 @@ import kotlin.math.*
 data class CameraAlert(val kind: RoadCamera.Kind, val meters: Double, val startMeters: Double, val limitKmh: Double?)
 data class WazeAhead(val alert: WazeAlert, val meters: Double, val startMeters: Double)
 data class AverageCheck(val limitKmh: Double?, val averageKmh: Double, val metersLeft: Double)
+/** The speaker button's three choices, like Waze. */
+enum class VoiceMode(val title: String, val detail: String) {
+    ALL("Voice on", "Turns and warnings"),
+    ALERTS("Alerts only", "Cameras and police, no turns"),
+    OFF("Voice off", "Nothing spoken");
+
+    val next: VoiceMode get() = when (this) { ALL -> ALERTS; ALERTS -> OFF; OFF -> ALL }
+}
+
 data class AircraftNear(val aircraft: PoliceAircraft, val meters: Double)
 
 private fun now() = System.currentTimeMillis()
@@ -27,10 +36,17 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     var progress by mutableStateOf<RouteTracker.Progress?>(null); private set
     var rerouting by mutableStateOf(false); private set
     var arrived by mutableStateOf(false); private set
-    private var mutedState = mutableStateOf(!AppSettings.voice)
-    var muted: Boolean
-        get() = mutedState.value
-        set(v) { mutedState.value = v; if (v) Voice.stop() }
+    private var voiceState = mutableStateOf(if (AppSettings.voice) VoiceMode.ALL else VoiceMode.OFF)
+    /** What the voice says: everything, only warnings (cameras, police, hazards), or nothing. */
+    var voiceMode: VoiceMode
+        get() = voiceState.value
+        set(v) {
+            voiceState.value = v
+            if (v == VoiceMode.OFF || (v == VoiceMode.ALERTS && !speakingAlert)) Voice.stop()
+        }
+    val muted: Boolean get() = voiceMode == VoiceMode.OFF
+    /** Whether what's being said now is a warning, so switching to "Alerts only" doesn't cut it off. */
+    private var speakingAlert = false
     /** The camera follows the user until they pan the map. */
     var following by mutableStateOf(true)
     var speedMps by mutableStateOf(0.0); private set
@@ -133,8 +149,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         // The first step with how far it is ("In 300 yards, turn left"), so a turn a little way off
         // doesn't sound like it's right here.
         val firstWords = first?.let { f ->
-            if (f.alongMeters < 40 || f.type == ManeuverType.ARRIVE) "${f.instruction}."
-            else "In ${Fmt.spokenDistance(f.alongMeters)}, ${f.instruction.lowercasedFirst()}."
+            if (f.alongMeters < 40 || f.type == ManeuverType.ARRIVE) "${f.spokenWords}."
+            else "In ${Fmt.spokenDistance(f.alongMeters)}, ${f.spokenWords.lowercasedFirst()}."
         } ?: ""
         speak("Starting route to ${destination.name}. $firstWords")
         // That was the heads-up for the first step: not again a moment later, but still the turn itself.
@@ -169,6 +185,19 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             if (i < 0) return null
             return route.maneuvers[i].road?.trim()?.ifEmpty { null }
         }
+
+    /**
+     * ", then turn right onto King Street" when the step after [i] comes so soon after it (70 m)
+     * there's no time to be told on its own, the way Waze says both together. Not for leaving a
+     * roundabout (said with the roundabout) or arriving.
+     */
+    private fun thenWords(i: Int): String {
+        if (route.mode != TravelMode.DRIVE || i >= route.maneuvers.size) return ""
+        val j = (i + 1 until route.maneuvers.size).firstOrNull { !route.maneuvers[it].silent } ?: return ""
+        val a = route.maneuvers[i]; val b = route.maneuvers[j]
+        if (b.leavesRoundabout || b.type == ManeuverType.ARRIVE || b.alongMeters - a.alongMeters >= 70) return ""
+        return ", then ${b.spokenWords.lowercasedFirst()}"
+    }
 
     /** The one after next, for the "Then" line when two turns come close together. */
     val thenManeuver: Maneuver?
@@ -236,7 +265,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         checkStops(p)
         if (route.mode == TravelMode.DRIVE && AppSettings.speedingAlert &&
             speeding.update(if (loc.speedKnown) loc.speed * 3.6 else null, speedLimitKmh, loc.timeMillis / 1000.0)) {
-            speak("You're over the speed limit.")
+            speak("You're over the speed limit.", alert = true)
         }
     }
 
@@ -313,7 +342,13 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
                     if (route.id == id && partial.isNotEmpty()) { matchedLimits = true; setLimits(partial) }
                 }
             }
-            if (found == null || route.id != id || found.limits.isEmpty()) return@async false
+            if (found == null || route.id != id || found.limits.isEmpty()) {
+                // A long drive's later miles didn't come back (the server timed out on one piece): the
+                // first miles were already shown, but the rest must still come from the road data below,
+                // or the sign stays blank past the first 25 km for the whole drive.
+                if (route.id == id) matchedLimits = false
+                return@async false
+            }
             matchedLimits = true
             setLimits(found.limits)
             matchedWays = found.ways
@@ -391,7 +426,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         if (AppSettings.cameraWarnings && cam.kind == RoadCamera.Kind.SPEED && !cam.quiet) {
             chime()
             if (!repeatRun) {
-                speak((if (cam.average) "Average speed camera ahead" else "Speed camera ahead") + (limit?.let { ", limit ${Fmt.spokenSpeed(it)}." } ?: "."))
+                speak((if (cam.average) "Average speed camera ahead" else "Speed camera ahead") + (limit?.let { ", limit ${Fmt.spokenSpeed(it)}." } ?: "."), alert = true)
             }
             cameraSpokenAt = now()
             cameraSpokenLimit = limit
@@ -455,7 +490,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         Voice.buzz()
         if (s.wazeVoice && !Voice.onCall) {
             chime()
-            speak("${next.alert.spoken.dropLast(1)}, in ${Fmt.spokenDistance(ahead)}.")
+            speak("${next.alert.spoken.dropLast(1)}, in ${Fmt.spokenDistance(ahead)}.", alert = true)
         }
     }
 
@@ -477,7 +512,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             since(riskSpokenAt) > 600 &&
             (live == 0 || PoliceRisk.level(PoliceRisk.score(ahead, riskPast ?: emptyList(), 0)) == PoliceRisk.Level.HIGH)) {
             riskSpokenAt = now()
-            speak("Police hotspot ahead.")
+            speak("Police hotspot ahead.", alert = true)
         }
     }
 
@@ -506,7 +541,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             if (spokenAircraft.add(a.id)) {
                 Voice.buzz()
                 chime()
-                if (!Voice.onCall) speak("${a.title} nearby.")
+                if (!Voice.onCall) speak("${a.title} nearby.", alert = true)
             }
         }
     }
@@ -533,7 +568,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             } else {
                 zoneEntry = null
                 averageCheck = null
-                if (AppSettings.cameraWarnings) speak("Average speed check ended.")
+                if (AppSettings.cameraWarnings) speak("Average speed check ended.", alert = true)
             }
         }
         val i = inside ?: return
@@ -552,7 +587,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
                 zoneEntry = ZoneEntry(z.startMeters, z.endMeters, now(), at, zk)
                 if (AppSettings.cameraWarnings) {
                     chime()
-                    speak("Average speed check for ${Fmt.spokenDistance(z.endMeters - at)}" + (limit?.let { ", limit ${Fmt.spokenSpeed(it)}." } ?: "."))
+                    speak("Average speed check for ${Fmt.spokenDistance(z.endMeters - at)}" + (limit?.let { ", limit ${Fmt.spokenSpeed(it)}." } ?: "."), alert = true)
                 }
             }
             zoneCarry = null
@@ -624,7 +659,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
                 val r = route.maneuvers.subList(0, i).lastOrNull { it.type == ManeuverType.ROUNDABOUT }
                 if (r != null && m.alongMeters - r.alongMeters < 150) return
             }
-            speak(m.instruction, urgent = true)
+            speak(m.spokenWords + thenWords(i), urgent = true)
         } else if (m.leavesRoundabout) {
             return
         } else if (d <= near && d > nowD + 30 && stage < 2) {
@@ -634,12 +669,12 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
                 else ". Use the ${g.second.lowercase()}"
             } ?: ""
             val words = if (m.type == ManeuverType.ARRIVE) destinationSide?.let { "your destination is on the $it" } ?: "your destination is ahead"
-                else m.instruction.lowercasedFirst()
-            speak("In ${Fmt.spokenDistance(d)}, $words$lane")
+                else m.spokenWords.lowercasedFirst()
+            speak("In ${Fmt.spokenDistance(d)}, $words${if (m.type == ManeuverType.ARRIVE) "" else thenWords(i)}$lane")
         } else if (d <= far && d > near + 150 && stage < 1 && m.type != ManeuverType.ARRIVE) {
             spokenStage[i] = 1
             if (Voice.onCall) return
-            speak("In ${Fmt.spokenDistance(d)}, ${m.instruction.lowercasedFirst()}")
+            speak("In ${Fmt.spokenDistance(d)}, ${m.spokenWords.lowercasedFirst()}")
         } else if (drive && d > 3000 && stage < 1 && !toldContinue.contains(i) && justPassed(p)) {
             toldContinue.add(i)
             if (!Voice.onCall) speak(continueWords(d))
@@ -660,7 +695,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             trafficLoading = false
             val fresh = r?.routes?.firstOrNull() ?: return@launch
             val nowP = progress ?: return@launch
-            if (route.id != id || rerouting || planned <= 0 || fresh.trafficSeconds == null) return@launch
+            // Arrived (or ended) while asking: no new route, and no "Found a faster route" in the car park.
+            if (stopped || arrived || route.id != id || rerouting || planned <= 0 || fresh.trafficSeconds == null) return@launch
             val current = nowP.remainingSeconds
             val saving = current - fresh.durationSeconds
             val sameWay = abs(fresh.distanceMeters - nowP.remainingMeters) < max(300.0, nowP.remainingMeters * 0.03)
@@ -699,7 +735,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             speak(continueWords(d))
         } else {
             spokenStage[i] = if (d <= near) 2 else 1
-            speak("In ${Fmt.spokenDistance(d)}, ${m.instruction.lowercasedFirst()}")
+            speak("In ${Fmt.spokenDistance(d)}, ${m.spokenWords.lowercasedFirst()}")
         }
     }
 
@@ -742,6 +778,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             }.getOrNull()
             if (stopped || req != rerouteRequest) return@launch
             rerouting = false
+            // Parked at the destination while the new route was loading: the trip is over, keep it that way.
+            if (arrived) return@launch
             val fresh = r?.routes?.firstOrNull()
             if (fresh == null) {
                 // The stop just added couldn't be routed to: say so, and don't keep it as if it were on the way.
@@ -784,8 +822,9 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     /** Something the app needs to tell the driver mid-drive, where a notice wouldn't be seen. */
     fun say(text: String) = speak(text)
 
-    private fun speak(text: String, urgent: Boolean = false) {
-        if (muted || stopped) return
+    private fun speak(text: String, urgent: Boolean = false, alert: Boolean = false) {
+        if (stopped || !(voiceMode == VoiceMode.ALL || (voiceMode == VoiceMode.ALERTS && alert))) return
+        speakingAlert = alert
         Voice.say(text, urgent)
     }
 }
@@ -821,3 +860,15 @@ object LaneGuide {
         return lanes to words
     }
 }
+
+/**
+ * What the voice says for this step: a roundabout's way off too, as the banner shows it, so it's
+ * "take the 3rd exit onto West End Road" and not just "take the 3rd exit" (the open router's
+ * roundabout steps often leave the road out of the words).
+ */
+val Maneuver.spokenWords: String
+    get() {
+        val r = road?.trim()
+        if (type != ManeuverType.ROUNDABOUT || leavesRoundabout || r.isNullOrEmpty() || instruction.contains(" onto ") || instruction.contains(" toward")) return instruction
+        return "$instruction onto $r"
+    }

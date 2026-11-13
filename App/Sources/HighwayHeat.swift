@@ -11,7 +11,7 @@ import UIKit
  * public API, so it may stop answering one day; then the heat map is simply empty.
  *
  * Each tile is a 256 px greyscale WebP: brighter is more reports. Kite colours it itself, clear
- * where there's nothing, then yellow through orange to red.
+ * where there's nothing, then glowing blue through violet ("blue lights").
  */
 @MainActor
 final class HighwayHeat {
@@ -39,9 +39,10 @@ final class HighwayHeat {
     /** How the last ask went, for Settings: true when tiles came back. */
     private(set) var lastOK: Bool?
 
-    // Past zoom 10 the server's tiles are blocky squares that tint whole streets orange (seen in
-    // London on the simulator), so closer in Kite stretches the zoom 10 tiles smoothly instead.
-    static let minZoom = 5, maxZoom = 10
+    // The server goes to zoom 14. Up to 13 its tiles follow the roads cleanly (checked in London and
+    // Southampton); its few blocky patches are faint, so the "quiet" cut-off in blueLights hides
+    // them. Closer in, Kite stretches the zoom 13 tiles.
+    static let minZoom = 5, maxZoom = 13
 
     nonisolated static func url(_ t: Tile) -> URL {
         URL(string: "https://tiles.cmbe.cc/heat_map/get/\(t.z)/\(t.x)/\(t.y).webp")!
@@ -88,7 +89,12 @@ final class HighwayHeat {
                           topRight: corner(x: t.x + 1, y: t.y, z: t.z))
     }
 
-    /** The grey tile, coloured: clear where there's nothing, yellow to red as reports get denser. */
+    /**
+     * The grey tile, coloured "blue lights" style: roads where police get reported glow blue,
+     * turning violet and then bright pink where reports are densest, with a soft halo so the
+     * roads read at a glance. Blue so it's never mistaken for traffic (amber and red). Quiet
+     * roads (faint grey) stay clear. The same maths as the Android app.
+     */
     nonisolated static func colour(_ data: Data) -> UIImage? {
         guard let src = UIImage(data: data)?.cgImage else { return nil }
         let w = src.width, h = src.height
@@ -101,30 +107,70 @@ final class HighwayHeat {
             return true
         }
         guard drawn else { return nil }
-        var rgba = [UInt8](repeating: 0, count: w * h * 4)
-        for i in 0..<(w * h) {
-            let v = Double(grey[i])
-            guard v > 16 else { continue }
-            // 0 → yellow (255, 214, 0), 0.5 → orange (249, 115, 22), 1 → red (220, 38, 38).
-            let t = min((v - 16) / 170, 1)
-            let r: Double, g: Double, b: Double
-            if t < 0.5 {
-                let k = t / 0.5
-                r = 255 + (249 - 255) * k; g = 214 + (115 - 214) * k; b = 0 + 22 * k
-            } else {
-                let k = (t - 0.5) / 0.5
-                r = 249 + (220 - 249) * k; g = 115 + (38 - 115) * k; b = 22 + (38 - 22) * k
-            }
-            let a = 0.12 + 0.43 * t
-            // Premultiplied.
-            rgba[i * 4] = UInt8(r * a); rgba[i * 4 + 1] = UInt8(g * a); rgba[i * 4 + 2] = UInt8(b * a)
-            rgba[i * 4 + 3] = UInt8(a * 255)
-        }
+        var rgba = blueLights(grey, w: w, h: h)
         let image: CGImage? = rgba.withUnsafeMutableBytes { buf in
             CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
                       space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage()
         }
         return image.map { UIImage(cgImage: $0) }
+    }
+
+    /** Below this grey level a road has too few reports to show. */
+    nonisolated static let quiet = 40.0
+    /** The colour ramp: blue for some reports, violet for many, bright pink for the most. */
+    nonisolated static let ramp: [(Double, Double, Double, Double)] = [(0, 59, 130, 246), (0.55, 139, 92, 246), (1, 232, 121, 249)]
+
+    /** Greyscale (0 to 255, w×h) to premultiplied RGBA. Pure, so it's easy to test. */
+    nonisolated static func blueLights(_ grey: [UInt8], w: Int, h: Int) -> [UInt8] {
+        let n = w * h
+        var t = [Double](repeating: 0, count: n)
+        for i in 0..<n { t[i] = min(max((Double(grey[i]) - quiet) / (200 - quiet), 0), 1) }
+        // The halo: the strength blurred a few pixels out (two box blurs come close to a soft glow).
+        var halo = t
+        for _ in 0..<2 { halo = boxBlur(halo, w: w, h: h, r: 3) }
+        var rgba = [UInt8](repeating: 0, count: n * 4)
+        for i in 0..<n {
+            let core = t[i] > 0 ? 0.45 + 0.5 * t[i] : 0
+            let a = max(core, min(halo[i] * 1.4, 0.5))
+            guard a > 0.01 else { continue }
+            let (r, g, b) = rampColour(max(t[i], halo[i] * 0.7))
+            rgba[i * 4] = UInt8(r * a); rgba[i * 4 + 1] = UInt8(g * a); rgba[i * 4 + 2] = UInt8(b * a)
+            rgba[i * 4 + 3] = UInt8(a * 255)
+        }
+        return rgba
+    }
+
+    nonisolated static func rampColour(_ x: Double) -> (Double, Double, Double) {
+        let x = min(max(x, 0), 1)
+        for k in 1..<ramp.count where x <= ramp[k].0 {
+            let (p0, r0, g0, b0) = ramp[k - 1], (p1, r1, g1, b1) = ramp[k]
+            let f = (x - p0) / (p1 - p0)
+            return (r0 + (r1 - r0) * f, g0 + (g1 - g0) * f, b0 + (b1 - b0) * f)
+        }
+        let last = ramp[ramp.count - 1]
+        return (last.1, last.2, last.3)
+    }
+
+    /** A box blur of radius [r] across then down, with the edges held. */
+    nonisolated static func boxBlur(_ src: [Double], w: Int, h: Int, r: Int) -> [Double] {
+        var mid = [Double](repeating: 0, count: w * h)
+        var out = [Double](repeating: 0, count: w * h)
+        let span = Double(2 * r + 1)
+        for y in 0..<h {
+            for x in 0..<w {
+                var sum = 0.0
+                for d in -r...r { sum += src[y * w + min(max(x + d, 0), w - 1)] }
+                mid[y * w + x] = sum / span
+            }
+        }
+        for y in 0..<h {
+            for x in 0..<w {
+                var sum = 0.0
+                for d in -r...r { sum += mid[min(max(y + d, 0), h - 1) * w + x] }
+                out[y * w + x] = sum / span
+            }
+        }
+        return out
     }
 
     /** Shows the heat map for what's on screen ([on] false clears it). Below [below], so it never hides the route. */
@@ -140,23 +186,22 @@ final class HighwayHeat {
         let cached = want.compactMap { t in images[t.key].map { (t, $0) } }
         let missing = want.filter { images[$0.key] == nil }
         loading = Task { [weak self, weak map] in
-            var got: [(Tile, Data)] = []
-            await withTaskGroup(of: (Tile, Data?).self) { group in
+            var got: [(Tile, UIImage)] = []
+            await withTaskGroup(of: (Tile, UIImage?).self) { group in
                 for t in missing {
                     group.addTask {
                         guard let (data, resp) = try? await Self.session.data(from: Self.url(t)),
                               (resp as? HTTPURLResponse)?.statusCode == 200 else { return (t, nil) }
-                        return (t, data)
+                        // Coloured here, off the main thread: the glow takes a few milliseconds a tile.
+                        return (t, Self.colour(data))
                     }
                 }
-                for await (t, data) in group { if let data { got.append((t, data)) } }
+                for await (t, img) in group { if let img { got.append((t, img)) } }
             }
             guard let self, !Task.isCancelled else { return }
             self.loading = nil
             var fresh: [Tile: UIImage] = Dictionary(cached, uniquingKeysWith: { a, _ in a })
-            for (t, data) in got {
-                if let img = Self.colour(data) { fresh[t] = img; self.remember(t.key, img) }
-            }
+            for (t, img) in got { fresh[t] = img; self.remember(t.key, img) }
             if !want.isEmpty { self.lastOK = !fresh.isEmpty }
             if !want.isEmpty { Self.trace.info("heat map: \(fresh.count) of \(want.count) tiles at zoom \(want.first?.z ?? 0)") }
             guard let map, let style = map.style else { return }
@@ -178,8 +223,8 @@ final class HighwayHeat {
             let src = MLNImageSource(identifier: id, coordinateQuad: Self.quad(t), image: img)
             style.addSource(src)
             let layer = MLNRasterStyleLayer(identifier: id, source: src)
-            // Close in, a hotspot city centre would otherwise be one flat red sheet over the streets.
-            layer.rasterOpacity = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 10, 0.75, 13, 0.5, 16, 0.3])
+            // Close in, a hotspot city centre would otherwise be one bright sheet over the streets.
+            layer.rasterOpacity = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 10, 0.9, 13, 0.8, 16, 0.6])
             layer.rasterFadeDuration = NSExpression(forConstantValue: 0)
             if let under = style.layer(withIdentifier: below) { style.insertLayer(layer, below: under) } else { style.addLayer(layer) }
         }
