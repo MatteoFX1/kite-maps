@@ -43,6 +43,9 @@ Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
   police and hazards but not the turns, and shows which one you picked for a moment.
 - **Tidier map:** zoomed out over a busy town, cameras and minor reports close together join into
   one bubble with a number (tap it to zoom in). Police and crashes always keep their own icon.
+- **Long drives load again:** on a long trip like Southampton to Newcastle, when the map's own
+  directions server was slow (often at night), Kite could sit on "Finding routes…" for minutes.
+  The step that lines its turns up with Google's route now takes a fraction of a second.
 - **New police heat map look ("blue lights"):** roads where police get reported now glow blue,
   turning violet and pink at the worst spots, instead of a muddy yellow-to-red haze that looked
   like traffic jams. Quiet roads stay clear, and closer in it follows the roads sharply instead

@@ -116,6 +116,61 @@ final class StepFillTests: XCTestCase {
         XCTAssertEqual(steps[1].instruction, "Turn left onto Elmbank Cres")
     }
 
+    /** A wiggly line about [km] long heading north-east from Southampton, a point every [step] metres or so. */
+    func longLine(_ km: Double, step: Double = 25) -> [LatLng] {
+        let n = Int(km * 1000 / step)
+        return (0...n).map { i in
+            let d = Double(i) * step
+            return LatLng(50.9 + d / 111_000 * 0.8, -1.4 + d / 70_000 * 0.4 + 0.0004 * sin(Double(i) / 7))
+        }
+    }
+
+    func testNearLineMatchesTheFullSearch() {
+        let l = longLine(30)
+        let near = NearLine(l)
+        let cum = Geo.cumulative(l)
+        var g = SystemRandomNumberGenerator()
+        for _ in 0..<2000 {
+            let base = Geo.point(along: l, meters: Double.random(in: 0...cum.last!, using: &g), cumulative: cum)
+            let p = LatLng(base.lat + Double.random(in: -0.0004...0.0004, using: &g), base.lng + Double.random(in: -0.0006...0.0006, using: &g))
+            let full = Geo.project(p, on: l, cumulative: cum)
+            let quick = near.project(p)
+            if full.offset <= 45 {
+                XCTAssertEqual(full.offset, quick.offset, accuracy: 0.01)
+                XCTAssertEqual(full.along, quick.along, accuracy: 0.5)
+            } else {
+                XCTAssertGreaterThanOrEqual(quick.offset, full.offset - 0.01)
+            }
+        }
+    }
+
+    func testPiecewiseOnALongDriveIsQuick() {
+        // Southampton to Newcastle is about 550 km: this used to take minutes and hold "Finding routes…".
+        let l = longLine(550, step: 30)
+        let total = Geo.length(l)
+        let cum = Geo.cumulative(l)
+        // The router strays for a few km in the middle, and has a turn every few km.
+        let own = l.enumerated().map { i, p in (9000...9100).contains(i) ? LatLng(p.lat, p.lng + 0.01) : p }
+        var steps = [Maneuver(type: .depart, instruction: "Head out", location: l[0], alongMeters: 0, distanceMeters: 0)]
+        var at = 3000.0
+        while at < total - 3000 {
+            steps.append(Maneuver(type: .turnLeft, instruction: "Turn left", location: Geo.point(along: l, meters: at, cumulative: cum), alongMeters: at, distanceMeters: 0))
+            at += 3000
+        }
+        steps.append(Maneuver(type: .arrive, instruction: "You have arrived", location: l[l.count - 1], alongMeters: total, distanceMeters: 0))
+        var route = Route(mode: .drive, polyline: own, distanceMeters: total, typicalSeconds: 20_000, trafficSeconds: nil, summary: nil, maneuvers: [], source: "osm")
+        route.maneuvers = steps
+        let google = [Maneuver(type: .straight, instruction: "Head north", location: l[0], alongMeters: 0, distanceMeters: 0),
+                      Maneuver(type: .arrive, instruction: "You have arrived", location: l[l.count - 1], alongMeters: total, distanceMeters: 0)]
+        let t0 = Date()
+        let out = StepMerge.adoptPiecewise([route, route, route], google: google, onto: l)
+        let secs = Date().timeIntervalSince(t0)
+        XCTAssertNotNil(out)
+        XCTAssertGreaterThan(out?.count ?? 0, 150)
+        // Debug builds are slow: generous, but far from the minutes it took before.
+        XCTAssertLessThan(secs, 20)
+    }
+
     func testPiecewiseUsesGoogleWhereTheRouterStrays() {
         // The router follows the line except for a stretch in the middle where it goes its own way.
         let total = Geo.length(line)

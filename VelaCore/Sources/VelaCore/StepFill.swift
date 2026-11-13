@@ -8,6 +8,64 @@ import Foundation
  * the open router left out turns Google gives ("Keep right to stay on A38(M)" at Spaghetti
  * Junction, the second of the Six Ways roundabouts in Erdington).
  */
+/**
+ * A line's segments filed by 100 m squares, so "how far is this point from the line" only looks at
+ * the few segments nearby instead of every one. Only answers for points within [reach] (≤ 60 m) of
+ * the line; further off it says "nowhere near" (offset infinity). The same maths as Geo.project.
+ */
+struct NearLine {
+    let line: [LatLng]
+    let cum: [Double]
+    private let lat0: Double, k0: Double
+    private var cells: [Int64: [Int]] = [:]
+    private static let cell = 100.0
+
+    init(_ line: [LatLng], cumulative: [Double]? = nil) {
+        self.line = line
+        cum = cumulative ?? Geo.cumulative(line)
+        lat0 = line.first?.lat ?? 0
+        k0 = cos(lat0 * .pi / 180) * 111_320.0
+        guard line.count >= 2 else { return }
+        for i in 0..<(line.count - 1) {
+            let (ax, ay) = xy(line[i]), (bx, by) = xy(line[i + 1])
+            for cx in Int(floor(min(ax, bx) / Self.cell))...Int(floor(max(ax, bx) / Self.cell)) {
+                for cy in Int(floor(min(ay, by) / Self.cell))...Int(floor(max(ay, by) / Self.cell)) {
+                    cells[Self.key(cx, cy), default: []].append(i)
+                }
+            }
+        }
+    }
+
+    private func xy(_ p: LatLng) -> (Double, Double) { ((p.lng - line[0].lng) * k0, (p.lat - lat0) * 110_540) }
+    private static func key(_ x: Int, _ y: Int) -> Int64 { (Int64(x) << 32) ^ Int64(UInt32(bitPattern: Int32(truncatingIfNeeded: y))) }
+
+    /** Like Geo.project, for a point near the line; (0, infinity) when nothing is within about 60 m. */
+    func project(_ p: LatLng) -> (along: Double, offset: Double) {
+        guard line.count >= 2 else { return Geo.project(p, on: line, cumulative: cum) }
+        let (px, py) = xy(p)
+        let cx = Int(floor(px / Self.cell)), cy = Int(floor(py / Self.cell))
+        let k = cos(p.lat * .pi / 180) * 111_320.0
+        var best = (along: 0.0, offset: Double.infinity)
+        var seen = Set<Int>()
+        for x in (cx - 1)...(cx + 1) {
+            for y in (cy - 1)...(cy + 1) {
+                for i in cells[Self.key(x, y)] ?? [] where seen.insert(i).inserted {
+                    let a = line[i], b = line[i + 1]
+                    let ax = (a.lng - p.lng) * k, ay = (a.lat - p.lat) * 110_540
+                    let bx = (b.lng - p.lng) * k, by = (b.lat - p.lat) * 110_540
+                    let dx = bx - ax, dy = by - ay
+                    let len2 = dx * dx + dy * dy
+                    let t = len2 > 0 ? min(max(-(ax * dx + ay * dy) / len2, 0), 1) : 0
+                    let ex = ax + t * dx, ey = ay + t * dy
+                    let d = (ex * ex + ey * ey).squareRoot()
+                    if d < best.offset { best = (cum[i] + t * (cum[i + 1] - cum[i]), d) }
+                }
+            }
+        }
+        return best
+    }
+}
+
 extension StepMerge {
     static let turnKinds: Set<ManeuverType> = [.turnLeft, .turnRight, .slightLeft, .slightRight, .sharpLeft, .sharpRight, .uturn,
                                                .keepLeft, .keepRight, .forkLeft, .forkRight, .rampLeft, .rampRight, .roundabout]
@@ -37,12 +95,17 @@ extension StepMerge {
         let total = cum.last ?? 0
         guard total > 0 else { return nil }
         var best: (steps: [Maneuver], cover: Double)?
+        // Looked up by nearby squares, not segment by segment: a 550 km drive's line is checked every
+        // 25 m, and comparing each check with every segment of the other line took minutes ("Finding
+        // routes…" for good on Southampton to Newcastle when the open router was slow at night).
+        let near = NearLine(line, cumulative: cum)
         for o in candidates where o.polyline.count >= 2 {
             let oc = Geo.cumulative(o.polyline)
+            let onO = NearLine(o.polyline, cumulative: oc)
             var bad: [ClosedRange<Double>] = []
             var m = 0.0
             while m <= total {
-                if Geo.project(Geo.point(along: line, meters: m, cumulative: cum), on: o.polyline, cumulative: oc).offset > 30 {
+                if onO.project(Geo.point(along: line, meters: m, cumulative: cum)).offset > 30 {
                     let r = max(0, m - 150)...min(total, m + 150)
                     if let last = bad.last, last.upperBound >= r.lowerBound { bad[bad.count - 1] = last.lowerBound...r.upperBound } else { bad.append(r) }
                 }
@@ -54,14 +117,14 @@ extension StepMerge {
             var placed: [Maneuver] = []
             var last = 0.0
             for s in o.maneuvers where s.type != .depart && s.type != .arrive {
-                let p = Geo.project(s.location, on: line, cumulative: cum)
+                let p = near.project(s.location)
                 guard p.offset < 40, p.along >= last - 30, p.along < total - 5, !onBad(p.along) else { continue }
                 // The open route around the step runs on the line too, not just the step's own point.
                 let oa = Geo.project(s.location, on: o.polyline, cumulative: oc).along
-                let near = stride(from: max(0, oa - 150), through: min(oc.last ?? 0, oa + 150), by: 25).allSatisfy {
-                    Geo.project(Geo.point(along: o.polyline, meters: $0, cumulative: oc), on: line, cumulative: cum).offset <= 30
+                let close = stride(from: max(0, oa - 150), through: min(oc.last ?? 0, oa + 150), by: 25).allSatisfy {
+                    near.project(Geo.point(along: o.polyline, meters: $0, cumulative: oc)).offset <= 30
                 }
-                guard near else { continue }
+                guard close else { continue }
                 last = max(last, p.along)
                 var s2 = s
                 s2.alongMeters = p.along

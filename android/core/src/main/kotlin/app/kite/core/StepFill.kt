@@ -1,8 +1,12 @@
 package app.kite.core
 
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 /**
  * Turn-by-turn that doesn't leave anything out (the iPhone's StepFill.swift). Kite's steps come
@@ -29,6 +33,62 @@ internal fun alike(a: Maneuver, b: Maneuver): Boolean {
     return side(a.type) != 0 && side(a.type) == side(b.type)
 }
 
+/**
+ * A line's segments filed by 100 m squares, so "how far is this point from the line" only looks at
+ * the few segments nearby instead of every one. Only answers for points within about 60 m of the
+ * line; further off it says "nowhere near" (offset infinity). The same maths as Geo.project.
+ */
+internal class NearLine(val line: List<LatLng>, cum0: DoubleArray? = null) {
+    val cum: DoubleArray = cum0 ?: Geo.cumulative(line)
+    private val lat0 = line.firstOrNull()?.lat ?: 0.0
+    private val lng0 = line.firstOrNull()?.lng ?: 0.0
+    private val k0 = cos(lat0 * PI / 180) * 111_320.0
+    private val cells = HashMap<Long, MutableList<Int>>()
+
+    init {
+        for (i in 0 until line.size - 1) {
+            val ax = x(line[i]); val ay = y(line[i]); val bx = x(line[i + 1]); val by = y(line[i + 1])
+            for (cx in floor(min(ax, bx) / CELL).toInt()..floor(max(ax, bx) / CELL).toInt())
+                for (cy in floor(min(ay, by) / CELL).toInt()..floor(max(ay, by) / CELL).toInt())
+                    cells.getOrPut(key(cx, cy)) { mutableListOf() }.add(i)
+        }
+    }
+
+    private fun x(p: LatLng) = (p.lng - lng0) * k0
+    private fun y(p: LatLng) = (p.lat - lat0) * 110_540
+
+    /** Like Geo.project, for a point near the line; (0, infinity) when nothing is within about 60 m. */
+    fun project(p: LatLng): Projection {
+        if (line.size < 2) return Geo.project(p, line, cum)
+        val cx = floor(x(p) / CELL).toInt()
+        val cy = floor(y(p) / CELL).toInt()
+        val k = cos(p.lat * PI / 180) * 111_320.0
+        var bestAlong = 0.0
+        var bestOff = Double.POSITIVE_INFINITY
+        val seen = HashSet<Int>()
+        for (gx in cx - 1..cx + 1) for (gy in cy - 1..cy + 1) {
+            for (i in cells[key(gx, gy)] ?: continue) {
+                if (!seen.add(i)) continue
+                val a = line[i]; val b = line[i + 1]
+                val ax = (a.lng - p.lng) * k; val ay = (a.lat - p.lat) * 110_540
+                val bx = (b.lng - p.lng) * k; val by = (b.lat - p.lat) * 110_540
+                val dx = bx - ax; val dy = by - ay
+                val len2 = dx * dx + dy * dy
+                val t = if (len2 > 0) min(max(-(ax * dx + ay * dy) / len2, 0.0), 1.0) else 0.0
+                val ex = ax + t * dx; val ey = ay + t * dy
+                val d = sqrt(ex * ex + ey * ey)
+                if (d < bestOff) { bestOff = d; bestAlong = cum[i] + t * (cum[i + 1] - cum[i]) }
+            }
+        }
+        return Projection(bestAlong, bestOff)
+    }
+
+    private companion object {
+        const val CELL = 100.0
+        fun key(x: Int, y: Int): Long = (x.toLong() shl 32) xor (y.toLong() and 0xFFFFFFFFL)
+    }
+}
+
 private fun isEnd(m: Maneuver) = m.type == ManeuverType.DEPART || m.type == ManeuverType.ARRIVE
 
 /**
@@ -43,13 +103,18 @@ fun StepMerge.adoptPiecewise(candidates: List<Route>, google: List<Maneuver>, li
     if (total <= 0) return null
     var best: MutableList<Maneuver>? = null
     var bestCover = 0.0
+    // Looked up by nearby squares, not segment by segment: a 550 km drive's line is checked every
+    // 25 m, and comparing each check with every segment of the other line took minutes ("Finding
+    // routes…" for good on Southampton to Newcastle when the open router was slow at night).
+    val near = NearLine(line, cum)
     for (o in candidates) {
         if (o.polyline.size < 2) continue
         val oc = Geo.cumulative(o.polyline)
+        val onO = NearLine(o.polyline, oc)
         val bad = mutableListOf<ClosedFloatingPointRange<Double>>()
         var m = 0.0
         while (m <= total) {
-            if (Geo.project(Geo.point(line, m, cum), o.polyline, oc).offset > 30) {
+            if (onO.project(Geo.point(line, m, cum)).offset > 30) {
                 val r = max(0.0, m - 150)..min(total, m + 150)
                 val last = bad.lastOrNull()
                 if (last != null && last.endInclusive >= r.start) bad[bad.size - 1] = last.start..r.endInclusive else bad.add(r)
@@ -63,17 +128,17 @@ fun StepMerge.adoptPiecewise(candidates: List<Route>, google: List<Maneuver>, li
         var last = 0.0
         for (s in o.maneuvers) {
             if (isEnd(s)) continue
-            val p = Geo.project(s.location, line, cum)
+            val p = near.project(s.location)
             if (!(p.offset < 40 && p.along >= last - 30 && p.along < total - 5) || onBad(p.along)) continue
             // The open route around the step runs on the line too, not just the step's own point.
             val oa = Geo.project(s.location, o.polyline, oc).along
             var d = max(0.0, oa - 150)
-            var near = true
+            var close = true
             while (d <= min(oc.last(), oa + 150)) {
-                if (Geo.project(Geo.point(o.polyline, d, oc), line, cum).offset > 30) { near = false; break }
+                if (near.project(Geo.point(o.polyline, d, oc)).offset > 30) { close = false; break }
                 d += 25
             }
-            if (!near) continue
+            if (!close) continue
             last = max(last, p.along)
             placed.add(s.copy(alongMeters = p.along, location = Geo.point(line, p.along, cum)))
         }

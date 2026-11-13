@@ -131,6 +131,54 @@ class StepFillTests {
             out?.map { it.instruction })
     }
 
+    /** A wiggly line about [km] long heading north-east from Southampton, a point every [step] metres or so. */
+    private fun longLine(km: Double, step: Double = 25.0): List<LatLng> {
+        val n = (km * 1000 / step).toInt()
+        return (0..n).map { i ->
+            val d = i * step
+            LatLng(50.9 + d / 111_000.0 * 0.8, -1.4 + d / 70_000.0 * 0.4 + 0.0004 * kotlin.math.sin(i / 7.0))
+        }
+    }
+
+    @Test fun nearLineMatchesTheFullSearch() {
+        val l = longLine(30.0)
+        val near = NearLine(l)
+        val cum = Geo.cumulative(l)
+        val rnd = java.util.Random(7)
+        repeat(2000) {
+            val base = Geo.point(l, rnd.nextDouble() * cum.last(), cum)
+            val p = LatLng(base.lat + (rnd.nextDouble() - 0.5) * 0.0008, base.lng + (rnd.nextDouble() - 0.5) * 0.0012)
+            val full = Geo.project(p, l, cum)
+            val quick = near.project(p)
+            if (full.offset <= 45) {
+                assertEquals(full.offset, quick.offset, 0.01)
+                assertEquals(full.along, quick.along, 0.5)
+            } else assertTrue(quick.offset >= full.offset - 0.01)
+        }
+    }
+
+    @Test fun piecewiseOnALongDriveIsQuick() {
+        // Southampton to Newcastle is about 550 km: this used to take minutes and hold "Finding routes…".
+        val l = longLine(550.0, 30.0)
+        val total = Geo.length(l)
+        val cum = Geo.cumulative(l)
+        // The router strays for a few km in the middle, and has a turn every few km.
+        val own = l.mapIndexed { i, p -> if (i in 9000..9100) LatLng(p.lat, p.lng + 0.01) else p }
+        val steps = mutableListOf(Maneuver(ManeuverType.DEPART, "Head out", l[0], 0.0, 0.0))
+        var at = 3000.0
+        while (at < total - 3000) { steps.add(Maneuver(ManeuverType.TURN_LEFT, "Turn left", Geo.point(l, at, cum), at, 0.0)); at += 3000 }
+        steps.add(Maneuver(ManeuverType.ARRIVE, "You have arrived", l.last(), total, 0.0))
+        val route = Route(mode = TravelMode.DRIVE, polyline = own, distanceMeters = total, typicalSeconds = 20_000.0, trafficSeconds = null,
+            summary = null, maneuvers = steps, source = "osm")
+        val google = listOf(Maneuver(ManeuverType.STRAIGHT, "Head north", l[0], 0.0, 0.0), Maneuver(ManeuverType.ARRIVE, "You have arrived", l.last(), total, 0.0))
+        val t0 = System.nanoTime()
+        val out = StepMerge.adoptPiecewise(listOf(route, route, route), google, l)
+        val secs = (System.nanoTime() - t0) / 1e9
+        assertNotNull(out)
+        assertTrue(out.size > 150, "kept the router's turns: ${out.size}")
+        assertTrue(secs < 10, "took $secs s")
+    }
+
     @Test fun googleKeepIsAKeepArrow() {
         val m = DirectionsParser.parseStep("<step maneuver='TURN' meters='500'>Keep <turn side='RIGHT'>right</turn> to stay on <road>A38(M)</road></step>")
         assertEquals(ManeuverType.KEEP_RIGHT, m.type)
