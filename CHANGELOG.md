@@ -28,6 +28,10 @@ Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
   road says "to stay on", keep-left and keep-right steps show a keep arrow instead of a full turn,
   and a turn where the road bends away is no longer called "Continue straight".
 
+- **New police heat map look ("blue lights"):** roads where police get reported now glow blue,
+  turning violet and pink at the worst spots, instead of a muddy yellow-to-red haze that looked
+  like traffic jams. Quiet roads stay clear, and closer in it follows the roads sharply instead
+  of going blurry.
 - **Speed limits on long drives:** if the speed limit service stopped answering partway through
   a long route, the sign could stay blank after the first 25 km for the rest of the drive. Kite
   now fills in the rest from its other map source, like it does when that service is down.

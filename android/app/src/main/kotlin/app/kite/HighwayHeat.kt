@@ -20,8 +20,8 @@ import kotlin.math.*
 /**
  * The police heat map from Highway Radar's own tile server: where police get reported, built from
  * its users' reports over time, for the whole UK at once. Each tile is a 256 px greyscale WebP:
- * brighter is more reports. Kite colours it itself, clear where there's nothing, then yellow
- * through orange to red. The same as the iPhone app.
+ * brighter is more reports. Kite colours it itself, clear where there's nothing, then glowing
+ * blue through violet ("blue lights"). The same as the iPhone app.
  */
 class HighwayHeat(private val scope: CoroutineScope) {
     data class Tile(val z: Int, val x: Int, val y: Int) { val key get() = "$z/$x/$y" }
@@ -35,7 +35,9 @@ class HighwayHeat(private val scope: CoroutineScope) {
 
     companion object {
         const val MIN_ZOOM = 5
-        const val MAX_ZOOM = 10
+        // The server goes to zoom 14; up to 13 its tiles follow the roads cleanly, and the "quiet"
+        // cut-off in blueLights hides its few faint blocky patches. Closer in, the 13 tiles stretch.
+        const val MAX_ZOOM = 13
         private val client by lazy {
             Http.client(20).newBuilder().cache(Cache(File(KiteApp.app.cacheDir, "heat"), 40L shl 20)).build()
         }
@@ -76,30 +78,77 @@ class HighwayHeat(private val scope: CoroutineScope) {
 
         fun quad(t: Tile) = LatLngQuad(corner(t.x, t.y, t.z), corner(t.x + 1, t.y, t.z), corner(t.x + 1, t.y + 1, t.z), corner(t.x, t.y + 1, t.z))
 
-        /** The grey tile, coloured: clear where there's nothing, yellow to red as reports get denser. */
+        /**
+         * The grey tile, coloured "blue lights" style: roads where police get reported glow blue,
+         * turning violet and then bright pink where reports are densest, with a soft halo so the
+         * roads read at a glance. Blue so it's never mistaken for traffic (amber and red). Quiet
+         * roads (faint grey) stay clear. The same maths as the iPhone app.
+         */
         fun colour(data: ByteArray): Bitmap? {
             val src = BitmapFactory.decodeByteArray(data, 0, data.size) ?: return null
             val w = src.width; val h = src.height
             if (w <= 0 || h <= 0) return null
             val px = IntArray(w * h)
             src.getPixels(px, 0, w, 0, 0, w, h)
-            for (i in px.indices) {
+            val grey = IntArray(w * h) { i ->
                 val p = px[i]
-                val v = (((p shr 16) and 0xFF) * 0.299 + ((p shr 8) and 0xFF) * 0.587 + (p and 0xFF) * 0.114)
-                if (v <= 16) { px[i] = 0; continue }
-                val t = min((v - 16) / 170, 1.0)
-                val r: Double; val g: Double; val b: Double
-                if (t < 0.5) {
-                    val k = t / 0.5
-                    r = 255 + (249 - 255) * k; g = 214 + (115 - 214) * k; b = 22 * k
-                } else {
-                    val k = (t - 0.5) / 0.5
-                    r = 249 + (220 - 249) * k; g = 115 + (38 - 115) * k; b = 22 + (38 - 22) * k
-                }
-                val a = 0.12 + 0.43 * t
-                px[i] = ((a * 255).toInt() shl 24) or (r.toInt() shl 16) or (g.toInt() shl 8) or b.toInt()
+                (((p shr 16) and 0xFF) * 0.299 + ((p shr 8) and 0xFF) * 0.587 + (p and 0xFF) * 0.114).toInt()
             }
-            return Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
+            return Bitmap.createBitmap(blueLights(grey, w, h), w, h, Bitmap.Config.ARGB_8888)
+        }
+
+        /** Below this grey level a road has too few reports to show. */
+        private const val QUIET = 40.0
+        /** The colour ramp: blue for some reports, violet for many, bright pink for the most. */
+        private val RAMP = arrayOf(doubleArrayOf(0.0, 59.0, 130.0, 246.0), doubleArrayOf(0.55, 139.0, 92.0, 246.0), doubleArrayOf(1.0, 232.0, 121.0, 249.0))
+
+        /** Greyscale (0 to 255, w×h) to ARGB pixels (not premultiplied, as Bitmap wants). */
+        fun blueLights(grey: IntArray, w: Int, h: Int): IntArray {
+            val n = w * h
+            val t = DoubleArray(n) { i -> ((grey[i] - QUIET) / (200 - QUIET)).coerceIn(0.0, 1.0) }
+            // The halo: the strength blurred a few pixels out (two box blurs come close to a soft glow).
+            var halo = t
+            repeat(2) { halo = boxBlur(halo, w, h, 3) }
+            val out = IntArray(n)
+            for (i in 0 until n) {
+                val core = if (t[i] > 0) 0.45 + 0.5 * t[i] else 0.0
+                val a = max(core, min(halo[i] * 1.4, 0.5))
+                if (a <= 0.01) continue
+                val c = rampColour(max(t[i], halo[i] * 0.7))
+                out[i] = ((a * 255).toInt() shl 24) or (c[0].toInt() shl 16) or (c[1].toInt() shl 8) or c[2].toInt()
+            }
+            return out
+        }
+
+        fun rampColour(x0: Double): DoubleArray {
+            val x = x0.coerceIn(0.0, 1.0)
+            for (k in 1 until RAMP.size) {
+                if (x <= RAMP[k][0]) {
+                    val a = RAMP[k - 1]; val b = RAMP[k]
+                    val f = (x - a[0]) / (b[0] - a[0])
+                    return doubleArrayOf(a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f)
+                }
+            }
+            val l = RAMP.last()
+            return doubleArrayOf(l[1], l[2], l[3])
+        }
+
+        /** A box blur of radius [r] across then down, with the edges held. */
+        fun boxBlur(src: DoubleArray, w: Int, h: Int, r: Int): DoubleArray {
+            val mid = DoubleArray(w * h)
+            val out = DoubleArray(w * h)
+            val span = (2 * r + 1).toDouble()
+            for (y in 0 until h) for (x in 0 until w) {
+                var sum = 0.0
+                for (d in -r..r) sum += src[y * w + (x + d).coerceIn(0, w - 1)]
+                mid[y * w + x] = sum / span
+            }
+            for (y in 0 until h) for (x in 0 until w) {
+                var sum = 0.0
+                for (d in -r..r) sum += mid[(y + d).coerceIn(0, h - 1) * w + x]
+                out[y * w + x] = sum / span
+            }
+            return out
         }
     }
 
@@ -149,7 +198,7 @@ class HighwayHeat(private val scope: CoroutineScope) {
             if (style.getSource(id) != null) continue
             style.addSource(ImageSource(id, quad(t), img))
             val layer = RasterLayer(id, id).withProperties(
-                rasterOpacity(interpolate(linear(), zoom(), stop(10, 0.75f), stop(13, 0.5f), stop(16, 0.3f))),
+                rasterOpacity(interpolate(linear(), zoom(), stop(10, 0.9f), stop(13, 0.8f), stop(16, 0.6f))),
                 rasterFadeDuration(0f),
             )
             if (style.getLayer(below) != null) style.addLayerBelow(layer, below) else style.addLayer(layer)

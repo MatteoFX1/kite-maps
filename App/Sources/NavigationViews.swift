@@ -783,13 +783,13 @@ struct RouteWazeSummary: View {
     }
 }
 
-/** The heat map's key, top left of the map while it's on: yellow for a few police reports, red for many. */
+/** The heat map's key, top left of the map while it's on: blue for a few police reports, violet to pink for many. */
 struct HeatLegend: View {
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundColor(Color(hex: 0xDC2626))
+            Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundColor(Color(hex: 0x8B5CF6))
             Text("Police").font(.caption2.weight(.semibold))
-            LinearGradient(colors: [Color(hex: 0xFFD600), Color(hex: 0xF97316), Color(hex: 0xDC2626)],
+            LinearGradient(colors: [Color(hex: 0x3B82F6), Color(hex: 0x8B5CF6), Color(hex: 0xE879F9)],
                            startPoint: .leading, endPoint: .trailing)
                 .frame(width: 54, height: 6).clipShape(Capsule())
             Text("often").font(.caption2).foregroundColor(.secondary)
@@ -797,7 +797,7 @@ struct HeatLegend: View {
         .padding(.horizontal, 10).frame(height: 28)
         .glass(Capsule())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Police heat map on: red where police are reported most often")
+        .accessibilityLabel("Police heat map on: brightest where police are reported most often")
     }
 }
 
