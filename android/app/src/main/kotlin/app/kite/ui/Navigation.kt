@@ -444,7 +444,7 @@ fun TripBar(nav: Navigator, onEnd: () -> Unit, onSteps: () -> Unit) {
                 append(arrive.first)
                 if (ampm && arrive.second.isNotEmpty()) withStyle(SpanStyle(fontSize = (size * 0.53f).sp, fontWeight = FontWeight.Bold)) { append(arrive.second) }
             }
-            val candidates = listOf(30 to true, 27 to true, 24 to true, 24 to false, 21 to false, 18 to false)
+            val candidates = listOf(30 to true, 27 to true, 24 to true, 22 to true, 21 to true, 21 to false, 18 to false)
             val (size, ampm) = candidates.firstOrNull { (s, a) ->
                 val style = TextStyle(fontSize = s.sp, fontWeight = FontWeight.ExtraBold)
                 listOf(arriveText(s, a), AnnotatedString(left.first), AnnotatedString(dist.first))
