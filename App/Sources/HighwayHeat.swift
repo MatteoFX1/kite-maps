@@ -95,7 +95,7 @@ final class HighwayHeat {
      * roads read at a glance. Blue so it's never mistaken for traffic (amber and red). Quiet
      * roads (faint grey) stay clear. The same maths as the Android app.
      */
-    nonisolated static func colour(_ data: Data) -> UIImage? {
+    nonisolated static func colour(_ data: Data, zoom: Int) -> UIImage? {
         guard let src = UIImage(data: data)?.cgImage else { return nil }
         let w = src.width, h = src.height
         guard w > 0, h > 0 else { return nil }
@@ -107,7 +107,7 @@ final class HighwayHeat {
             return true
         }
         guard drawn else { return nil }
-        var rgba = blueLights(grey, w: w, h: h)
+        var rgba = blueLights(grey, w: w, h: h, zoom: zoom)
         let image: CGImage? = rgba.withUnsafeMutableBytes { buf in
             CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
                       space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage()
@@ -115,25 +115,31 @@ final class HighwayHeat {
         return image.map { UIImage(cgImage: $0) }
     }
 
-    /** Below this grey level a road has too few reports to show. */
-    nonisolated static let quiet = 40.0
+    /**
+     * Below this grey level a road has too few reports to show, so colour only marks real police
+     * hotspots ("danger spots", Matteo's pick). Zoomed-out tiles add up a bigger area and come out
+     * brighter, so they need a higher bar.
+     */
+    nonisolated static func quiet(zoom: Int) -> Double { zoom >= 12 ? 85 : zoom == 11 ? 100 : 120 }
     /** The colour ramp: blue for some reports, violet for many, bright pink for the most. */
     nonisolated static let ramp: [(Double, Double, Double, Double)] = [(0, 59, 130, 246), (0.55, 139, 92, 246), (1, 232, 121, 249)]
 
     /** Greyscale (0 to 255, w×h) to premultiplied RGBA. Pure, so it's easy to test. */
-    nonisolated static func blueLights(_ grey: [UInt8], w: Int, h: Int) -> [UInt8] {
+    nonisolated static func blueLights(_ grey: [UInt8], w: Int, h: Int, zoom: Int) -> [UInt8] {
         let n = w * h
         var t = [Double](repeating: 0, count: n)
-        for i in 0..<n { t[i] = min(max((Double(grey[i]) - quiet) / (200 - quiet), 0), 1) }
+        let q = quiet(zoom: zoom)
+        for i in 0..<n { t[i] = min(max((Double(grey[i]) - q) / 130, 0), 1) }
         // The halo: the strength blurred a few pixels out (two box blurs come close to a soft glow).
         var halo = t
         for _ in 0..<2 { halo = boxBlur(halo, w: w, h: h, r: 3) }
         var rgba = [UInt8](repeating: 0, count: n * 4)
         for i in 0..<n {
-            let core = t[i] > 0 ? 0.45 + 0.5 * t[i] : 0
-            let a = max(core, min(halo[i] * 1.4, 0.5))
+            // Spots that pass the bar are drawn bold, so they stand out.
+            let core = t[i] > 0 ? 0.7 + 0.3 * t[i] : 0
+            let a = max(core, min(halo[i] * 1.8, 0.55))
             guard a > 0.01 else { continue }
-            let (r, g, b) = rampColour(max(t[i], halo[i] * 0.7))
+            let (r, g, b) = rampColour(0.3 + 0.7 * max(t[i], halo[i] * 0.7))
             rgba[i * 4] = UInt8(r * a); rgba[i * 4 + 1] = UInt8(g * a); rgba[i * 4 + 2] = UInt8(b * a)
             rgba[i * 4 + 3] = UInt8(a * 255)
         }
@@ -193,7 +199,7 @@ final class HighwayHeat {
                         guard let (data, resp) = try? await Self.session.data(from: Self.url(t)),
                               (resp as? HTTPURLResponse)?.statusCode == 200 else { return (t, nil) }
                         // Coloured here, off the main thread: the glow takes a few milliseconds a tile.
-                        return (t, Self.colour(data))
+                        return (t, Self.colour(data, zoom: t.z))
                     }
                 }
                 for await (t, img) in group { if let img { got.append((t, img)) } }

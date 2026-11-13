@@ -16,6 +16,9 @@ Fixes from Matteo's drive on 0.7.11 (Wide Lane, Southampton), checked on 80 junc
 - **Roundabout lanes when the map server is down:** the OpenStreetMap server Kite asks for each
   roundabout's lanes was down on and off for two days, and Kite then guessed 2 lanes everywhere.
   It now gets the number of lanes from the faster server it already uses for speed limits.
+- **Police heat map shows danger spots only:** it used to light up nearly every main road, so
+  colour stopped meaning much. Now only the places where police are reported most often glow,
+  drawn bolder so they stand out. Zoomed out, a city shows its worst roads instead of a web.
 
 ## 0.7.11 (iPhone and Android)
 
