@@ -33,7 +33,16 @@ Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
   left (Castle Lane West, Bournemouth), Kite now says "Turn left".
 - **Roundabout pictures match the words:** the picture could draw the 3rd exit while Kite said
   "take the 2nd exit". The picture now always counts the same exit as the voice.
-
+- **Big arrival time:** the bar at the bottom shows three big numbers side by side, like Waze:
+  when you'll get there, minutes left and miles left. The arrival time turns orange or red when
+  traffic is making you late.
+- **One warning at a time:** only the nearest warning gets the big card; any others wait in a small
+  "Also ahead" pill under it (tap it for a quick look). A camera you're speeding towards always
+  comes first. The camera card no longer shows the same limit as the sign next to it.
+- **Voice: On, Alerts only, Off:** the speaker button now has a middle setting that says cameras,
+  police and hazards but not the turns, and shows which one you picked for a moment.
+- **Tidier map:** zoomed out over a busy town, cameras and minor reports close together join into
+  one bubble with a number (tap it to zoom in). Police and crashes always keep their own icon.
 - **New police heat map look ("blue lights"):** roads where police get reported now glow blue,
   turning violet and pink at the worst spots, instead of a muddy yellow-to-red haze that looked
   like traffic jams. Quiet roads stay clear, and closer in it follows the roads sharply instead
