@@ -48,6 +48,8 @@ Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
   The step that lines its turns up with Google's route now takes a fraction of a second.
 - **Roundabouts say the road:** the voice now says "take the 3rd exit onto West End Road", like the
   banner, instead of sometimes leaving the road off.
+- **No made-up routes abroad:** directions to somewhere the backup map has no roads to (like
+  California) no longer show a 1,280-mile drive that ends in Portugal. Kite says no route was found.
 - **New police heat map look ("blue lights"):** roads where police get reported now glow blue,
   turning violet and pink at the worst spots, instead of a muddy yellow-to-red haze that looked
   like traffic jams. Quiet roads stay clear, and closer in it follows the roads sharply instead

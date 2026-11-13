@@ -171,6 +171,12 @@ final class StepFillTests: XCTestCase {
         XCTAssertLessThan(secs, 20)
     }
 
+    func testARouteThatStopsFarShortIsNotARoute() {
+        let southampton = LatLng(50.9097, -1.4044), davis = LatLng(38.5460, -121.7420)
+        XCTAssertFalse(Directions.reaches([LatLng(50.9100, -1.4040), LatLng(38.7807, -9.4977)], from: southampton, to: davis))
+        XCTAssertTrue(Directions.reaches([LatLng(50.9100, -1.4040), LatLng(51.5072, -0.1276)], from: southampton, to: LatLng(51.508, -0.128)))
+    }
+
     func testPiecewiseUsesGoogleWhereTheRouterStrays() {
         // The router follows the line except for a stretch in the middle where it goes its own way.
         let total = Geo.length(line)

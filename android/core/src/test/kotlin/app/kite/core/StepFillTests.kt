@@ -179,6 +179,14 @@ class StepFillTests {
         assertTrue(secs < 10, "took $secs s")
     }
 
+    @Test fun aRouteThatStopsFarShortIsNotARoute() {
+        val southampton = LatLng(50.9097, -1.4044)
+        val davis = LatLng(38.5460, -121.7420)
+        val toPortugal = listOf(LatLng(50.9100, -1.4040), LatLng(38.7807, -9.4977))
+        assertFalse(Directions.reaches(toPortugal, southampton, davis))
+        assertTrue(Directions.reaches(listOf(LatLng(50.9100, -1.4040), LatLng(51.5072, -0.1276)), southampton, LatLng(51.508, -0.128)))
+    }
+
     @Test fun googleKeepIsAKeepArrow() {
         val m = DirectionsParser.parseStep("<step maneuver='TURN' meters='500'>Keep <turn side='RIGHT'>right</turn> to stay on <road>A38(M)</road></step>")
         assertEquals(ManeuverType.KEEP_RIGHT, m.type)

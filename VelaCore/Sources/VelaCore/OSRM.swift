@@ -557,7 +557,10 @@ public enum Directions {
             err = error.localizedDescription
         } }
         do {
-            let o = try await osrmTask.value
+            // The open router only knows Europe: asked for somewhere it has no roads to (California,
+            // an island with no ferry), it snaps the end to its nearest road, and Southampton to Davis
+            // came back as 1,280 miles to Cabo da Roca in Portugal. A route that stops miles short isn't one.
+            let o = try await osrmTask.value.filter { reaches($0.polyline, from: a, to: b) }
             if !o.isEmpty {
                 return Result(routes: o.map { r in
                     var r = r
@@ -587,6 +590,12 @@ func deadline<T: Sendable>(_ seconds: Double, _ op: @escaping @Sendable () async
 }
 
 extension Directions {
+    /** Whether [line] starts and ends within 5 km of where it was asked to go from and to. */
+    public static func reaches(_ line: [LatLng], from a: LatLng, to b: LatLng) -> Bool {
+        guard let first = line.first, let last = line.last else { return false }
+        return first.distance(to: a) < 5_000 && last.distance(to: b) < 5_000
+    }
+
     /** Whether [line] sets off more than a right angle away from [heading]: back the way the car came. */
     public static func startsBehind(_ line: [LatLng], heading: Double) -> Bool {
         guard line.count >= 2 else { return false }

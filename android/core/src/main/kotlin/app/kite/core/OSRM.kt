@@ -483,9 +483,18 @@ object Directions {
             }
         }
         val o = osrmTask.await()
-        o.getOrNull()?.let { if (it.isNotEmpty()) return@coroutineScope Result(it.map { r -> StepMerge.tidy(r.maneuvers); Roundabouts.settle(r) }) }
+        // The open router only knows Europe: asked for somewhere it has no roads to (California, an
+        // island with no ferry), it snaps the end to its nearest road, and Southampton to Davis came
+        // back as 1,280 miles to Cabo da Roca in Portugal. A route that stops miles short isn't one.
+        o.getOrNull()?.filter { reaches(it.polyline, a, b) }?.let { if (it.isNotEmpty()) return@coroutineScope Result(it.map { r -> StepMerge.tidy(r.maneuvers); Roundabouts.settle(r) }) }
         o.exceptionOrNull()?.let { err = it.message }
         Result(emptyList(), err ?: "No route found.")
+    }
+
+    /** Whether [line] starts and ends within 5 km of where it was asked to go from and to. */
+    fun reaches(line: List<LatLng>, a: LatLng, b: LatLng): Boolean {
+        val first = line.firstOrNull() ?: return false
+        return first.distanceTo(a) < 5_000 && line.last().distanceTo(b) < 5_000
     }
 
     /** Whether [line] sets off more than a right angle away from [heading]: back the way the car came. */
