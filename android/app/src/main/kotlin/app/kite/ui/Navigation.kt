@@ -432,7 +432,7 @@ fun TripBar(nav: Navigator, onEnd: () -> Unit, onSteps: () -> Unit) {
         val dist = distanceParts(meters)
         val spoken = "Arrive at ${Fmt.arrival(remaining)}, ${Fmt.duration(remaining)}, ${Fmt.distance(meters)} to go"
         Row(Modifier.weight(1f).clearAndSetSemantics { contentDescription = spoken }, verticalAlignment = Alignment.Top) {
-            TripStat(Modifier.weight(1.2f), buildAnnotatedString {
+            TripStat(Modifier.weight(1.45f), buildAnnotatedString {
                 append(arrive.first)
                 if (arrive.second.isNotEmpty()) withStyle(SpanStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold)) { append(arrive.second) }
             }, "arrive", delayColor(nav.route, dark))
@@ -449,7 +449,8 @@ fun TripBar(nav: Navigator, onEnd: () -> Unit, onSteps: () -> Unit) {
 private fun TripStat(modifier: Modifier, big: AnnotatedString, label: String, color: Color) {
     val dark = LocalDark.current
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        AutoSizeText(big, color)
+        // Same height for all three, so the labels underneath line up even when one number shrinks to fit.
+        Box(Modifier.height(38.dp), contentAlignment = Alignment.BottomCenter) { AutoSizeText(big, color) }
         Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Vela.muted(dark), maxLines = 1)
     }
 }
@@ -687,9 +688,12 @@ fun AlsoAheadPill(nav: Navigator, alerts: List<NavAlert>, onTap: () -> Unit) {
         .border(1.dp, Color.White.copy(alpha = 0.14f), CircleShape).tap(onTap).padding(horizontal = 16.dp)
         .semantics { contentDescription = "Also ahead. Tap to show the next warning" },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Also ahead", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.75f))
-        // Two at most, so the pill never runs off the screen; "+1" for any more.
-        for (a in alerts.take(2)) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // Two at most, with "+1" for any more. On a small phone the words "Also ahead" go first,
+        // then the second warning, so the pill never runs off the screen.
+        val width = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+        val shown = if (width < 360) 1 else 2
+        if (width >= 400) Text("Also ahead", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.75f))
+        for (a in alerts.take(shown)) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             val label = when (a) {
                 NavAlert.CAMERA -> nav.cameraAhead?.let { CameraBadge(it.kind, 24.dp); Fmt.distance(it.meters) }
                 NavAlert.WAZE -> nav.wazeAhead?.let { WazeBadge(it.alert.kind, 24.dp); Fmt.distance(it.meters) }
@@ -703,7 +707,7 @@ fun AlsoAheadPill(nav: Navigator, alerts: List<NavAlert>, onTap: () -> Unit) {
             }
             if (label != null) Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
         }
-        if (alerts.size > 2) Text("+${alerts.size - 2}", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
+        if (alerts.size > shown) Text("+${alerts.size - shown}", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
     }
 }
 
