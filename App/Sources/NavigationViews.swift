@@ -565,7 +565,7 @@ struct TripBar: View {
             let color = TripBody.delayColor(nav.route, scheme)
             // Measured against the real width, so am/pm only goes when it truly doesn't fit.
             GeometryReader { g in
-                let pick = TripBar.fit(arrive, left.value, dist.value, width: g.size.width)
+                let pick = TripBar.fit(arrive, left, dist, width: g.size.width)
                 stats(arrive, left, dist, color, size: pick.size, ampm: pick.ampm)
                     .frame(width: g.size.width, height: g.size.height)
             }
@@ -611,15 +611,17 @@ struct TripBar: View {
     static let statGap: CGFloat = 14
 
     /** The biggest size (30 down to 21 with am/pm, then 21, 18 without) where all three fit in `width`. */
-    static func fit(_ arrive: (time: String, suffix: String), _ left: String, _ dist: String, width: CGFloat) -> (size: CGFloat, ampm: Bool) {
+    static func fit(_ arrive: (time: String, suffix: String), _ left: (value: String, unit: String),
+                    _ dist: (value: String, unit: String), width: CGFloat) -> (size: CGFloat, ampm: Bool) {
         func w(_ s: String, _ size: CGFloat, _ weight: UIFont.Weight) -> CGFloat {
             ceil((s as NSString).size(withAttributes: [.font: UIFont.monospacedDigitSystemFont(ofSize: size, weight: weight)]).width)
         }
-        let label = w("arrive", 14, .medium)
+        // Each column is as wide as its number or its label, whichever is wider.
+        let label = w("arrive", 14, .medium), leftLabel = w(left.unit, 14, .medium), distLabel = w(dist.unit, 14, .medium)
         let candidates: [(CGFloat, Bool)] = [(30, true), (27, true), (24, true), (22, true), (21, true), (21, false), (18, false)]
         for (size, ampm) in candidates {
             let first = w(arrive.time, size, .heavy) + (ampm && !arrive.suffix.isEmpty ? w(arrive.suffix, size * 0.53, .bold) : 0)
-            let total = max(first, label) + max(w(left, size, .heavy), 30) + max(w(dist, size, .heavy), 30) + statGap * 2
+            let total = max(first, label) + max(w(left.value, size, .heavy), leftLabel) + max(w(dist.value, size, .heavy), distLabel) + statGap * 2
             if total <= width - 4 { return (size, ampm) }
         }
         return (18, false)
