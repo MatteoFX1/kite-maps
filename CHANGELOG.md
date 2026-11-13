@@ -51,6 +51,9 @@ Catthorpe, Almondsbury, the M27/M3 and Eastleigh roundabouts and more).
 - **Not "onto M3" when you've just left it:** at motorway roundabouts like M3 junction 6, the road
   into Basingstoke still carries the M3 number on the map, so Kite said "take the 1st exit onto M3".
   It now just says "take the 1st exit".
+- **One exit, said once:** leaving a motorway could be announced twice, 150 m apart ("Exit at junction
+  10", then "Take the exit"), when Google's directions and the map's both had it. Now it's one line,
+  keeping the junction number and any lane advice.
 - **Pasted coordinates stay in the box:** searching "50.9097, -1.4044" drops the pin and keeps the
   coordinates in the search box, instead of going back to an empty "Where to?".
 - **Road name above the trip bar on small phones:** on short screens (iPhone mini, small Android phones) the road you're on was

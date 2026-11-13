@@ -83,6 +83,29 @@ final class StepFillTests: XCTestCase {
         XCTAssertEqual(steps[2].instruction, "Take the exit towards Emsworth")
     }
 
+    func testOneSlipRoadToldTwiceIsOnce() {
+        // Winchester J10: Google's exit, then the open router's 160 m on.
+        var a = ends([step(.rampLeft, "Exit at junction 10", 20970), step(.rampLeft, "Take the exit", 21130)])
+        StepMerge.tidy(&a)
+        XCTAssertEqual(a.filter { !$0.silent }.map(\.instruction), ["Head out", "Exit at junction 10", "You have arrived"])
+        // Gravelly Hill J6: the second brings the lane.
+        var second = step(.rampLeft, "Exit at junction 6", 6295)
+        second.laneHint = "Use the left lane"
+        var b = ends([step(.rampLeft, "Take exit 6 onto M6", 6165), second])
+        StepMerge.tidy(&b)
+        let spoken = b.filter { !$0.silent }
+        XCTAssertEqual(spoken.map(\.instruction), ["Head out", "Take exit 6 onto M6", "You have arrived"])
+        XCTAssertEqual(spoken[1].laneHint, "Use the left lane")
+        // A bare first one takes the second's words.
+        var c = ends([step(.rampLeft, "Take the exit", 1000), step(.rampLeft, "Take the exit toward Alton", 1120)])
+        StepMerge.tidy(&c)
+        XCTAssertEqual(c.filter { !$0.silent }.map(\.instruction), ["Head out", "Take the exit toward Alton", "You have arrived"])
+        // Two real exits further apart both stay.
+        var d = ends([step(.rampLeft, "Take exit 4", 1000), step(.rampLeft, "Take the exit toward Alton", 1400)])
+        StepMerge.tidy(&d)
+        XCTAssertEqual(d.filter { !$0.silent }.count, 4)
+    }
+
     func testTurnThenContinueIsOneTurn() {
         var steps = ends([step(.turnRight, "Turn right", 2108), step(.straight, "Continue straight onto Wide Ln", 2119, road: "Wide Ln")])
         StepMerge.tidy(&steps)

@@ -333,6 +333,17 @@ extension StepMerge {
      * Lane" then "Turn right onto Coldhams Lane" 8 m on is one turn; "Continue onto" the road
      * you're already on says nothing; a turn that keeps you on the same road is "to stay on" it.
      */
+    /** Leaving by a slip road: "Exit at junction 10", "Take exit 6 onto M6", "Take the exit toward Alton". */
+    static func isExit(_ m: Maneuver) -> Bool {
+        (m.type == .rampLeft || m.type == .rampRight)
+            && ["Exit at junction", "Take exit", "Take the exit"].contains { m.instruction.hasPrefix($0) }
+    }
+
+    /** Says which junction, road or place, not just "Take the exit". */
+    static func saysWhere(_ w: String) -> Bool {
+        w.rangeOfCharacter(from: .decimalDigits) != nil || w.contains(" toward") || w.contains(" onto ")
+    }
+
     public static func tidy(_ steps: inout [Maneuver]) {
         var prev: Int?
         var road: String?
@@ -342,6 +353,16 @@ extension StepMerge {
             guard !steps[i].silent, steps[i].type != .depart, steps[i].type != .arrive else { continue }
             let w = steps[i].instruction
             let carryOn = steps[i].type == .straight && (w.hasPrefix("Continue") || w.hasPrefix("Stay on"))
+            if let p = prev, steps[i].alongMeters - steps[p].alongMeters < 200, steps[p].type == steps[i].type,
+               isExit(steps[p]), isExit(steps[i]) {
+                // One slip road told twice ("Exit at junction 10", then "Take the exit" 160 m on, one from
+                // Google and one from the open router): the first, with whatever the second adds.
+                if !saysWhere(steps[p].instruction), saysWhere(w) { steps[p].instruction = w }
+                if steps[p].lanes.isEmpty { steps[p].lanes = steps[i].lanes }
+                if steps[p].laneHint == nil { steps[p].laneHint = steps[i].laneHint }
+                steps[i].silent = true
+                continue
+            }
             if let p = prev, steps[p].type != .depart, steps[i].alongMeters - steps[p].alongMeters < 35 {
                 if carryOn, steps[i].lanes.isEmpty {
                     steps[i].silent = true

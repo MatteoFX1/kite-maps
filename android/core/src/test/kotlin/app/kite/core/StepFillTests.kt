@@ -78,6 +78,28 @@ class StepFillTests {
         assertEquals("Take the exit towards Emsworth", steps[2].instruction)
     }
 
+    @Test fun oneSlipRoadToldTwiceIsOnce() {
+        // Winchester J10: Google's exit, then the open router's 160 m on.
+        val a = ends(listOf(step(ManeuverType.RAMP_LEFT, "Exit at junction 10", 20970.0), step(ManeuverType.RAMP_LEFT, "Take the exit", 21130.0)))
+        StepMerge.tidy(a)
+        assertEquals(listOf("Head out", "Exit at junction 10", "You have arrived"), a.filter { !it.silent }.map { it.instruction })
+        // Gravelly Hill J6: the second brings the lane.
+        val b = ends(listOf(step(ManeuverType.RAMP_LEFT, "Take exit 6 onto M6", 6165.0),
+            step(ManeuverType.RAMP_LEFT, "Exit at junction 6", 6295.0).apply { laneHint = "Use the left lane" }))
+        StepMerge.tidy(b)
+        val spoken = b.filter { !it.silent }
+        assertEquals(listOf("Head out", "Take exit 6 onto M6", "You have arrived"), spoken.map { it.instruction })
+        assertEquals("Use the left lane", spoken[1].laneHint)
+        // A bare first one takes the second's words.
+        val c = ends(listOf(step(ManeuverType.RAMP_LEFT, "Take the exit", 1000.0), step(ManeuverType.RAMP_LEFT, "Take the exit toward Alton", 1120.0)))
+        StepMerge.tidy(c)
+        assertEquals(listOf("Head out", "Take the exit toward Alton", "You have arrived"), c.filter { !it.silent }.map { it.instruction })
+        // Two real exits further apart both stay.
+        val d = ends(listOf(step(ManeuverType.RAMP_LEFT, "Take exit 4", 1000.0), step(ManeuverType.RAMP_LEFT, "Take the exit toward Alton", 1400.0)))
+        StepMerge.tidy(d)
+        assertEquals(4, d.count { !it.silent })
+    }
+
     @Test fun turnThenContinueIsOneTurn() {
         val steps = ends(listOf(step(ManeuverType.TURN_RIGHT, "Turn right", 2108.0), step(ManeuverType.STRAIGHT, "Continue straight onto Wide Ln", 2119.0, road = "Wide Ln")))
         StepMerge.tidy(steps)
