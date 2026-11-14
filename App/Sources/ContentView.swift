@@ -105,7 +105,7 @@ struct ContentView: View {
             model.tab = .saved
         }
         .sheet(isPresented: $model.showLayers) {
-            LayersSheet(settings: settings).kiteType()
+            LayersSheet(settings: settings, liveCount: model.wazeLiveCount).kiteType()
         }
         .fullScreenCover(isPresented: .constant(DemoScript.step?.hasPrefix("svtest") == true)) {
             // Screenshot run only: the viewer on a test pattern, turned right by the step's number.
@@ -239,6 +239,11 @@ struct BrowseOverlay: View {
                         NoticeBanner(text: n) { model.notice = nil }
                     }
                     if !searchFocused { StatusCards(location: model.location) }
+                    // Kite closed in the middle of a drive: one big button to carry on.
+                    if idle, let trip = model.resumeOffer {
+                        ResumeCard(trip: trip, onGo: { model.resumeTrip() }, onClose: { withAnimation { model.dismissResume() } })
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                 }
                 .padding(.top, 6)
                 .inSidePanel(panel)
@@ -551,6 +556,12 @@ enum DemoScript {
             return
         }
         if step == "layers" { model.showLayers = true; return }
+        if step == "resume" {
+            // As if the app had closed halfway to Winchester: the card offering to carry on.
+            let to = Place(id: "demo-winchester", name: "Winchester Cathedral", location: LatLng(51.0607, -1.3131), source: "demo")
+            model.resumeOffer = SavedTrip(destination: to, stops: [], mode: TravelMode.drive.rawValue, at: Date())
+            return
+        }
         if step == "pickhome" { model.picking = .home; return }
         if step == "rail" {
             // Lower Manhattan with the subway lines and hill shading on.
@@ -814,12 +825,20 @@ enum DemoScript {
         await wait(5)
         guard !["place", "lookaround", "copy"].contains(step) else { return }
         if step == "wazeroute" { RouteWazeSummary.demo = [(.police, 2), (.accident, 1), (.hazard, 3)] }
+        if step == "charges" {
+            RouteCharges.demo = [RoadCharge(name: "Dartford Crossing", note: "No barriers. Charged 6 am to 10 pm. Pay the Dart Charge online by midnight the day after.")]
+        }
         model.openDirections(to: first)
         if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)
         if step == "addstop" { model.addingStop = true; return }
-        guard ["nav", "camalert", "wazealert", "trafficalert", "allalerts", "endtrip"].contains(step) else { return }
+        if step == "charges" { model.detent = .full; return }
+        guard ["nav", "camalert", "wazealert", "trafficalert", "allalerts", "endtrip", "faster"].contains(step) else { return }
         model.startNavigation()
+        if step == "faster" {
+            await wait(4)
+            model.nav?.showDemoFaster()
+        }
         if step == "camalert" {
             await wait(4)
             model.nav?.showDemoAlerts()
@@ -923,6 +942,44 @@ struct Triangle: Shape {
         p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
         p.closeSubpath()
         return p
+    }
+}
+
+/** "Carry on to Tesco Portswood?": the trip that was going when Kite closed, back in one tap. */
+struct ResumeCard: View {
+    let trip: SavedTrip
+    let onGo: () -> Void
+    let onClose: () -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Carry on to").font(.system(size: 16, weight: .semibold)).foregroundColor(Vela.muted(scheme))
+                    Text(trip.destination.name + "?").font(.system(size: 22, weight: .heavy)).lineLimit(2).minimumScaleFactor(0.8)
+                    if !trip.stops.isEmpty {
+                        Text("via \(trip.stops.map(\.name).joined(separator: ", "))").font(.system(size: 15))
+                            .foregroundColor(Vela.muted(scheme)).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                CircleIconButton(icon: "xmark", action: onClose).accessibilityLabel("Not now")
+            }
+            Button(action: onGo) {
+                HStack(spacing: 10) {
+                    Image(systemName: "location.north.fill").font(.system(size: 22, weight: .bold))
+                    Text("Carry on").font(.system(size: 22, weight: .heavy))
+                }
+                .foregroundColor(Vela.onAccent(scheme))
+                .frame(maxWidth: .infinity, minHeight: 60)
+                .background(Capsule().fill(Vela.accent(scheme)))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .glass(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.horizontal, 16)
     }
 }
 

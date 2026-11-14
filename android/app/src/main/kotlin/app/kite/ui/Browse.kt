@@ -122,6 +122,9 @@ fun BrowseOverlay(model: AppModel) {
             val n = model.notice
             if (n != null && !focused) NoticeBanner(n) { model.notice = null }
             if (!focused) StatusCards()
+            // Kite closed in the middle of a drive: one big button to carry on.
+            val trip = model.resumeOffer
+            if (idle && trip != null) ResumeCard(trip, onGo = { model.resumeTrip() }, onClose = { model.dismissResume() })
         }
     }
     // The back button closes things one at a time, like the iPhone's back arrows.

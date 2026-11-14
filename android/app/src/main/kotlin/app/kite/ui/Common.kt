@@ -35,6 +35,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -214,22 +216,49 @@ fun PoliceRiskChip(score: Int, label: String = "Police risk") {
     }
 }
 
-/** Bottom left of the map, with Waze on: the heat map's key, the police risk here and how many live reports are in view. */
+/**
+ * Bottom left of the map, with Waze on. One label at most, so the map stays clear: the police risk
+ * here, and only when it isn't low. The heat map's key shows for a few seconds after the heat map
+ * is switched on, then goes; the count of live reports is on the Layers screen.
+ */
 @Composable
 fun WazeMapChips(model: AppModel) {
     val s = AppSettings
     if (!s.wazeOn) return
+    // The heat map was just switched on: its key is showing.
+    var legend by remember { mutableStateOf(false) }
+    var heatWas by remember { mutableStateOf(s.wazeHeatmap) }
+    if (heatWas != s.wazeHeatmap) { heatWas = s.wazeHeatmap; legend = s.wazeHeatmap }
+    // Six seconds once the Layers screen is out of the way, so the key is actually seen.
+    LaunchedEffect(legend, model.showLayers) {
+        if (legend && !model.showLayers) { kotlinx.coroutines.delay(6000); legend = false }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (s.wazeHeatmap && s.wazePolice) HeatLegend()
+        if (legend && s.wazeHeatmap && s.wazePolice) HeatLegend()
         val risk = model.areaRisk
-        if (s.policeRisk && risk != null) PoliceRiskChip(risk, "Local report activity")
-        val n = model.wazeLiveCount
-        if (n != null && (s.wazeOnMap || s.wazeHeatmap)) {
-            Row(Modifier.height(34.dp).glass(CircleShape).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF22C55E)))
-                Text("Live from Waze · $n report${if (n == 1) "" else "s"}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = primaryText)
+        if (s.policeRisk && risk != null && PoliceRisk.level(risk) != PoliceRisk.Level.LOW) PoliceRiskChip(risk)
+    }
+}
+
+/** "Carry on to Tesco Portswood?": the trip that was going when Kite closed, back in one tap. */
+@Composable
+fun ResumeCard(trip: SavedTrip, onGo: () -> Unit, onClose: () -> Unit) {
+    val dark = LocalDark.current
+    Column(Modifier.padding(horizontal = 12.dp).fillMaxWidth().glass(RoundedCornerShape(22.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Carry on to", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Vela.muted(dark))
+                Text(trip.destination.name + "?", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = primaryText, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis, lineHeight = 26.sp)
+                if (trip.stops.isNotEmpty()) Text("via ${trip.stops.joinToString(", ") { it.name }}", fontSize = 15.sp, color = Vela.muted(dark),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            CircleIconButton(Icons.Filled.Close, Modifier.semantics { contentDescription = "Not now" }, onClick = onClose)
+        }
+        Row(Modifier.fillMaxWidth().height(60.dp).clip(CircleShape).background(Vela.accent(dark)).clickable(onClick = onGo),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)) {
+            Icon(Icons.Filled.Navigation, null, tint = Vela.onAccent(dark), modifier = Modifier.size(26.dp))
+            Text("Carry on", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Vela.onAccent(dark))
         }
     }
 }

@@ -3,6 +3,8 @@ import VelaCore
 
 struct LayersSheet: View {
     @ObservedObject var settings: AppSettings
+    /** How many live Waze reports are on the map now (it used to be a label on the map itself). */
+    var liveCount: Int? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
@@ -40,11 +42,19 @@ struct LayersSheet: View {
                     }
                 }
             }
+            if let n = liveCount, settings.wazeOn, settings.wazeOnMap || settings.wazeHeatmap {
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: 0x22C55E)).frame(width: 10, height: 10)
+                    Text("Live from Waze · \(n) report\(n == 1 ? "" : "s") on the map").font(.subheadline.weight(.semibold))
+                        .foregroundColor(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
             Spacer()
         }
         .padding(20)
         .background(Vela.sheet(scheme).ignoresSafeArea())
-        .presentationDetents([.height(560)])
+        .presentationDetents([.height(590)])
     }
 
     private func tile(_ title: String, icon: String = "", badge: RoadCamera.Kind? = nil, waze: WazeAlert.Kind? = nil,
@@ -230,6 +240,9 @@ struct SettingsView: View {
                     ForEach(UnitsMode.allCases) { Text($0.label).tag($0) }
                 } label: { SettingLabel("Distance units", icon: "ruler.fill", color: 0x0891B2) }
                 Toggle(isOn: $settings.parkingButton) { SettingLabel("Parking button on the map", icon: "parkingsign", color: 0x2563EB) }
+                if settings.parkingButton {
+                    Toggle(isOn: $settings.autoParking) { SettingLabel("Save where I parked when a drive ends", icon: "car.fill", color: 0x2563EB) }
+                }
             }
         }
         .kiteList()

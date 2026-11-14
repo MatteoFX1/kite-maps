@@ -12,6 +12,12 @@ import kotlin.math.*
 data class CameraAlert(val kind: RoadCamera.Kind, val meters: Double, val startMeters: Double, val limitKmh: Double?)
 data class WazeAhead(val alert: WazeAlert, val meters: Double, val startMeters: Double)
 data class AverageCheck(val limitKmh: Double?, val averageKmh: Double, val metersLeft: Double)
+/** A faster way found mid-drive: how much it saves, which road it takes, and when it's taken by itself if nothing is tapped. */
+class FasterOffer(val minutes: Int, val via: String?, val untilMillis: Long)
+
+/** How long the faster route card waits before taking the route by itself. */
+const val FASTER_WAIT_MS = 10_000L
+
 /** The speaker button's three choices, like Waze. */
 enum class VoiceMode(val title: String, val detail: String) {
     ALL("Voice on", "Turns and warnings"),
@@ -36,13 +42,17 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     var progress by mutableStateOf<RouteTracker.Progress?>(null); private set
     var rerouting by mutableStateOf(false); private set
     var arrived by mutableStateOf(false); private set
-    private var voiceState = mutableStateOf(if (AppSettings.voice) VoiceMode.ALL else VoiceMode.OFF)
+    private var voiceState = mutableStateOf(
+        if (!AppSettings.voice) VoiceMode.OFF else if (AppSettings.voiceAlertsOnly) VoiceMode.ALERTS else VoiceMode.ALL)
     /** What the voice says: everything, only warnings (cameras, police, hazards), or nothing. */
     var voiceMode: VoiceMode
         get() = voiceState.value
         set(v) {
             voiceState.value = v
             if (v == VoiceMode.OFF || (v == VoiceMode.ALERTS && !speakingAlert)) Voice.stop()
+            // Remembered, so the next trip starts on the same choice instead of full voice again.
+            AppSettings.voice = v != VoiceMode.OFF
+            AppSettings.voiceAlertsOnly = v == VoiceMode.ALERTS
         }
     val muted: Boolean get() = voiceMode == VoiceMode.OFF
     /** Whether what's being said now is a warning, so switching to "Alerts only" doesn't cut it off. */
@@ -53,6 +63,21 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     var lastFix by mutableStateOf<Fix?>(null); private set
     /** No GPS fix for a while (a tunnel, a car park): the screen says so instead of looking live. */
     var gpsLost by mutableStateOf(false); private set
+    /**
+     * GPS has gone (a tunnel) and Kite is carrying on along the route at the speed the car went in,
+     * like Waze and Google do, so the arrow, the distance and the voice don't freeze.
+     */
+    var estimating by mutableStateOf(false); private set
+    /** When the last real GPS fix came in, by the phone's running timer. */
+    private var realFixMs = android.os.SystemClock.elapsedRealtime()
+    /** Where along the route, how fast and when the estimate started from (the last real fix). */
+    private class EstimateFrom(val along: Double, val speed: Double, val atMs: Long)
+    private var estimateFrom: EstimateFrom? = null
+    /** An estimated position for the app to show, in place of the fix GPS didn't send. */
+    var onEstimate: ((Fix) -> Unit)? = null
+    /** A clearly faster way found on the way, offered on a card before it's taken. */
+    var fasterOffer by mutableStateOf<FasterOffer?>(null); private set
+    private var fasterRoute: Route? = null
     var cameraAhead by mutableStateOf<CameraAlert?>(null); private set
     /** How far along the route the card's camera is. */
     private var cameraAheadAt = 0.0
@@ -136,12 +161,43 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
 
     private val gpsWatch = scope.launch {
         while (true) {
-            delay(2_000)
-            val fix = lastFix ?: continue
-            if (demoAlerts) continue
-            val lost = fix.ageMs > 8_000
+            delay(1_000)
+            if (lastFix == null || demoAlerts) continue
+            val gap = (android.os.SystemClock.elapsedRealtime() - realFixMs) / 1000.0
+            val lost = gap > 8
+            estimate(gap)
             if (lost != gpsLost) gpsLost = lost
         }
+    }
+
+    /**
+     * No fix for a few seconds while driving on the route: carry on along it at the speed the car
+     * had, once a second, for up to three minutes (the longest road tunnels in Britain take about
+     * two). Not near the end of the route, where stopping matters, and never off the route.
+     */
+    private fun estimate(gap: Double) {
+        val p = progress ?: return
+        val last = lastFix ?: return
+        if (arrived || stopped || route.mode != TravelMode.DRIVE || gap <= 3 || rerouting) return
+        if (estimateFrom == null) {
+            if (p.offRoute || p.offsetMeters >= 30 || speedMps < 5 || p.remainingMeters <= 400) return
+            // Started again after a new route was taken mid-tunnel: from where the estimate had got to, now.
+            estimateFrom = EstimateFrom(p.alongMeters, speedMps, if (estimating) android.os.SystemClock.elapsedRealtime() else realFixMs)
+        }
+        val e = estimateFrom ?: return
+        val t = (android.os.SystemClock.elapsedRealtime() - e.atMs) / 1000.0
+        val along = e.along + e.speed * t
+        if (t >= 180 || along >= Geo.length(route.polyline) - 300) {
+            // Too long without GPS to keep guessing: stop, and the screen says the signal is lost.
+            if (estimating) estimating = false
+            return
+        }
+        val at = Geo.point(route.polyline, along)
+        val ahead = Geo.point(route.polyline, along + 15)
+        val fix = Fix(at.lat, at.lng, accuracy = 10.0, speed = e.speed, course = if (at == ahead) max(last.course, 0.0) else Geo.bearing(at, ahead),
+            altitude = last.altitude, timeMillis = now())
+        if (!estimating) estimating = true
+        onEstimate?.invoke(fix)
     }
 
     init {
@@ -219,12 +275,18 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         return p.copy(remainingSeconds = p.remainingSeconds * trafficScale)
     }
 
-    fun handle(loc: Fix) {
+    /** [estimated]: a position worked out along the route while GPS is gone, not a real fix. */
+    fun handle(loc: Fix, estimated: Boolean = false) {
         if (arrived) return
+        if (!estimated) {
+            realFixMs = android.os.SystemClock.elapsedRealtime()
+            estimateFrom = null
+            if (estimating) estimating = false
+        }
         lastFix = loc
         if (!demoAlerts) speedMps = max(0.0, loc.speed)
         val course = heading(loc)
-        noteFix(loc)
+        if (!estimated) noteFix(loc)
         val p = update(loc, course)
         progress = p
         val toPin = loc.coord.distanceTo(destination.location)
@@ -242,6 +304,9 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         } ?: false
         if (p.arrived || parked || (route.mode == TravelMode.DRIVE && toPin < 40 && nearPin)) {
             arrived = true
+            fasterOffer = null
+            fasterRoute = null
+            estimating = false
             speak("You have arrived at ${destination.name}" + (destinationSide?.let { ", on the $it." } ?: "."))
             scope.launch {
                 delay(180_000)
@@ -250,7 +315,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             return
         }
         if (p.offsetMeters < 40) joinedRoute = true
-        if (p.offRoute && !rerouting && (toPin > 150 || !nearPin) && (joinedRoute || p.offsetMeters > 400) && since(lastReroute) > 8) {
+        if (p.offRoute && !estimated && !rerouting && (toPin > 150 || !nearPin) && (joinedRoute || p.offsetMeters > 400) && since(lastReroute) > 8) {
             reroute(loc)
             return
         }
@@ -713,7 +778,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
 
     /** Every few minutes on a drive, asks again for the way from here, like Waze. */
     private fun checkTraffic(p: RouteTracker.Progress, loc: Fix) {
-        if (route.mode != TravelMode.DRIVE || AppSettings.noGoogle || rerouting || trafficLoading ||
+        if (route.mode != TravelMode.DRIVE || AppSettings.noGoogle || rerouting || trafficLoading || fasterOffer != null ||
             p.remainingMeters <= 5000 || p.offRoute || since(trafficAt) <= 240) return
         trafficLoading = true
         trafficAt = now()
@@ -731,12 +796,48 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             val saving = current - fresh.durationSeconds
             val sameWay = abs(fresh.distanceMeters - nowP.remainingMeters) < max(300.0, nowP.remainingMeters * 0.03)
             if (!sameWay && saving > max(300.0, current * 0.1)) {
-                adopt(fresh)
-                speak("Found a faster route. It saves ${(saving / 60).roundToInt()} minutes.")
+                offerFaster(fresh, saving)
             } else if (sameWay) {
                 trafficScale = min(3.0, max(0.5, fresh.durationSeconds / planned))
             }
         }
+    }
+
+    /**
+     * A faster way is offered on a card with two big buttons, like Waze, rather than the line on the
+     * map just changing. Left alone, it's taken after a few seconds, so ignoring it works as before.
+     */
+    private fun offerFaster(fresh: Route, saving: Double) {
+        val minutes = max(1, (saving / 60).roundToInt())
+        val offer = FasterOffer(minutes, fresh.summary, now() + FASTER_WAIT_MS)
+        fasterRoute = fresh
+        fasterOffer = offer
+        speak("Found a faster route. It saves $minutes minutes.")
+        scope.launch {
+            delay(FASTER_WAIT_MS)
+            if (fasterOffer === offer) takeFaster()
+        }
+    }
+
+    /** "Take it" on the card, or nothing tapped in time. */
+    fun takeFaster() {
+        val fresh = fasterRoute
+        fasterOffer = null
+        fasterRoute = null
+        if (fresh == null || stopped || arrived) return
+        adopt(fresh)
+    }
+
+    /** "Keep mine": stay on this route, and don't offer another for a good while. */
+    fun keepRoute() {
+        fasterOffer = null
+        fasterRoute = null
+        trafficAt = now() + 600_000
+    }
+
+    /** For the build's screenshots: the faster route card. */
+    fun showDemoFaster() {
+        fasterOffer = FasterOffer(6, "A3024", now() + 3600_000)
     }
 
     private fun justPassed(p: RouteTracker.Progress): Boolean {
@@ -829,6 +930,10 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
 
     /** Drives [fresh] from here on: a reroute, or a faster way found on the way. */
     private fun adopt(fresh: Route) {
+        // A reroute while the faster route card was up: that offer started from somewhere else.
+        fasterOffer = null
+        fasterRoute = null
+        estimateFrom = null
         // Inside an average speed check: keep the rest of its road from the route being left.
         val e = zoneEntry; val p = progress
         // With none showing (a second reroute before the cameras came back), one already kept stays.
@@ -846,7 +951,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         routeWaze = emptyList()
         wazeAhead = null
         loadWaze()
-        lastFix?.let { handle(it) }
+        lastFix?.let { handle(it, estimating) }
     }
 
     /** Something the app needs to tell the driver mid-drive, where a notice wouldn't be seen. */

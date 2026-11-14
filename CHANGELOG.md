@@ -24,6 +24,41 @@ Fixes from Matteo's drive on 0.7.11 (Wide Lane, Southampton), checked on 80 junc
   so the top of the screen stays for your next turn and cameras. Tap it to hide it. Police,
   crashes and other reports are unchanged.
 
+Twelve improvements from an owner's review of both apps, all picked by Matteo:
+
+- **Tunnels:** when GPS drops while you're driving on the route, Kite now carries on along it at
+  the speed you went in, for up to three minutes, so the arrow, the distance and the voice keep
+  going. A small "No GPS · estimated" label shows while it does. It never guesses near the end of
+  the trip, and the moment GPS is back the real position takes over.
+- **Carry on after the app closes:** if Kite closes in the middle of a drive (or the phone
+  restarts), the home map offers "Carry on to …?" with one big button, for two hours.
+- **The voice button is remembered:** "Alerts only" used to be forgotten, and every new drive
+  started with full voice again. Now a drive starts on whatever you chose last.
+- **Android says when it can't speak:** a phone with no text-to-speech voice installed
+  (GrapheneOS can come like that) used to mean a silent drive with no explanation. Kite now shows
+  "No voice on this phone" with a tap through to the phone's voice settings.
+- **Faster routes ask first:** a faster route found on the way used to replace yours by itself.
+  Now a card says how much it saves and which road it takes, with "Keep mine" and "Take it".
+  Left alone for ten seconds, it's taken, as before.
+- **Parking saved by itself:** arriving at the end of a drive saves where the car is, and the
+  arrival card says so. It can be turned off in Settings under Map & display.
+- **Route choices up front:** when there's more than one way, up to three routes show as big cards
+  above Go, each with its road, traffic and time. Share has moved below the steps.
+- **Slim banner on long stretches:** with the next turn more than 2 miles away, the big green
+  banner shrinks to one line, so the map gets the room. It grows back well before the turn.
+- **A clearer home map:** one label at most at the bottom left. "Police risk" shows only when it's
+  medium or high, the heat map's key shows for a few seconds after you switch it on, and the
+  count of live reports has moved to the Layers screen.
+- **Road charges with no barrier:** a route that uses the Dartford Crossing, the Mersey Gateway
+  or Silver Jubilee Bridge, the Tyne Tunnels, the Blackwall or Silvertown Tunnel, or goes into
+  London's Congestion Charge zone, now says so before you press Go, with when to pay. No prices,
+  since they change. Clean air zones (London's ULEZ and others) aren't included: whether you pay
+  depends on the car.
+- **"Closes before you arrive":** when the place you're heading to shuts before you'd get there,
+  or within a quarter of an hour after, a red line above Go says so.
+- **Android notification shows the next turn:** the "Driving with Kite" notification now shows the
+  next turn, its distance and the arrival time, so they're on the lock screen and over other apps.
+
 ## 0.7.11 (iPhone and Android)
 
 Another check of the basics on both phones, with the bugs it found fixed, and turn-by-turn checked
