@@ -318,6 +318,15 @@ final class Navigator: ObservableObject {
     private func loadRoundabouts() {
         guard route.mode != .walk else { return }
         let start = route
+        quietMerges = []
+        // "Merge onto…" only where a lane really ends: a slip road that becomes a lane of its own is said nothing.
+        if route.mode == .drive, start.maneuvers.contains(where: { $0.type == .merge && !$0.silent }) {
+            Task {
+                guard let q = await Merges.quietLaneGains(start.maneuvers, line: start.polyline), self.route.id == start.id else { return }
+                self.quietMerges = Set(q.filter { $0.type == .merge && $0.silent }.map(\.alongMeters))
+                self.useSteps(self.route.maneuvers)
+            }
+        }
         Task {
             var r = start
             // Mini-roundabouts first: they add steps, so the layouts below line up with the steps as driven.
@@ -331,11 +340,15 @@ final class Navigator: ObservableObject {
             for i in self.route.maneuvers.indices where i < drawn.maneuvers.count {
                 self.route.maneuvers[i].roundabout = drawn.maneuvers[i].roundabout
             }
+            // The road matcher's lane counts, where OpenStreetMap's layout came without them.
+            if let steps = Roundabouts.withEntryLanes(self.route.maneuvers, self.entryLanes) { self.route.maneuvers = steps }
         }
     }
 
     /** New steps on the same route line: what was already said stays said, step by step. */
     private func useSteps(_ steps: [Maneuver]) {
+        var steps = steps
+        for k in steps.indices where steps[k].type == .merge && quietMerges.contains(steps[k].alongMeters) { steps[k].silent = true }
         let old = route.maneuvers
         func moved(_ i: Int) -> Int? {
             guard i < old.count else { return nil }
@@ -352,6 +365,12 @@ final class Navigator: ObservableObject {
         }
     }
 
+    /** Merges on this route that are really a lane gain (where along the route), said nothing. */
+    private var quietMerges: Set<Double> = []
+
+    /** The road matcher's lane counts into each roundabout on this route. */
+    private var entryLanes: [RoundaboutEntry] = []
+
     private func loadCameras() {
         routeCameras = []
         // Kept across a reroute: a camera already warned about isn't warned about again.
@@ -367,6 +386,7 @@ final class Navigator: ObservableObject {
         fullRoadData = false
         matchedLimits = false
         matchedWays = []
+        entryLanes = []
         // Speed limits from the road matcher first: it answers in about a second.
         let matcher = Task { () -> Bool in
             let found = await Valhalla.speedLimits(along: line) { partial in
@@ -386,6 +406,9 @@ final class Navigator: ObservableObject {
             self.matchedLimits = true
             self.route.speedLimits = found.limits
             self.matchedWays = found.ways
+            // How many lanes go into each roundabout, in case OpenStreetMap's own answer doesn't come.
+            self.entryLanes = found.entries
+            if let steps = Roundabouts.withEntryLanes(self.route.maneuvers, found.entries) { self.route.maneuvers = steps }
             self.routeCameras = self.onOurSide(self.routeCameras)
             RoadCache.shared.add(ways: found.ways.filter { $0.kmh != nil }, cameras: [], signals: [])
             return true
@@ -698,6 +721,15 @@ final class Navigator: ObservableObject {
 
     /** Tapping the Waze card puts it away; the report still won't be warned about again. */
     func dismissWaze() { wazeAhead = nil }
+
+    /** For the build's screenshots: standstill traffic up the road, shown small over the trip bar. */
+    func showDemoTraffic() {
+        demoAlerts = true
+        let here = progress.map { Geo.point(along: route.polyline, meters: $0.alongMeters + 130) } ?? route.polyline.first ?? LatLng(0, 0)
+        let a = WazeAlert(id: "demo-jam", kind: .jam, subtype: "JAM_STAND_STILL_TRAFFIC", location: here,
+                          street: "A335", reportedAt: Date().addingTimeInterval(-4 * 60), thumbsUp: 1, reliability: 7)
+        wazeAhead = WazeAhead(alert: a, meters: 130, startMeters: 600)
+    }
 
     /** For the build's screenshots: police reported up the road. */
     func showDemoWaze() {

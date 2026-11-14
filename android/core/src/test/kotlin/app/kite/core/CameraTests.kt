@@ -231,4 +231,32 @@ class CameraTests {
         val south = CameraAlerts.project(cams, line.reversed())
         assertEquals(listOf(1L), south.filter { it.camera.quiet }.map { it.camera.id })
     }
+
+    @Test fun roundaboutEntryLanesFromTheMatcher() {
+        val json = """{"shape":"_ibE_ibE_ibE?_ibE?_ibE?","edges":[
+         {"way_id":1,"lane_count":1,"length":0.1,"begin_shape_index":0,"end_shape_index":1},
+         {"way_id":2,"lane_count":3,"length":0.1,"begin_shape_index":1,"end_shape_index":2},
+         {"way_id":3,"lane_count":2,"roundabout":true,"length":0.02,"begin_shape_index":2,"end_shape_index":3},
+         {"way_id":4,"lane_count":1,"length":0.1,"begin_shape_index":3,"end_shape_index":4}]}"""
+        val e = Valhalla.parseEntries(json.toByteArray())
+        assertEquals(listOf(3), e.map { it.lanes })
+        val at = Geo.decodePolyline("_ibE_ibE_ibE?_ibE?_ibE?")[2]
+        val m = Maneuver(ManeuverType.ROUNDABOUT, "At the roundabout, take the 2nd exit", at, 200.0, 0.0, exit = 2,
+            roundabout = RoundaboutShape(listOf(270.0, 60.0), 1, clockwise = true, complete = false))
+        assertEquals(3, Roundabouts.withEntryLanes(listOf(m), e)?.get(0)?.roundabout?.entryLanes)
+        assertNull(Roundabouts.withEntryLanes(listOf(m.copy(roundabout = m.roundabout!!.copy(entryLanes = 2))), e))
+    }
+
+    @Test fun mergeJoinsFromTheMatcher() {
+        val json = """{"shape":"_ibE_ibE_ibE?_ibE?","edges":[
+ {"lane_count":1,"begin_shape_index":0,"end_shape_index":1,"end_node":{"intersecting_edges":[{"driveability":"backward","begin_heading":61}]}},
+ {"lane_count":4,"begin_shape_index":1,"end_shape_index":2,"end_node":{"intersecting_edges":[{"driveability":"forward","begin_heading":200}]}},
+ {"lane_count":4,"begin_shape_index":2,"end_shape_index":3}]}"""
+        val j = Merges.joins(json.toByteArray())
+        assertEquals(2, j.size)
+        assertEquals(1, j[0].inLanes)
+        assertEquals(4, j[0].outLanes)
+        assertEquals(listOf(61.0), j[0].others)
+        assertEquals(emptyList(), j[1].others)
+    }
 }

@@ -818,7 +818,7 @@ enum DemoScript {
         if step == "stops", let second = model.visibleResults.dropFirst().first { model.addStop(second) }
         await wait(8)
         if step == "addstop" { model.addingStop = true; return }
-        guard ["nav", "camalert", "wazealert", "allalerts", "endtrip"].contains(step) else { return }
+        guard ["nav", "camalert", "wazealert", "trafficalert", "allalerts", "endtrip"].contains(step) else { return }
         model.startNavigation()
         if step == "camalert" {
             await wait(4)
@@ -827,6 +827,10 @@ enum DemoScript {
         if step == "wazealert" {
             await wait(4)
             model.nav?.showDemoWaze()
+        }
+        if step == "trafficalert" {
+            await wait(4)
+            model.nav?.showDemoTraffic()
         }
         if step == "allalerts" {
             // Everything at once: camera, Waze police, helicopter and an average speed check.

@@ -34,7 +34,8 @@ struct NavigationOverlay: View {
         guard !nav.arrived else { return [] }
         var ahead: [(NavAlert, Double)] = []
         if let c = nav.cameraAhead { ahead.append((.camera, c.meters)) }
-        if let w = nav.wazeAhead { ahead.append((.waze, w.meters)) }
+        // Traffic jams don't get a card up top: they show as a small line over the trip bar instead.
+        if let w = nav.wazeAhead, w.alert.kind != .jam { ahead.append((.waze, w.meters)) }
         var list = ahead.sorted { $0.1 < $1.1 }.map(\.0)
         if let c = nav.cameraAhead, let limit = c.limitKmh ?? nav.speedLimitKmh, nav.speedMps * 3.6 > limit + 3,
            let i = list.firstIndex(of: .camera), i > 0 {
@@ -51,6 +52,12 @@ struct NavigationOverlay: View {
         let list = alertsUp
         if let peek, list.contains(peek) { return peek }
         return list.first
+    }
+
+    /** A traffic jam ahead, shown small over the trip bar rather than as a big card. */
+    private var trafficAhead: WazeAhead? {
+        guard !nav.arrived, let w = nav.wazeAhead, w.alert.kind == .jam else { return nil }
+        return w
     }
 
     /** The police risk chip, only worth a look while driving when it isn't low. */
@@ -198,6 +205,13 @@ struct NavigationOverlay: View {
                     .inSidePanel(panel)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
+                if let jam = trafficAhead {
+                    TrafficLine(ahead: jam)
+                        .onTapGesture { withAnimation { nav.dismissWaze() } }
+                        .accessibilityHint("Tap to hide")
+                        .inSidePanel(panel)
+                        .transition(.opacity)
+                }
                 TripBar(nav: nav, onEnd: {
                     if nav.arrived { model.endNavigation() } else {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { confirmEnd = true }
@@ -834,6 +848,30 @@ struct WazeCard: View {
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(fill))
         .shadow(color: fill.opacity(0.5), radius: 12, y: 4)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/**
+ * A traffic jam ahead, kept small and calm just over the trip bar: "Standstill traffic in 140 yd".
+ * The top of the screen stays for the next turn and the cameras.
+ */
+struct TrafficLine: View {
+    let ahead: WazeAhead
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 8) {
+            WazeBadge(kind: ahead.alert.kind, size: 22)
+            Text("\(ahead.alert.title) in \(Fmt.distance(ahead.meters))")
+                .font(.system(size: 17, weight: .bold)).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .foregroundColor(scheme == .dark ? Color(hex: 0xFF8A80) : Vela.closed)
+        .padding(.horizontal, 16).frame(height: 40)
+        .background(Capsule().fill(scheme == .dark ? Color(hex: 0x0F172A).opacity(0.92) : Color.white.opacity(0.95)))
+        .shadow(color: .black.opacity(0.25), radius: 5, y: 2)
+        .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
     }
 }

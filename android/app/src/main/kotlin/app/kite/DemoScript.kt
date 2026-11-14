@@ -269,12 +269,13 @@ object DemoScript {
         delay(8000)
         if (step == "directions" || step == "stops") return
         if (step == "addstop") { model.addingStop = true; return }
-        if (step !in setOf("nav", "camalert", "wazealert", "allalerts", "endtrip")) return
+        if (step !in setOf("nav", "camalert", "wazealert", "trafficalert", "allalerts", "endtrip")) return
         model.startNavigation()
         delay(4000)
         when (step) {
             "camalert" -> model.nav?.showDemoAlerts()
             "wazealert" -> model.nav?.showDemoWaze()
+            "trafficalert" -> model.nav?.showDemoTraffic()
             "allalerts" -> { model.nav?.showDemoAlerts(); model.nav?.showDemoWaze() }
         }
     }

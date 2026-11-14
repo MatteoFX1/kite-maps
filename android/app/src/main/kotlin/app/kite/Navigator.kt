@@ -84,6 +84,10 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     private var fullRoadData = false
     private var matchedLimits = false
     private var matchedWays: List<Overpass.LimitWay> = emptyList()
+    /** Merges on this route that are really a lane gain (where along the route), said nothing. */
+    private var quietMerges: Set<Double> = emptySet()
+    /** The road matcher's lane counts into each roundabout on this route. */
+    private var entryLanes: List<RoundaboutEntry> = emptyList()
     var onFinished: (() -> Unit)? = null
     private var toldContinue = mutableSetOf<Int>()
     private var lastReroute = 0L
@@ -288,6 +292,16 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     private fun loadRoundabouts() {
         if (route.mode == TravelMode.WALK) return
         val start = route
+        quietMerges = emptySet()
+        // "Merge onto…" only where a lane really ends: a slip road that becomes a lane of its own is said nothing.
+        if (route.mode == TravelMode.DRIVE && start.maneuvers.any { it.type == ManeuverType.MERGE && !it.silent }) {
+            scope.launch {
+                val gains = Merges.laneGains(start.maneuvers.map { it.copy() }, start.polyline) ?: return@launch
+                if (route.id != start.id) return@launch
+                quietMerges = gains
+                useSteps(route.maneuvers)
+            }
+        }
         scope.launch {
             var r = start
             Roundabouts.addMinis(r.deep())?.let { withMinis ->
@@ -300,11 +314,14 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             // Only the pictures change, not the steps: the tracker keeps its place on the route,
             // like the iPhone's (a new one could snap to the wrong part of a route that loops back).
             route = route.copy(maneuvers = steps)
+            // The road matcher's lane counts, where OpenStreetMap's layout came without them.
+            Roundabouts.withEntryLanes(route.maneuvers, entryLanes)?.let { route = route.copy(maneuvers = it) }
         }
     }
 
     /** New steps on the same route line: what was already said stays said, step by step. */
-    private fun useSteps(steps: List<Maneuver>) {
+    private fun useSteps(steps0: List<Maneuver>) {
+        val steps = steps0.map { if (it.type == ManeuverType.MERGE && it.alongMeters in quietMerges) it.copy(silent = true) else it }
         val old = route.maneuvers
         fun moved(i: Int): Int? {
             if (i >= old.size) return null
@@ -336,6 +353,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         fullRoadData = false
         matchedLimits = false
         matchedWays = emptyList()
+        entryLanes = emptyList()
         val matcher = scope.async {
             val found = Valhalla.speedLimits(line) { partial ->
                 withContext(Dispatchers.Main) {
@@ -352,6 +370,9 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
             matchedLimits = true
             setLimits(found.limits)
             matchedWays = found.ways
+            // How many lanes go into each roundabout, in case OpenStreetMap's own answer doesn't come.
+            entryLanes = found.entries
+            Roundabouts.withEntryLanes(route.maneuvers, found.entries)?.let { route = route.copy(maneuvers = it) }
             routeCameras = onOurSide(routeCameras)
             camerasTick++
             withContext(Dispatchers.IO) { RoadCache.shared.add(found.ways.filter { it.kmh != null }, emptyList(), emptyList()) }
@@ -624,6 +645,15 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         demoAlerts = true
         demoLimitKmh = limitKmh
         speedMps = mph / 2.23694
+    }
+
+    /** For the build's screenshots: standstill traffic up the road, shown small over the trip bar. */
+    fun showDemoTraffic() {
+        demoAlerts = true
+        val here = progress?.let { Geo.point(route.polyline, it.alongMeters + 130) } ?: route.polyline.firstOrNull() ?: LatLng(0.0, 0.0)
+        val a = WazeAlert(id = "demo-jam", kind = WazeAlert.Kind.JAM, subtype = "JAM_STAND_STILL_TRAFFIC", location = here, street = "A335",
+            reportedAtMillis = System.currentTimeMillis() - 4 * 60_000, thumbsUp = 1, reliability = 7)
+        wazeAhead = WazeAhead(a, 130.0, 600.0)
     }
 
     fun showDemoWaze() {
