@@ -88,28 +88,6 @@ jobs:
         continue-on-error: true
         timeout-minutes: 4
         run: swift run vela-probe audit
-      - name: Live junction check (40 tricky British junctions)
-        working-directory: VelaCore
-        continue-on-error: true
-        timeout-minutes: 10
-        run: swift run vela-probe turns
-      - name: Live junction check (second 40)
-        working-directory: VelaCore
-        continue-on-error: true
-        timeout-minutes: 10
-        env:
-          TURNSET: "2"
-        run: swift run vela-probe turns
-      - name: Live merge check
-        working-directory: VelaCore
-        continue-on-error: true
-        timeout-minutes: 6
-        run: swift run vela-probe merges
-      - name: Live slip road check
-        working-directory: VelaCore
-        continue-on-error: true
-        timeout-minutes: 6
-        run: swift run vela-probe ramps
       - name: Live Google check (UK)
         working-directory: VelaCore
         continue-on-error: true
@@ -130,6 +108,35 @@ jobs:
         continue-on-error: true
         timeout-minutes: 2
         run: swift run vela-probe "pizza" 40.7484 -73.9857
+
+  # The long checks: 80 tricky British junctions, every merge and every slip road, driven through
+  # Kite's own turn-by-turn. Too slow for every change, so they run only when started by hand
+  # (Actions > Build iPhone app > Run workflow).
+  junctions:
+    name: Junction check (${{ matrix.name }})
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    continue-on-error: true
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "first 40 junctions", cmd: "turns", set: "1" }
+          - { name: "second 40 junctions", cmd: "turns", set: "2" }
+          - { name: "merges", cmd: "merges", set: "1" }
+          - { name: "slip roads", cmd: "ramps", set: "1" }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the check
+        working-directory: VelaCore
+        env:
+          TURNSET: ${{ matrix.set }}
+        run: swift run vela-probe ${{ matrix.cmd }} 2>&1 | grep -v "^\[" | tee ../junction-check.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: junction-check-${{ matrix.cmd }}-${{ matrix.set }}
+          path: junction-check.txt
 
   ipa:
     name: Build Kite.ipa
