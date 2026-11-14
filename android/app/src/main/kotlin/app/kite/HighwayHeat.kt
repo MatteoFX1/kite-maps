@@ -84,7 +84,7 @@ class HighwayHeat(private val scope: CoroutineScope) {
          * roads read at a glance. Blue so it's never mistaken for traffic (amber and red). Quiet
          * roads (faint grey) stay clear. The same maths as the iPhone app.
          */
-        fun colour(data: ByteArray): Bitmap? {
+        fun colour(data: ByteArray, zoom: Int): Bitmap? {
             val src = BitmapFactory.decodeByteArray(data, 0, data.size) ?: return null
             val w = src.width; val h = src.height
             if (w <= 0 || h <= 0) return null
@@ -94,27 +94,30 @@ class HighwayHeat(private val scope: CoroutineScope) {
                 val p = px[i]
                 (((p shr 16) and 0xFF) * 0.299 + ((p shr 8) and 0xFF) * 0.587 + (p and 0xFF) * 0.114).toInt()
             }
-            return Bitmap.createBitmap(blueLights(grey, w, h), w, h, Bitmap.Config.ARGB_8888)
+            return Bitmap.createBitmap(blueLights(grey, w, h, zoom), w, h, Bitmap.Config.ARGB_8888)
         }
 
-        /** Below this grey level a road has too few reports to show. */
-        private const val QUIET = 40.0
+        // Colour only marks real police hotspots ("danger spots", Matteo's pick). Zoomed-out tiles
+        // add up a bigger area and come out brighter, so they need a higher bar.
+        fun quiet(zoom: Int): Double = if (zoom >= 12) 85.0 else if (zoom == 11) 100.0 else 120.0
         /** The colour ramp: blue for some reports, violet for many, bright pink for the most. */
         private val RAMP = arrayOf(doubleArrayOf(0.0, 59.0, 130.0, 246.0), doubleArrayOf(0.55, 139.0, 92.0, 246.0), doubleArrayOf(1.0, 232.0, 121.0, 249.0))
 
         /** Greyscale (0 to 255, w×h) to ARGB pixels (not premultiplied, as Bitmap wants). */
-        fun blueLights(grey: IntArray, w: Int, h: Int): IntArray {
+        fun blueLights(grey: IntArray, w: Int, h: Int, zoom: Int): IntArray {
             val n = w * h
-            val t = DoubleArray(n) { i -> ((grey[i] - QUIET) / (200 - QUIET)).coerceIn(0.0, 1.0) }
+            val q = quiet(zoom)
+            val t = DoubleArray(n) { i -> ((grey[i] - q) / 130).coerceIn(0.0, 1.0) }
             // The halo: the strength blurred a few pixels out (two box blurs come close to a soft glow).
             var halo = t
             repeat(2) { halo = boxBlur(halo, w, h, 3) }
             val out = IntArray(n)
             for (i in 0 until n) {
-                val core = if (t[i] > 0) 0.45 + 0.5 * t[i] else 0.0
-                val a = max(core, min(halo[i] * 1.4, 0.5))
+                // Spots that pass the bar are drawn bold, so they stand out.
+                val core = if (t[i] > 0) 0.7 + 0.3 * t[i] else 0.0
+                val a = max(core, min(halo[i] * 1.8, 0.55))
                 if (a <= 0.01) continue
-                val c = rampColour(max(t[i], halo[i] * 0.7))
+                val c = rampColour(0.3 + 0.7 * max(t[i], halo[i] * 0.7))
                 out[i] = ((a * 255).toInt() shl 24) or (c[0].toInt() shl 16) or (c[1].toInt() shl 8) or c[2].toInt()
             }
             return out
@@ -167,7 +170,7 @@ class HighwayHeat(private val scope: CoroutineScope) {
             val got = missing.map { t ->
                 async(Dispatchers.IO) {
                     val r = runCatching { Http.get(url(t), client = client) }.getOrNull()
-                    if (r != null && r.code == 200) t to colour(r.body) else t to null
+                    if (r != null && r.code == 200) t to colour(r.body, t.z) else t to null
                 }
             }.awaitAll()
             loading = null

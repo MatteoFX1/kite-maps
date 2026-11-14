@@ -34,7 +34,8 @@ struct NavigationOverlay: View {
         guard !nav.arrived else { return [] }
         var ahead: [(NavAlert, Double)] = []
         if let c = nav.cameraAhead { ahead.append((.camera, c.meters)) }
-        if let w = nav.wazeAhead { ahead.append((.waze, w.meters)) }
+        // Traffic jams don't get a card up top: they show as a small line over the trip bar instead.
+        if let w = nav.wazeAhead, w.alert.kind != .jam { ahead.append((.waze, w.meters)) }
         var list = ahead.sorted { $0.1 < $1.1 }.map(\.0)
         if let c = nav.cameraAhead, let limit = c.limitKmh ?? nav.speedLimitKmh, nav.speedMps * 3.6 > limit + 3,
            let i = list.firstIndex(of: .camera), i > 0 {
@@ -51,6 +52,12 @@ struct NavigationOverlay: View {
         let list = alertsUp
         if let peek, list.contains(peek) { return peek }
         return list.first
+    }
+
+    /** A traffic jam ahead, shown small over the trip bar rather than as a big card. */
+    private var trafficAhead: WazeAhead? {
+        guard !nav.arrived, let w = nav.wazeAhead, w.alert.kind == .jam else { return nil }
+        return w
     }
 
     /** The police risk chip, only worth a look while driving when it isn't low. */
@@ -73,6 +80,7 @@ struct NavigationOverlay: View {
             VStack(spacing: 10) {
                 if nav.arrived {
                     ArrivedCard(name: nav.destination.name, onPark: nav.route.mode == .drive ? { model.saveParking() } : nil,
+                                saved: model.autoParked,
                                 note: nav.wazeWarned > 0 ? "Waze drivers warned you about \(nav.wazeWarned) report\(nav.wazeWarned == 1 ? "" : "s") on the way" : nil) { model.endNavigation() }
                 } else {
                     InstructionBanner(nav: nav)
@@ -113,6 +121,12 @@ struct NavigationOverlay: View {
                 // row: the card matters more, and the GPS and rerouting notes come back once it's gone.
                 if mainAlert != nil && Self.shortScreen {
                     EmptyView()
+                } else if nav.estimating, !nav.arrived {
+                    // In a tunnel Kite carries on along the route at the speed you went in: say it's a best guess.
+                    Label("No GPS · estimated", systemImage: "location.slash")
+                        .font(.system(size: 18, weight: .bold))
+                        .padding(.horizontal, 18).frame(height: 44)
+                        .glass(Capsule())
                 } else if nav.gpsLost, !nav.arrived {
                     // In a tunnel the speed and the next turn stop moving: say why, so it doesn't look live.
                     Label("GPS signal lost", systemImage: "location.slash.fill")
@@ -190,14 +204,28 @@ struct NavigationOverlay: View {
                 .frame(maxWidth: .infinity)
                 .padding(.leading, panel)
             }
-            // Arriving answers the question: the trip bar's Done takes over.
-            if confirmEnd, !nav.arrived {
+            if let offer = nav.fasterOffer, !nav.arrived {
+                // A faster way: two big buttons instead of the route just changing under you.
+                FasterRouteCard(offer: offer,
+                                onKeep: { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { nav.keepRoute() } },
+                                onTake: { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { nav.takeFaster() } })
+                    .inSidePanel(panel)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if confirmEnd, !nav.arrived {
+                // Arriving answers the question: the trip bar's Done takes over.
                 EndTripCard(destination: nav.destination.name,
                             onKeep: { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { confirmEnd = false } },
                             onEnd: { model.endNavigation() })
                     .inSidePanel(panel)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
+                if let jam = trafficAhead {
+                    TrafficLine(ahead: jam)
+                        .onTapGesture { withAnimation { nav.dismissWaze() } }
+                        .accessibilityHint("Tap to hide")
+                        .inSidePanel(panel)
+                        .transition(.opacity)
+                }
                 TripBar(nav: nav, onEnd: {
                     if nav.arrived { model.endNavigation() } else {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { confirmEnd = true }
@@ -290,6 +318,32 @@ struct InstructionBanner: View {
         let m = nav.nextManeuver
         let leftTraffic = Geo.drivesOnLeft(m?.location ?? LatLng(0, 0))
         let refs = RoadRefs.find(m?.instruction ?? "")
+        // A long way to the next turn (over 2 miles, on a motorway say): one slim line, and the map gets
+        // the room. It grows back to full size well before the first spoken heads-up.
+        if nav.route.mode == .drive, let p = nav.progress, p.distanceToNext > 3200, m?.type != .arrive {
+            HStack(spacing: 10) {
+                Image(systemName: maneuverSymbol(m?.type ?? .straight)).font(.system(size: 24, weight: .heavy))
+                Text(Fmt.distance(p.distanceToNext)).font(.system(size: 26, weight: .heavy)).monospacedDigit()
+                if !refs.isEmpty {
+                    ForEach(refs.prefix(2), id: \.self) { RoadShield(ref: $0) }
+                } else {
+                    Text(Self.split(Self.headline(m))?.1 ?? Self.headline(m))
+                        .font(.system(size: 18, weight: .bold)).lineLimit(1).minimumScaleFactor(0.75)
+                }
+            }
+            .padding(.horizontal, 18).frame(height: 56)
+            .foregroundColor(.white)
+            .background(Capsule().fill(Vela.navGreen))
+            .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("In \(Fmt.distance(p.distanceToNext)), \(Self.headline(m))")
+        } else {
+            full(m, leftTraffic: leftTraffic, refs: refs)
+        }
+    }
+
+    private func full(_ m: Maneuver?, leftTraffic: Bool, refs: [String]) -> some View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 16) {
                 if m?.type == .roundabout {
@@ -682,9 +736,57 @@ struct TripBar: View {
     }
 }
 
+/** A faster route found on the way, in place of the trip bar: keep yours or take it. Left alone, it's taken. */
+struct FasterRouteCard: View {
+    let offer: FasterOffer
+    let onKeep: () -> Void
+    let onTake: () -> Void
+    @Environment(\.colorScheme) private var scheme
+    /** How much of the wait is left, as the bar under the words. */
+    @State private var left: CGFloat = 1
+
+    var body: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 2) {
+                Text("Faster route · saves \(offer.minutes) min").font(.system(size: 23, weight: .heavy))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Text((offer.via.map { "via \($0) · " } ?? "") + "taking it in a few seconds").font(.system(size: 16, weight: .medium))
+                    .foregroundColor(Vela.muted(scheme)).lineLimit(1).minimumScaleFactor(0.75)
+            }
+            Capsule().fill(Vela.accent(scheme)).frame(height: 4)
+                .scaleEffect(x: left, y: 1, anchor: .leading)
+                .onAppear {
+                    withAnimation(.linear(duration: max(0.1, offer.until.timeIntervalSinceNow))) { left = 0 }
+                }
+            HStack(spacing: 12) {
+                Button(action: onKeep) {
+                    Text("Keep mine").font(.system(size: 20, weight: .bold))
+                        .frame(maxWidth: .infinity).frame(height: 60)
+                        .foregroundColor(.primary)
+                        .background(Capsule().fill(Vela.chip(scheme)))
+                }
+                Button(action: onTake) {
+                    Text("Take it").font(.system(size: 20, weight: .bold))
+                        .frame(maxWidth: .infinity).frame(height: 60)
+                        .foregroundColor(Vela.onAccent(scheme))
+                        .background(Capsule().fill(Vela.accent(scheme)))
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .foregroundColor(.primary)
+        .padding(18)
+        .glass(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 4)
+    }
+}
+
 struct ArrivedCard: View {
     let name: String
     var onPark: (() -> Void)?
+    /** The parking spot was already saved by itself. */
+    var saved = false
     var note: String?
     let done: () -> Void
     @State private var parked = false
@@ -717,13 +819,14 @@ struct ArrivedCard: View {
                 .fixedSize(horizontal: fit, vertical: false)
             Text(name).font(.system(size: 18, weight: .semibold)).lineLimit(fit ? 1 : 3)
                 .fixedSize(horizontal: fit, vertical: !fit)
+            if saved { Label("Parking spot saved", systemImage: "parkingsign").font(.subheadline.weight(.semibold)).opacity(0.95) }
             if let note { Text(note).font(.subheadline).opacity(0.85).lineLimit(2) }
         }
     }
 
     private var buttons: some View {
         HStack(spacing: 14) {
-            if let onPark, !parked {
+            if let onPark, !parked, !saved {
                 Button { onPark(); parked = true } label: {
                     Image(systemName: "parkingsign").font(.system(size: 22, weight: .bold))
                         .frame(width: 56, height: 56)
@@ -834,6 +937,30 @@ struct WazeCard: View {
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(fill))
         .shadow(color: fill.opacity(0.5), radius: 12, y: 4)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/**
+ * A traffic jam ahead, kept small and calm just over the trip bar: "Standstill traffic in 140 yd".
+ * The top of the screen stays for the next turn and the cameras.
+ */
+struct TrafficLine: View {
+    let ahead: WazeAhead
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 8) {
+            WazeBadge(kind: ahead.alert.kind, size: 22)
+            Text("\(ahead.alert.title) in \(Fmt.distance(ahead.meters))")
+                .font(.system(size: 17, weight: .bold)).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .foregroundColor(scheme == .dark ? Color(hex: 0xFF8A80) : Vela.closed)
+        .padding(.horizontal, 16).frame(height: 40)
+        .background(Capsule().fill(scheme == .dark ? Color(hex: 0x0F172A).opacity(0.92) : Color.white.opacity(0.95)))
+        .shadow(color: .black.opacity(0.25), radius: 5, y: 2)
+        .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
     }
 }

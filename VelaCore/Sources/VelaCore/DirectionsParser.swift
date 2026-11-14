@@ -208,6 +208,19 @@ enum DirectionsParser {
         // "Keep right to stay on A38(M)" comes marked as a turn: it's a keep, and its arrow should say so.
         if text.hasPrefix("Keep left"), [.turnLeft, .slightLeft].contains(m.type) { m.type = .keepLeft }
         if text.hasPrefix("Keep right"), [.turnRight, .slightRight].contains(m.type) { m.type = .keepRight }
+        // Marked as a merge but not one ("Slight right onto the M1 slip road", "Take the slip road to
+        // A463 N"): said as a merge arrow, and Kite asked whether to merge there (M25 J21, Ray Hall).
+        if m.type == .merge, !text.hasPrefix("Merge") {
+            let l = text.lowercased()
+            let left = l.contains(" left"), right = l.contains(" right")
+            if l.hasPrefix("slight") { m.type = left ? .slightLeft : right ? .slightRight : m.type }
+            else if l.hasPrefix("keep") { m.type = left ? .keepLeft : right ? .keepRight : m.type }
+            else if l.hasPrefix("turn") { m.type = left ? .turnLeft : right ? .turnRight : m.type }
+            else if l.hasPrefix("take") && (l.contains("ramp") || l.contains("slip road") || l.contains("exit")) {
+                m.type = left ? .rampLeft : right ? .rampRight : .rampLeft
+                m.sideUnknown = !left && !right
+            }
+        }
         // A slip road with no side ("Take the M3 slip road" is ON_RAMP alone): not a merge, whatever
         // the side turns out to be. Until the line says which, the left (where most leave in Britain).
         if ["ON_RAMP", "OFF_RAMP", "RAMP"].contains(token?.uppercased() ?? ""), side == nil {

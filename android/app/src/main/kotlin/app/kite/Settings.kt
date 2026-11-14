@@ -44,6 +44,8 @@ object AppSettings {
     var units: UnitsMode by Pref("units", { p -> UnitsMode.entries.firstOrNull { it.name == p.getString("units", null) } ?: UnitsMode.AUTO },
         { e, v -> e.putString("units", v.name) })
     var voice by bool("voice", true)
+    /** The voice button's middle setting, "Alerts only": remembered with `voice`, so the next drive starts the same. */
+    var voiceAlertsOnly by bool("voiceAlertsOnly")
     var traffic by bool("traffic", true)
     var satellite by bool("satellite")
     /** Hill shading, and metro/rail lines in their colors. */
@@ -76,6 +78,11 @@ object AppSettings {
     var policeRisk by bool("policeRisk", true)
     var policeAircraft by bool("policeAircraft")
     var parkingButton by bool("parkingButton", true)
+    /** Save where the car is when a drive ends, without pressing anything. */
+    var autoParking by bool("autoParking", true)
+    /** The drive in progress, kept so it can be offered again if the app closes halfway. */
+    var trip: SavedTrip? by Pref("trip", { p -> p.getString("trip", null)?.let { SavedTrip.decode(it) } },
+        { e, v -> if (v == null) e.remove("trip") else e.putString("trip", v.encode()) })
     /** Live camera photos (GitHub #15): camera dots on the map, and the cameras along a route before you go. */
     var liveCams by bool("liveCams", true)
     /** UK road traffic cameras (National Highways, TfL, Traffic Scotland, Traffic Wales, TrafficWatch NI). */
@@ -136,6 +143,21 @@ object AppSettings {
 
     fun addRecent(q: String) {
         recents = (listOf(q) + recents.filterNot { it.equals(q, ignoreCase = true) }).take(12)
+    }
+}
+
+/** A drive in progress: where to, by way of where, and when it was last being driven. */
+data class SavedTrip(val destination: Place, val stops: List<Place>, val mode: Int, val atMillis: Long) {
+    fun encode() = Json.write(mapOf("destination" to PlaceCodec.toMap(destination), "stops" to stops.map { PlaceCodec.toMap(it) },
+        "mode" to mode, "at" to atMillis))
+
+    companion object {
+        fun decode(s: String): SavedTrip? {
+            val m = Json.obj(s) ?: return null
+            val to = (m["destination"] as? Map<*, *>)?.let { d -> PlaceCodec.fromMap(d.entries.associate { it.key.toString() to it.value }) } ?: return null
+            return SavedTrip(to, m["stops"].asMaps()?.mapNotNull { PlaceCodec.fromMap(it) } ?: emptyList(),
+                m["mode"].int() ?: 0, m["at"].num()?.toLong() ?: 0)
+        }
     }
 }
 

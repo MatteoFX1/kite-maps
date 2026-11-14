@@ -19,7 +19,12 @@ final class Navigator: ObservableObject {
     @Published private(set) var arrived = false
     /** What the voice says: everything, only warnings (cameras, police, hazards), or nothing. */
     @Published var voiceMode: VoiceMode {
-        didSet { if voiceMode == .off || (voiceMode == .alerts && !speakingAlert) { speech.stopSpeaking(at: .immediate) } }
+        didSet {
+            if voiceMode == .off || (voiceMode == .alerts && !speakingAlert) { speech.stopSpeaking(at: .immediate) }
+            // Remembered, so the next trip starts on the same choice instead of full voice again.
+            AppSettings.shared.voice = voiceMode != .off
+            AppSettings.shared.voiceAlertsOnly = voiceMode == .alerts
+        }
     }
     var muted: Bool { voiceMode == .off }
     /** Whether what's being said now is a warning, so switching to "Alerts only" doesn't cut it off. */
@@ -31,6 +36,22 @@ final class Navigator: ObservableObject {
     /** No GPS fix for a while (a tunnel, a car park): the screen says so instead of looking live. */
     @Published private(set) var gpsLost = false
     private var gpsWatch: Timer?
+    /**
+     * GPS has gone (a tunnel) and Kite is carrying on along the route at the speed the car went in,
+     * like Waze and Google do, so the arrow, the distance and the voice don't freeze.
+     */
+    @Published private(set) var estimating = false
+    /** When the last real GPS fix came in. */
+    private var realFixAt = Date()
+    /** Where along the route, how fast and when the estimate started from (the last real fix). */
+    private var estimateFrom: (along: Double, speed: Double, at: Date)?
+    /** An estimated position for the app to show, in place of the fix GPS didn't send. */
+    var onEstimate: ((CLLocation) -> Void)?
+    /** A clearly faster way found on the way, offered on a card before it's taken. */
+    @Published private(set) var fasterOffer: FasterOffer?
+    private var fasterRoute: Route?
+    /** How long the faster route card waits before taking the route by itself. */
+    static let fasterWait: TimeInterval = 10
     /** A camera coming up within about twelve seconds, for the warning card. */
     @Published private(set) var cameraAhead: CameraAlert?
     /** How far along the route the card's camera is. */
@@ -147,7 +168,7 @@ final class Navigator: ObservableObject {
         self.destination = destination
         self.stops = stops
         tracker = RouteTracker(route: route)
-        voiceMode = settings.voice ? .all : .off
+        voiceMode = !settings.voice ? .off : settings.voiceAlertsOnly ? .alerts : .all
         avoidHighways = settings.avoidHighways
         avoidTolls = settings.avoidTolls
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
@@ -157,11 +178,13 @@ final class Navigator: ObservableObject {
         loadCameras()
         loadWaze()
         loadRoundabouts()
-        gpsWatch = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+        gpsWatch = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, !self.demoAlerts, let fix = self.lastFix else { return }
-                let lost = Date().timeIntervalSince(fix.timestamp) > 8
+                guard let self, !self.demoAlerts, self.lastFix != nil else { return }
+                let gap = Date().timeIntervalSince(self.realFixAt)
+                let lost = gap > 8
                 if lost != self.gpsLost { self.gpsLost = lost }
+                self.estimate(gap)
             }
         }
         // The first step with how far it is ("In 300 yards, turn left"), so a turn a little way off
@@ -225,13 +248,48 @@ final class Navigator: ObservableObject {
         return b.alongMeters - a.alongMeters < 300 ? b : nil
     }
 
-    func handle(_ loc: CLLocation) {
+    /**
+     * No fix for a few seconds while driving on the route: carry on along it at the speed the car
+     * had, once a second, for up to three minutes (the longest road tunnels in Britain take about
+     * two). Not near the end of the route, where stopping matters, and never off the route.
+     */
+    private func estimate(_ gap: TimeInterval) {
+        guard !arrived, !stopped, route.mode == .drive, gap > 3, !rerouting, let p = progress, let last = lastFix else { return }
+        if estimateFrom == nil {
+            guard !p.offRoute, p.offsetMeters < 30, speedMps >= 5, p.remainingMeters > 400 else { return }
+            // Started again after a new route was taken mid-tunnel: from where the estimate had got to, now.
+            estimateFrom = (p.alongMeters, speedMps, estimating ? Date() : realFixAt)
+        }
+        guard let e = estimateFrom else { return }
+        let t = Date().timeIntervalSince(e.at)
+        let along = e.along + e.speed * t
+        guard t < 180, along < Geo.length(route.polyline) - 300 else {
+            // Too long without GPS to keep guessing: stop, and the screen says the signal is lost.
+            if estimating { estimating = false }
+            return
+        }
+        let at = Geo.point(along: route.polyline, meters: along)
+        let ahead = Geo.point(along: route.polyline, meters: along + 15)
+        let loc = CLLocation(coordinate: CLLocationCoordinate2D(latitude: at.lat, longitude: at.lng), altitude: last.altitude,
+                             horizontalAccuracy: 10, verticalAccuracy: -1, course: at == ahead ? max(last.course, 0) : Geo.bearing(at, ahead),
+                             speed: e.speed, timestamp: Date())
+        if !estimating { estimating = true }
+        onEstimate?(loc)
+    }
+
+    /** [estimated]: a position worked out along the route while GPS is gone, not a real fix. */
+    func handle(_ loc: CLLocation, estimated: Bool = false) {
         guard !arrived else { return }
+        if !estimated {
+            realFixAt = Date()
+            estimateFrom = nil
+            if estimating { estimating = false }
+        }
         lastFix = loc
         // The build's screenshots keep their made-up speed.
         if !demoAlerts { speedMps = max(0, loc.speed) }
         let course = heading(loc)
-        noteFix(loc)
+        if !estimated { noteFix(loc) }
         var p = tracker.update(LatLng(loc.coordinate.latitude, loc.coordinate.longitude),
                                accuracy: max(loc.horizontalAccuracy, 5), heading: course)
         // The arrival time follows the traffic as it changes on the way, not only as it was at the start.
@@ -259,6 +317,9 @@ final class Navigator: ObservableObject {
         let parked = stoppedNearEnd.map { loc.timestamp.timeIntervalSince($0) > (p.remainingMeters >= 150 && !nearPin ? 180 : offRoad ? 20 : 90) } ?? false
         if p.arrived || parked || (route.mode == .drive && toPin < 40 && nearPin) {
             arrived = true
+            fasterOffer = nil
+            fasterRoute = nil
+            estimating = false
             speak("You have arrived at \(destination.name)" + (destinationSide.map { ", on the \($0)." } ?? "."))
             // Parked, the phone goes in a pocket: let the screen sleep, and a few minutes on, end
             // the trip so full-power GPS doesn't run all day in the background.
@@ -275,7 +336,7 @@ final class Navigator: ObservableObject {
         if p.offsetMeters < 40 { joinedRoute = true }
         // Right by the pin at the end of the route, a new route is only a U-turn round the block: let
         // the car park instead. Still a long way round to go, though, the driver found another way in.
-        if p.offRoute && !rerouting && (toPin > 150 || !nearPin) && (joinedRoute || p.offsetMeters > 400) && Date().timeIntervalSince(lastReroute) > 8 {
+        if p.offRoute && !estimated && !rerouting && (toPin > 150 || !nearPin) && (joinedRoute || p.offsetMeters > 400) && Date().timeIntervalSince(lastReroute) > 8 {
             reroute(from: loc)
             return
         }
@@ -318,6 +379,15 @@ final class Navigator: ObservableObject {
     private func loadRoundabouts() {
         guard route.mode != .walk else { return }
         let start = route
+        quietMerges = []
+        // "Merge onto…" only where a lane really ends: a slip road that becomes a lane of its own is said nothing.
+        if route.mode == .drive, start.maneuvers.contains(where: { $0.type == .merge && !$0.silent }) {
+            Task {
+                guard let q = await Merges.quietLaneGains(start.maneuvers, line: start.polyline), self.route.id == start.id else { return }
+                self.quietMerges = Set(q.filter { $0.type == .merge && $0.silent }.map(\.alongMeters))
+                self.useSteps(self.route.maneuvers)
+            }
+        }
         Task {
             var r = start
             // Mini-roundabouts first: they add steps, so the layouts below line up with the steps as driven.
@@ -331,11 +401,15 @@ final class Navigator: ObservableObject {
             for i in self.route.maneuvers.indices where i < drawn.maneuvers.count {
                 self.route.maneuvers[i].roundabout = drawn.maneuvers[i].roundabout
             }
+            // The road matcher's lane counts, where OpenStreetMap's layout came without them.
+            if let steps = Roundabouts.withEntryLanes(self.route.maneuvers, self.entryLanes) { self.route.maneuvers = steps }
         }
     }
 
     /** New steps on the same route line: what was already said stays said, step by step. */
     private func useSteps(_ steps: [Maneuver]) {
+        var steps = steps
+        for k in steps.indices where steps[k].type == .merge && quietMerges.contains(steps[k].alongMeters) { steps[k].silent = true }
         let old = route.maneuvers
         func moved(_ i: Int) -> Int? {
             guard i < old.count else { return nil }
@@ -352,6 +426,12 @@ final class Navigator: ObservableObject {
         }
     }
 
+    /** Merges on this route that are really a lane gain (where along the route), said nothing. */
+    private var quietMerges: Set<Double> = []
+
+    /** The road matcher's lane counts into each roundabout on this route. */
+    private var entryLanes: [RoundaboutEntry] = []
+
     private func loadCameras() {
         routeCameras = []
         // Kept across a reroute: a camera already warned about isn't warned about again.
@@ -367,6 +447,7 @@ final class Navigator: ObservableObject {
         fullRoadData = false
         matchedLimits = false
         matchedWays = []
+        entryLanes = []
         // Speed limits from the road matcher first: it answers in about a second.
         let matcher = Task { () -> Bool in
             let found = await Valhalla.speedLimits(along: line) { partial in
@@ -386,6 +467,9 @@ final class Navigator: ObservableObject {
             self.matchedLimits = true
             self.route.speedLimits = found.limits
             self.matchedWays = found.ways
+            // How many lanes go into each roundabout, in case OpenStreetMap's own answer doesn't come.
+            self.entryLanes = found.entries
+            if let steps = Roundabouts.withEntryLanes(self.route.maneuvers, found.entries) { self.route.maneuvers = steps }
             self.routeCameras = self.onOurSide(self.routeCameras)
             RoadCache.shared.add(ways: found.ways.filter { $0.kmh != nil }, cameras: [], signals: [])
             return true
@@ -699,6 +783,15 @@ final class Navigator: ObservableObject {
     /** Tapping the Waze card puts it away; the report still won't be warned about again. */
     func dismissWaze() { wazeAhead = nil }
 
+    /** For the build's screenshots: standstill traffic up the road, shown small over the trip bar. */
+    func showDemoTraffic() {
+        demoAlerts = true
+        let here = progress.map { Geo.point(along: route.polyline, meters: $0.alongMeters + 130) } ?? route.polyline.first ?? LatLng(0, 0)
+        let a = WazeAlert(id: "demo-jam", kind: .jam, subtype: "JAM_STAND_STILL_TRAFFIC", location: here,
+                          street: "A335", reportedAt: Date().addingTimeInterval(-4 * 60), thumbsUp: 1, reliability: 7)
+        wazeAhead = WazeAhead(alert: a, meters: 130, startMeters: 600)
+    }
+
     /** For the build's screenshots: police reported up the road. */
     func showDemoWaze() {
         demoAlerts = true
@@ -770,7 +863,7 @@ final class Navigator: ObservableObject {
      * with a word about it.
      */
     private func checkTraffic(_ p: RouteTracker.Progress, _ loc: CLLocation) {
-        guard route.mode == .drive, !AppSettings.shared.noGoogle, !rerouting, !trafficLoading, !demoAlerts,
+        guard route.mode == .drive, !AppSettings.shared.noGoogle, !rerouting, !trafficLoading, !demoAlerts, fasterOffer == nil,
               p.remainingMeters > 5000, !p.offRoute, Date().timeIntervalSince(trafficAt) > 240 else { return }
         trafficLoading = true
         trafficAt = Date()
@@ -789,12 +882,48 @@ final class Navigator: ObservableObject {
             // The same way, more or less: just a better arrival time.
             let sameWay = abs(fresh.distanceMeters - now.remainingMeters) < max(300, now.remainingMeters * 0.03)
             if !sameWay, saving > max(300, current * 0.1) {
-                self.adopt(fresh)
-                self.speak("Found a faster route. It saves \(Int((saving / 60).rounded())) minutes.")
+                self.offerFaster(fresh, saving: saving)
             } else if sameWay {
                 self.trafficScale = min(3, max(0.5, fresh.durationSeconds / planned))
             }
         }
+    }
+
+    /**
+     * A faster way is offered on a card with two big buttons, like Waze, rather than the line on the
+     * map just changing. Left alone, it's taken after a few seconds, so ignoring it works as before.
+     */
+    private func offerFaster(_ fresh: Route, saving: Double) {
+        let minutes = max(1, Int((saving / 60).rounded()))
+        let offer = FasterOffer(minutes: minutes, via: fresh.summary, until: Date().addingTimeInterval(Self.fasterWait))
+        fasterRoute = fresh
+        fasterOffer = offer
+        speak("Found a faster route. It saves \(minutes) minutes.")
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.fasterWait) { [weak self] in
+            guard let self, self.fasterOffer == offer else { return }
+            self.takeFaster()
+        }
+    }
+
+    /** "Take it" on the card, or nothing tapped in time. */
+    func takeFaster() {
+        let fresh = fasterRoute
+        fasterOffer = nil
+        fasterRoute = nil
+        guard let fresh, !stopped, !arrived else { return }
+        adopt(fresh)
+    }
+
+    /** "Keep mine": stay on this route, and don't offer another for a good while. */
+    func keepRoute() {
+        fasterOffer = nil
+        fasterRoute = nil
+        trafficAt = Date().addingTimeInterval(600)
+    }
+
+    /** For the build's screenshots: the faster route card. */
+    func showDemoFaster() {
+        fasterOffer = FasterOffer(minutes: 6, via: "A3024", until: Date().addingTimeInterval(3600))
     }
 
     /** Just past a step the driver was told about (or the start), so "continue" follows on from it. */
@@ -905,6 +1034,10 @@ final class Navigator: ObservableObject {
 
     /** Drives [fresh] from here on: a reroute, or a faster way found on the way. */
     private func adopt(_ fresh: Route) {
+        // A reroute while the faster route card was up: that offer started from somewhere else.
+        fasterOffer = nil
+        fasterRoute = nil
+        estimateFrom = nil
         // Inside an average speed check: keep the rest of its road from the route being left.
         // With none showing (a second reroute before the cameras came back), one already kept stays.
         if let e = zoneEntry, let p = progress {
@@ -925,7 +1058,7 @@ final class Navigator: ObservableObject {
         routeWaze = []
         wazeAhead = nil
         loadWaze()
-        if let fix = lastFix { handle(fix) }
+        if let fix = lastFix { handle(fix, estimated: estimating) }
     }
 
     /** Something the app needs to tell the driver mid-drive, where a notice wouldn't be seen. */
@@ -995,6 +1128,14 @@ enum VoiceMode: Equatable {
     var icon: String { self == .all ? "speaker.wave.2.fill" : self == .alerts ? "bell.fill" : "speaker.slash.fill" }
     var title: String { self == .all ? "Voice on" : self == .alerts ? "Alerts only" : "Voice off" }
     var detail: String { self == .all ? "Turns and warnings" : self == .alerts ? "Cameras and police, no turns" : "Nothing spoken" }
+}
+
+/** A faster way found mid-drive: how much it saves and which road it takes. */
+struct FasterOffer: Equatable {
+    var minutes: Int
+    var via: String?
+    /** When it's taken by itself if nothing is tapped. */
+    var until: Date
 }
 
 struct CameraAlert: Equatable {

@@ -130,6 +130,11 @@ final class AppModel: ObservableObject {
     @Published var showSteps = false
     /** "Start" on a place: begin the drive as soon as its route arrives. */
     @Published var autoStart = false
+    /** A trip that was cut short when Kite closed (swiped away, a crash, the phone restarting): "Carry on to…?" */
+    @Published var resumeOffer: SavedTrip?
+    /** This drive's parking spot was saved by itself on arriving. */
+    @Published var autoParked = false
+    private var tripSavedAt = Date.distantPast
     /** Bumped when the map should redraw overlays that don't come from a published value. */
     @Published var mapTick = 0
     /** Which way the map faces, for the compass button. */
@@ -152,6 +157,34 @@ final class AppModel: ObservableObject {
     init() {
         location = LocationService()
         location.onUpdate = { [weak self] loc in self?.locationChanged(loc) }
+        // A trip still saved means Kite closed in the middle of it. Within two hours it's offered again.
+        if let t = settings.trip, !DemoScript.active {
+            if Date().timeIntervalSince(t.at) < 2 * 3600 { resumeOffer = t } else { settings.trip = nil }
+        }
+    }
+
+    /** "Carry on": the same place, stops and way of travelling, started as soon as the route arrives. */
+    func resumeTrip() {
+        guard let t = resumeOffer else { return }
+        resumeOffer = nil
+        settings.trip = nil
+        selected = nil
+        results = []
+        directions = DirectionsState(destination: t.destination, mode: TravelMode(rawValue: t.mode) ?? .drive)
+        directions?.stops = t.stops
+        detent = .half
+        autoStart = true
+        loadAllModes()
+    }
+
+    func dismissResume() {
+        resumeOffer = nil
+        settings.trip = nil
+    }
+
+    private func rememberTrip(_ n: Navigator) {
+        tripSavedAt = Date()
+        settings.trip = SavedTrip(destination: n.destination, stops: n.stops, mode: n.route.mode.rawValue, at: Date())
     }
 
     var userLatLng: LatLng? {
@@ -449,8 +482,9 @@ final class AppModel: ObservableObject {
     }
 
     /** Remember where the car is: here, now, with the street name when one is found. */
-    func saveParking() {
+    func saveParking(quiet: Bool = false) {
         guard let me = userLatLng else {
+            if quiet { return }
             notice = location.denied ? "Location is off for Kite. Turn it on in Settings to save where you parked." : "Still finding your location. Try again in a moment."
             return
         }
@@ -460,7 +494,7 @@ final class AppModel: ObservableObject {
         f.dateStyle = .none
         p.category = "Parked at \(f.string(from: Date()))"
         settings.parking = p
-        notice = "Parking spot saved. Tap the P button to find your car."
+        if !quiet { notice = "Parking spot saved. Tap the P button to find your car." }
         let pid = p.id
         Task {
             guard let found = await Photon.reverse(me), settings.parking?.id == pid else { return }
@@ -489,6 +523,8 @@ final class AppModel: ObservableObject {
     // MARK: Directions
 
     func openDirections(to place: Place) {
+        // Going somewhere else: the old trip isn't wanted back.
+        if resumeOffer != nil { dismissResume() }
         autoStart = false
         directions = DirectionsState(destination: place, mode: settings.defaultMode)
         detent = .half
@@ -682,6 +718,16 @@ final class AppModel: ObservableObject {
             guard let self, let n, self.nav === n else { return }
             self.endNavigation()
         }
+        // In a tunnel GPS stops: the navigator works out where the car should be, and it's shown like a fix.
+        n.onEstimate = { [weak self, weak n] loc in
+            guard let self, let n, self.nav === n else { return }
+            n.handle(loc, estimated: true)
+            self.followCamera(n, loc, animated: true)
+            self.mapTick += 1
+        }
+        resumeOffer = nil
+        autoParked = false
+        rememberTrip(n)
         location.setNavigating(true, mode: route.mode.rawValue)
         map?.showsUserLocation = false
         if let loc = location.last { n.handle(loc); followCamera(n, loc, animated: false) }
@@ -692,6 +738,7 @@ final class AppModel: ObservableObject {
         glide.stop()
         nav = nil
         navSub = nil
+        settings.trip = nil
         location.setNavigating(false)
         map?.showsUserLocation = true
         directions = nil
@@ -719,6 +766,21 @@ final class AppModel: ObservableObject {
         n.handle(loc)
         followCamera(n, loc, animated: true)
         mapTick += 1
+        tripCheck(n)
+    }
+
+    /** Keeps the saved trip fresh while driving, and on arriving forgets it and saves where the car is. */
+    private func tripCheck(_ n: Navigator) {
+        if n.arrived {
+            if settings.trip != nil { settings.trip = nil }
+            // Where you parked, without having to find the P button while getting out of the car.
+            if !autoParked, n.route.mode == .drive, settings.autoParking, settings.parkingButton, userLatLng != nil {
+                autoParked = true
+                saveParking(quiet: true)
+            }
+        } else if Date().timeIntervalSince(tripSavedAt) > 60 || settings.trip?.stops.count != n.stops.count {
+            rememberTrip(n)
+        }
     }
 
     private func followCamera(_ n: Navigator, _ loc: CLLocation, animated: Bool) {

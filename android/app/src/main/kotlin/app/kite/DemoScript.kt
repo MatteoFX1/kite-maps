@@ -24,6 +24,8 @@ object DemoScript {
     fun start(model: AppModel, s: String) {
         step = s
         Voice.silent = true
+        // A drive left over from the last screenshot run isn't one to offer again.
+        model.dismissResume()
         val st = AppSettings
         // Past the first-launch pages, unless that's what's being checked.
         if (s != "welcome" && s != "wazeintro") { st.welcomed = true; st.wazeAsked = true }
@@ -115,6 +117,12 @@ object DemoScript {
             "welcome" -> { st.welcomed = false; return }
             "wazeintro" -> { st.welcomed = true; st.noGoogle = false; st.wazeAsked = false; return }
             "layers" -> { model.showLayers = true; return }
+            "resume" -> {
+                // As if the app had closed halfway to Winchester: the card offering to carry on.
+                model.resumeOffer = SavedTrip(Place("demo-winchester", "Winchester Cathedral", LatLng(51.0607, -1.3131), "demo"), emptyList(), 0,
+                    System.currentTimeMillis())
+                return
+            }
             "pickhome" -> { model.picking = PickKind.HOME; return }
             "settings", "wazesettings", "diagnostics" -> { if (step == "wazesettings") st.waze = true; model.tab = AppTab.SETTINGS; return }
             "transit" -> {
@@ -264,17 +272,22 @@ object DemoScript {
         model.select(first)
         delay(5000)
         if (step == "place") return
+        if (step == "charges") app.kite.ui.RouteChargesDemo.charges =
+            listOf(RoadCharge("Dartford Crossing", "No barriers. Charged 6 am to 10 pm. Pay the Dart Charge online by midnight the day after."))
         model.openDirections(first)
         if (step == "stops") model.visibleResults.drop(1).firstOrNull()?.let { model.addStop(it) }
         delay(8000)
         if (step == "directions" || step == "stops") return
         if (step == "addstop") { model.addingStop = true; return }
-        if (step !in setOf("nav", "camalert", "wazealert", "allalerts", "endtrip")) return
+        if (step == "charges") { model.detent = SheetDetent.FULL; return }
+        if (step !in setOf("nav", "camalert", "wazealert", "trafficalert", "allalerts", "endtrip", "faster")) return
         model.startNavigation()
         delay(4000)
         when (step) {
             "camalert" -> model.nav?.showDemoAlerts()
             "wazealert" -> model.nav?.showDemoWaze()
+            "trafficalert" -> model.nav?.showDemoTraffic()
+            "faster" -> model.nav?.showDemoFaster()
             "allalerts" -> { model.nav?.showDemoAlerts(); model.nav?.showDemoWaze() }
         }
     }

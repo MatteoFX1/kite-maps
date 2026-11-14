@@ -31,17 +31,7 @@ class DriveService : Service() {
                 setShowBadge(false)
             })
         }
-        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val n: Notification = NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_shortcut_car)
-            .setContentTitle("Driving with Kite")
-            .setContentText("Tap to go back to the map")
-            .setContentIntent(open)
-            .setOngoing(true)
-            .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+        val n = build(this, title, text)
         // Always go foreground first, even when this start is only to stop: Android ends the app if a
         // service started with startForegroundService() stops before it calls startForeground().
         val foreground = runCatching {
@@ -60,11 +50,43 @@ class DriveService : Service() {
         private const val CHANNEL = "drive"
         private const val STOP = "app.kite.STOP_DRIVE"
         private var running = false
+        private var title = "Driving with Kite"
+        private var text = "Tap to go back to the map"
+        private var shownAt = 0L
+
+        private fun build(c: Context, title: String, text: String): Notification {
+            val open = PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            return NotificationCompat.Builder(c, CHANNEL)
+                .setSmallIcon(R.drawable.ic_shortcut_car)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setContentIntent(open)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setShowWhen(false)
+                .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build()
+        }
+
+        /**
+         * The next turn and the arrival time on the notification, so they're on the lock screen and
+         * over another app. Quiet: it never sounds or buzzes, and changes at most every two seconds.
+         */
+        fun show(c: Context, title: String, text: String) {
+            if (!running || (title == this.title && text == this.text)) return
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (title.substringAfter(" · ") == this.title.substringAfter(" · ") && now - shownAt < 2_000) return
+            this.title = title; this.text = text; shownAt = now
+            runCatching { c.getSystemService(NotificationManager::class.java).notify(1, build(c, title, text)) }
+        }
 
         fun start(c: Context) {
             // Without location access Android refuses a location service, and that refusal ends the app.
             if (ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
                 ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
+            title = "Driving with Kite"; text = "Tap to go back to the map"
             running = runCatching { c.startForegroundService(Intent(c, DriveService::class.java)) }.isSuccess
         }
 

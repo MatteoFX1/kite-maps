@@ -383,7 +383,7 @@ object Valhalla {
     const val endpoint = "https://valhalla1.openstreetmap.de/trace_attributes"
     private val client = Http.client(15)
 
-    data class Limits(val limits: List<SpeedLimit>, val ways: List<Overpass.LimitWay>)
+    data class Limits(val limits: List<SpeedLimit>, val ways: List<Overpass.LimitWay>, val entries: List<RoundaboutEntry> = emptyList())
 
     /** The limits along [line], and the roads it drives. Null when the server didn't answer. [progress] gets limits after each piece. */
     suspend fun speedLimits(line: List<LatLng>, progress: (suspend (List<SpeedLimit>) -> Unit)? = null): Limits? {
@@ -392,6 +392,7 @@ object Valhalla {
         val total = cum.last()
         val merged = mutableListOf<SpeedLimit>()
         val ways = mutableListOf<Overpass.LimitWay>()
+        val entries = mutableListOf<RoundaboutEntry>()
         var start = 0.0
         while (start < total) {
             val end = min(total, start + 25_000)
@@ -407,10 +408,27 @@ object Valhalla {
                 m += 25
             }
             ways += parsed.second
+            entries += parseEntries(data)
             start = end
             if (start < total) progress?.invoke(merged + SpeedLimit(start, null))
         }
-        return Limits(merged, ways)
+        return Limits(merged, ways, entries)
+    }
+
+    /** Where the road meets each roundabout, and how many lanes it has there (the road matcher's lane count). */
+    fun parseEntries(data: ByteArray): List<RoundaboutEntry> {
+        val root = Json.obj(data) ?: return emptyList()
+        val edges = root["edges"].asMaps() ?: return emptyList()
+        val shape = (root["shape"] as? String)?.let { Geo.decodePolyline(it) } ?: emptyList()
+        val out = mutableListOf<RoundaboutEntry>()
+        for (k in 0 until edges.size - 1) {
+            val e = edges[k]
+            if (e["roundabout"] == true || edges[k + 1]["roundabout"] != true) continue
+            val lanes = e["lane_count"].int() ?: continue
+            val b = e["end_shape_index"].int() ?: continue
+            if (lanes in 1..6 && b in shape.indices) out.add(RoundaboutEntry(shape[b], lanes))
+        }
+        return out
     }
 
     fun thin(line: List<LatLng>): List<LatLng> {
@@ -428,7 +446,7 @@ object Valhalla {
             "costing" to "auto",
             "shape_match" to "map_snap",
             "filters" to mapOf(
-                "attributes" to listOf("edge.speed_limit", "edge.way_id", "edge.names", "edge.length", "edge.begin_shape_index", "edge.end_shape_index", "shape"),
+                "attributes" to listOf("edge.speed_limit", "edge.way_id", "edge.names", "edge.length", "edge.begin_shape_index", "edge.end_shape_index", "edge.lane_count", "edge.roundabout", "shape"),
                 "action" to "include",
             ),
         )
@@ -467,3 +485,6 @@ object Valhalla {
         return Triple(limits, ways, along)
     }
 }
+
+/** Where the route meets a roundabout, and how many lanes the road in has there (from the road matcher). */
+data class RoundaboutEntry(val at: LatLng, val lanes: Int)

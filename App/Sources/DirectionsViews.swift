@@ -14,7 +14,7 @@ struct DirectionsOverlay: View {
             ZStack(alignment: .top) {
                 VStack {
                     Spacer()
-                    BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: model.directions?.transit == true ? 200 : 300,
+                    BottomSheet(detent: $model.detent, containerHeight: full, peekHeight: TripHeader.peek(model.directions),
                                 topClearance: cardHeight + 16) {
                         TripHeader(model: model)
                     } content: {
@@ -116,8 +116,127 @@ struct TripHeader: View {
     @ObservedObject private var settings = AppSettings.shared
     @Environment(\.colorScheme) private var scheme
 
+    /** Route cards show when there's a choice to make: up to three, the picked one lit. */
+    static func cards(_ d: DirectionsState) -> [Route] {
+        !d.transit && d.route != nil && d.current.count > 1 ? Array(d.current.prefix(3)) : []
+    }
+
+    /** The place shuts before, or just as, this trip gets there. */
+    static func closing(_ d: DirectionsState) -> ClosingCheck.Warning? {
+        guard !d.transit, !d.reversed, let r = d.route else { return nil }
+        let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        return ClosingCheck.warning(status: d.destination.statusText, nowMinutes: (c.hour ?? 0) * 60 + (c.minute ?? 0),
+                                    travelSeconds: r.durationSeconds)
+    }
+
+    /** How tall the sheet sits at rest, so everything above the fold (cards, Go, modes) is in view. */
+    static func peek(_ d: DirectionsState?) -> CGFloat {
+        guard let d else { return 300 }
+        if d.transit { return 200 }
+        let n = cards(d).count
+        let base: CGFloat = n == 0 ? 300 : 186 + CGFloat(n) * 70
+        return base + (closing(d) != nil ? 36 : 0)
+    }
+
+    private var optionsMenu: some View {
+        Menu {
+            Toggle("Avoid tolls", isOn: $settings.avoidTolls)
+            Toggle(Fmt.yards ? "Avoid motorways" : "Avoid highways", isOn: $settings.avoidHighways)
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 19, weight: .bold))
+                .foregroundColor(.primary)
+                .frame(width: 48, height: 48)
+                .background(Circle().fill(Vela.chip(scheme)))
+        }
+        .accessibilityLabel("Route options")
+        .onChange(of: settings.avoidTolls) { _ in model.reloadRoutes() }
+        .onChange(of: settings.avoidHighways) { _ in model.reloadRoutes() }
+    }
+
+    private var goButton: some View {
+        Button { model.startNavigation() } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "location.north.fill").font(.system(size: 24, weight: .bold))
+                Text("Go").font(.system(size: 26, weight: .heavy))
+            }
+            .foregroundColor(Vela.onAccent(scheme))
+            .frame(maxWidth: .infinity, minHeight: 68)
+            .background(Capsule().fill(Vela.accent(scheme)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Start driving")
+    }
+
+    @ViewBuilder private func closingLine(_ d: DirectionsState) -> some View {
+        if let w = Self.closing(d) {
+            Label(w.before ? "Closes at \(w.closes), before you arrive" : "Closes at \(w.closes), just after you arrive",
+                  systemImage: "clock.badge.exclamationmark")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(scheme == .dark ? Vela.closedDark : Vela.closed)
+                .lineLimit(1).minimumScaleFactor(0.75)
+                .frame(height: 22)
+        }
+    }
+
+    /** One route to choose: the road it uses, how its traffic is, and its time, big. */
+    private func card(_ r: Route, on: Bool, pick: @escaping () -> Void) -> some View {
+        Button(action: pick) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(r.summary.map { "via \($0)" } ?? Fmt.distance(r.distanceMeters))
+                        .font(.system(size: 19, weight: .bold)).lineLimit(1).minimumScaleFactor(0.75)
+                    Group {
+                        if r.mode == .drive, r.trafficSeconds != nil {
+                            Text(r.delayLevel == 0 ? "Traffic is light" : "\(Fmt.duration(r.durationSeconds - r.typicalSeconds)) slower than usual")
+                                .foregroundColor(on ? Vela.onAccent(scheme) : TripBody.delayColor(r, scheme))
+                        } else {
+                            Text(r.summary == nil ? "Arrive \(Fmt.arrival(r.durationSeconds))" : Fmt.distance(r.distanceMeters))
+                                .foregroundColor(on ? Vela.onAccent(scheme).opacity(0.85) : Vela.muted(scheme))
+                        }
+                    }
+                    .font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(Fmt.duration(r.durationSeconds)).font(.system(size: 24, weight: .heavy)).lineLimit(1)
+                    Text("arrive \(Fmt.arrival(r.durationSeconds))").font(.system(size: 13, weight: .semibold))
+                        .opacity(0.8).lineLimit(1)
+                }
+                .layoutPriority(1)
+            }
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 62)
+            .foregroundColor(on ? Vela.onAccent(scheme) : .primary)
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(on ? Vela.accent(scheme) : Vela.chip(scheme)))
+            .contentShape(RoundedRectangle(cornerRadius: 20))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(r.summary.map { "Route via \($0)" } ?? "Route"), \(Fmt.duration(r.durationSeconds))")
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
     var body: some View {
         if let d = model.directions {
+            let cards = Self.cards(d)
+            if !cards.isEmpty {
+                // A choice of routes: the choices first, then Go, then the ways to travel.
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(cards.enumerated()), id: \.element.id) { i, r in
+                        card(r, on: r.id == d.route?.id) { model.selectRoute(i) }
+                    }
+                    closingLine(d).padding(.top, 2)
+                    if !d.reversed { goButton.padding(.top, 2) }
+                    HStack(spacing: 8) {
+                        ModeTabs(model: model, state: d)
+                        optionsMenu
+                    }
+                    .padding(.top, 2)
+                }
+                .padding(.horizontal, 18)
+                .padding(.bottom, 10)
+            } else {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top) {
                     if d.transit {
@@ -153,40 +272,15 @@ struct TripHeader: View {
                         .frame(minHeight: 52)
                     }
                     Spacer(minLength: 8)
-                    if !d.transit {
-                        Menu {
-                            Toggle("Avoid tolls", isOn: $settings.avoidTolls)
-                            Toggle(Fmt.yards ? "Avoid motorways" : "Avoid highways", isOn: $settings.avoidHighways)
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 19, weight: .bold))
-                                .foregroundColor(.primary)
-                                .frame(width: 48, height: 48)
-                                .background(Circle().fill(Vela.chip(scheme)))
-                        }
-                        .accessibilityLabel("Route options")
-                        .onChange(of: settings.avoidTolls) { _ in model.reloadRoutes() }
-                        .onChange(of: settings.avoidHighways) { _ in model.reloadRoutes() }
-                    }
+                    if !d.transit { optionsMenu }
                 }
                 ModeTabs(model: model, state: d)
-                if !d.transit, !d.reversed, d.route != nil {
-                    Button { model.startNavigation() } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "location.north.fill").font(.system(size: 24, weight: .bold))
-                            Text("Go").font(.system(size: 26, weight: .heavy))
-                        }
-                        .foregroundColor(Vela.onAccent(scheme))
-                        .frame(maxWidth: .infinity, minHeight: 68)
-                        .background(Capsule().fill(Vela.accent(scheme)))
-                        .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Start driving")
-                }
+                closingLine(d)
+                if !d.transit, !d.reversed, d.route != nil { goButton }
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 10)
+            }
         }
     }
 }
@@ -251,12 +345,14 @@ struct TripBody: View {
                     if d.transit {
                         TransitBody(model: model, state: d)
                     } else if let r = d.route {
+                        if r.mode == .drive { RouteCharges(route: r) }
                         summary(r, d)
-                        if let url = d.destination.shareURL { shareButton(url) }
-                        if d.current.count > 1 { alternates(d, picked: r) }
+                        // More than three routes is rare; the ones past the cards stay reachable here.
+                        if d.current.count > 3 { alternates(d, picked: r) }
                         Divider()
                         Text("Steps").font(.headline)
                         StepsList(route: r)
+                        if let url = d.destination.shareURL { shareButton(url).padding(.top, 6) }
                     } else if d.loading.contains(d.mode) {
                         HStack { ProgressView(); Text("Finding routes…").foregroundColor(.secondary) }
                             .padding(.vertical, 20)
@@ -313,7 +409,7 @@ struct TripBody: View {
     private func alternates(_ d: DirectionsState, picked: Route) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(d.current.enumerated()), id: \.element.id) { i, r in
-                if r.id != picked.id {
+                if i >= 3, r.id != picked.id {
                     Button { model.selectRoute(i) } label: {
                         HStack {
                             Image(systemName: "arrow.triangle.branch").foregroundColor(.secondary).frame(width: 22)
@@ -333,6 +429,39 @@ struct TripBody: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+}
+
+/** Pay-later charges on this route (Dartford, the Mersey bridges, London's zone): there's no barrier to remind you. */
+struct RouteCharges: View {
+    let route: Route
+    @State private var charges: [RoadCharge] = []
+    @Environment(\.colorScheme) private var scheme
+    /** Made-up charges for the build's screenshots. */
+    static var demo: [RoadCharge] = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(charges.isEmpty ? Self.demo : charges, id: \.self) { c in
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "sterlingsign.circle.fill").font(.system(size: 26, weight: .bold))
+                        .foregroundColor(Color(hex: 0xE37400))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Charge on this route: \(c.name)").font(.system(size: 17, weight: .bold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(c.note).font(.system(size: 15, weight: .medium)).foregroundColor(Vela.muted(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Vela.chip(scheme)))
+            }
+        }
+        .task(id: route.id) {
+            let line = route.polyline
+            charges = await Task.detached { RoadCharges.on(line) }.value
         }
     }
 }

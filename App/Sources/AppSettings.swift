@@ -21,6 +21,16 @@ enum UnitsMode: String, CaseIterable, Identifiable {
     }
 }
 
+/** A trip in progress, kept so it can be picked back up if Kite closes mid-drive. */
+struct SavedTrip: Codable, Equatable {
+    var destination: Place
+    var stops: [Place]
+    /** The travel mode's raw value. */
+    var mode: Int
+    /** When the trip was last being driven. */
+    var at: Date
+}
+
 /** Everything in Settings, kept between launches. */
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
@@ -29,6 +39,10 @@ final class AppSettings: ObservableObject {
     @Published var theme: ThemeMode { didSet { d.set(theme.rawValue, forKey: "theme") } }
     @Published var units: UnitsMode { didSet { d.set(units.rawValue, forKey: "units") } }
     @Published var voice: Bool { didSet { d.set(voice, forKey: "voice") } }
+    /** The speaker button was last left on "Alerts only" (cameras and police, no turns). */
+    @Published var voiceAlertsOnly: Bool { didSet { d.set(voiceAlertsOnly, forKey: "voiceAlertsOnly") } }
+    /** Save where the car is by itself when a drive ends. */
+    @Published var autoParking: Bool { didSet { d.set(autoParking, forKey: "autoParking") } }
     @Published var traffic: Bool { didSet { d.set(traffic, forKey: "traffic") } }
     @Published var satellite: Bool { didSet { d.set(satellite, forKey: "satellite") } }
     /** Hill shading, and metro/rail lines in their colors. */
@@ -79,6 +93,8 @@ final class AppSettings: ObservableObject {
     /** Where the car is parked, with when in `statusText`. */
     @Published var parking: Place? { didSet { save(parking, "parking") } }
     /** The first-run choice between Google's data and open data only has been made. */
+    /** The trip being driven now (nil when none): offered again if the app closes before it ends. */
+    @Published var trip: SavedTrip? { didSet { if trip == nil { d.removeObject(forKey: "trip") } else { save(trip, "trip") } } }
     @Published var welcomed: Bool { didSet { d.set(welcomed, forKey: "welcomed") } }
     @Published var defaultMode: TravelMode { didSet { d.set(defaultMode.rawValue, forKey: "defaultMode") } }
     @Published var saved: [Place] { didSet { save(saved, "saved") } }
@@ -90,6 +106,8 @@ final class AppSettings: ObservableObject {
         theme = ThemeMode(rawValue: d.string(forKey: "theme") ?? "") ?? .system
         units = UnitsMode(rawValue: d.string(forKey: "units") ?? "") ?? .auto
         voice = d.object(forKey: "voice") as? Bool ?? true
+        voiceAlertsOnly = d.bool(forKey: "voiceAlertsOnly")
+        autoParking = d.object(forKey: "autoParking") as? Bool ?? true
         traffic = d.object(forKey: "traffic") as? Bool ?? true
         satellite = d.bool(forKey: "satellite")
         terrain = d.bool(forKey: "terrain")
@@ -123,6 +141,7 @@ final class AppSettings: ObservableObject {
         home = d.data(forKey: "home").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }
         work = d.data(forKey: "work").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }
         parking = d.data(forKey: "parking").flatMap { try? JSONDecoder().decode(Place.self, from: $0) }
+        trip = d.data(forKey: "trip").flatMap { try? JSONDecoder().decode(SavedTrip.self, from: $0) }
         welcomed = d.bool(forKey: "welcomed") || d.object(forKey: "saved") != nil
         defaultMode = TravelMode(rawValue: d.integer(forKey: "defaultMode")) ?? .drive
         saved = (d.data(forKey: "saved")).flatMap { try? JSONDecoder().decode([Place].self, from: $0) } ?? []

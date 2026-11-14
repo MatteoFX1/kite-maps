@@ -124,6 +124,11 @@ class AppModel {
     var showSteps by mutableStateOf(false)
     /** "Start" on a place: begin the drive as soon as its route arrives. */
     var autoStart by mutableStateOf(false)
+    /** A drive that was under way when the app last closed, offered again on the home map. */
+    var resumeOffer by mutableStateOf<SavedTrip?>(null)
+    /** This drive's parking spot was saved by itself on arriving. */
+    var autoParked by mutableStateOf(false)
+    private var tripSavedAt = 0L
     /** Bumped when the map should redraw overlays that don't come from a state value. */
     var mapTick by mutableIntStateOf(0)
     /** Which way the map faces, for the compass button. */
@@ -145,6 +150,34 @@ class AppModel {
 
     init {
         location.onUpdate = { locationChanged(it) }
+        // A drive cut short (the app closed, the phone restarted): offer it again, for two hours.
+        settings.trip?.let { t ->
+            if (!DemoScript.active && System.currentTimeMillis() - t.atMillis < 2 * 3600_000L) resumeOffer = t else settings.trip = null
+        }
+    }
+
+    /** "Carry on": the same place, stops and way of travelling, started as soon as the route arrives. */
+    fun resumeTrip() {
+        val t = resumeOffer ?: return
+        resumeOffer = null
+        settings.trip = null
+        selected = null
+        results = emptyList()
+        directions = DirectionsState(destination = t.destination, mode = TravelMode.entries.firstOrNull { it.raw == t.mode } ?: TravelMode.DRIVE,
+            stops = t.stops)
+        detent = SheetDetent.HALF
+        autoStart = true
+        loadAllModes()
+    }
+
+    fun dismissResume() {
+        resumeOffer = null
+        settings.trip = null
+    }
+
+    private fun rememberTrip(n: Navigator) {
+        tripSavedAt = System.currentTimeMillis()
+        settings.trip = SavedTrip(n.destination, n.stops, n.route.mode.raw, tripSavedAt)
     }
 
     fun edit(f: (DirectionsState) -> DirectionsState) { directions?.let { directions = f(it) } }
@@ -411,8 +444,9 @@ class AppModel {
     }
 
     /** Remember where the car is: here, now, with the street name when one is found. */
-    fun saveParking() {
+    fun saveParking(quiet: Boolean = false) {
         val me = userLatLng ?: run {
+            if (quiet) return
             notice = if (location.denied) "Location is off for Kite. Turn it on in Settings to save where you parked."
             else "Still finding your location. Try again in a moment."
             return
@@ -420,7 +454,7 @@ class AppModel {
         val p = Place(id = "parking:${System.currentTimeMillis() / 1000}", name = "Parked car", location = me, source = "osm",
             category = "Parked at ${Fmt.time(java.util.Date())}")
         settings.parking = p
-        notice = "Parking spot saved. Tap the P button to find your car."
+        if (!quiet) notice = "Parking spot saved. Tap the P button to find your car."
         scope.launch {
             val found = Photon.reverse(me) ?: return@launch
             if (settings.parking?.id != p.id) return@launch
@@ -448,6 +482,7 @@ class AppModel {
     // Directions
 
     fun openDirections(place: Place) {
+        if (resumeOffer != null) dismissResume()
         autoStart = false
         directions = DirectionsState(destination = place, mode = settings.defaultMode)
         detent = SheetDetent.HALF
@@ -623,6 +658,18 @@ class AppModel {
         val n = Navigator(route, d.destination, d.stops, scope)
         nav = n
         n.onFinished = { if (nav === n) endNavigation() }
+        // In a tunnel the Navigator carries on along the route by itself: move the arrow with it.
+        n.onEstimate = { f ->
+            if (nav === n) {
+                n.handle(f, estimated = true)
+                followCamera(n, f, animated = true)
+                driveNote(n)
+                mapTick++
+            }
+        }
+        resumeOffer = null
+        autoParked = false
+        rememberTrip(n)
         location.setNavigating(true)
         DriveService.start(KiteApp.app)
         location.last?.let { n.handle(it); followCamera(n, it, animated = false) }
@@ -632,6 +679,7 @@ class AppModel {
         nav?.stop()
         glide.stop()
         nav = null
+        settings.trip = null
         location.setNavigating(false)
         DriveService.stop(KiteApp.app)
         directions = null
@@ -659,7 +707,34 @@ class AppModel {
         val n = nav ?: return
         n.handle(f)
         followCamera(n, f, animated = true)
+        tripCheck(n)
+        driveNote(n)
         mapTick++
+    }
+
+    /** The next turn and arrival time on the drive's notification (Android only: the iPhone has no such thing to fill). */
+    private fun driveNote(n: Navigator) {
+        val p = n.progress ?: return
+        if (n.arrived) {
+            DriveService.show(KiteApp.app, "You have arrived", n.destination.name)
+            return
+        }
+        val m = n.nextManeuver
+        val turn = if (m == null) "To ${n.destination.name}" else "${Fmt.distance(p.distanceToNext)} · ${SpokenText.forScreen(m.instruction)}"
+        DriveService.show(KiteApp.app, turn, "Arrive ${Fmt.arrival(p.remainingSeconds)} · ${Fmt.distance(p.remainingMeters)} to go")
+    }
+
+    private fun tripCheck(n: Navigator) {
+        if (n.arrived) {
+            if (settings.trip != null) settings.trip = null
+            // Where you parked, without having to find the P button while getting out of the car.
+            if (!autoParked && n.route.mode == TravelMode.DRIVE && settings.autoParking && settings.parkingButton && userLatLng != null) {
+                autoParked = true
+                saveParking(quiet = true)
+            }
+        } else if (System.currentTimeMillis() - tripSavedAt > 60_000 || settings.trip?.stops?.size != n.stops.size) {
+            rememberTrip(n)
+        }
     }
 
     private fun followCamera(n: Navigator, f: Fix, animated: Boolean) {

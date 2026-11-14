@@ -19,14 +19,15 @@ public enum Valhalla {
     /** The limits along [line], and the roads it drives (with their limit where known). Nil when the server didn't answer. */
     /// [progress] gets the limits so far after each piece, so a long drive's first miles show straight away.
     public static func speedLimits(along line: [LatLng], progress: (@Sendable ([SpeedLimit]) async -> Void)? = nil) async
-        -> (limits: [SpeedLimit], ways: [Overpass.LimitWay])? {
-        guard line.count >= 2 else { return ([], []) }
+        -> (limits: [SpeedLimit], ways: [Overpass.LimitWay], entries: [RoundaboutEntry])? {
+        guard line.count >= 2 else { return ([], [], []) }
         let cum = Geo.cumulative(line)
         let total = cum.last ?? 0
         // In pieces of about 25 km: the server turns away very long traces, and placing each road on
         // a short piece of the line is quick.
         var merged: [SpeedLimit] = []
         var ways: [Overpass.LimitWay] = []
+        var entries: [RoundaboutEntry] = []
         var start = 0.0
         while start < total {
             let end = min(total, start + 25_000)
@@ -41,11 +42,12 @@ public enum Valhalla {
                 if merged.last.map({ $0.kmh != kmh }) ?? true { merged.append(SpeedLimit(startMeters: start + m, kmh: kmh)) }
             }
             ways += parsed.ways
+            entries += parsed.entries
             start = end
             // Unknown past what has been matched so far, not the last limit carried on.
             if start < total { await progress?(merged + [SpeedLimit(startMeters: start, kmh: nil)]) }
         }
-        return (merged, ways)
+        return (merged, ways, entries)
     }
 
     /** About one point every 15 m is plenty to match on, and keeps the request small. */
@@ -66,7 +68,7 @@ public enum Valhalla {
             "costing": "auto",
             "shape_match": "map_snap",
             "filters": ["attributes": ["edge.speed_limit", "edge.way_id", "edge.names", "edge.length", "edge.begin_shape_index",
-                                       "edge.end_shape_index", "shape"], "action": "include"],
+                                       "edge.end_shape_index", "edge.lane_count", "edge.roundabout", "shape"], "action": "include"],
         ]
         var r = URLRequest(url: endpoint)
         r.httpMethod = "POST"
@@ -77,7 +79,7 @@ public enum Valhalla {
     }
 
     /** Limit changes along the matched roads (meters from their start), the roads themselves, and their length. */
-    static func parse(_ data: Data) -> (limits: [SpeedLimit], ways: [Overpass.LimitWay], meters: Double)? {
+    static func parse(_ data: Data) -> (limits: [SpeedLimit], ways: [Overpass.LimitWay], meters: Double, entries: [RoundaboutEntry])? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let edges = root["edges"] as? [[String: Any]] else { return nil }
         let shape = (root["shape"] as? String).map { Geo.decodePolyline($0) } ?? []
@@ -86,7 +88,14 @@ public enum Valhalla {
         var along = 0.0
         // The last posted limit and the road it was on.
         var carried: (kmh: Double, names: Set<String>)?
-        for e in edges {
+        var entries: [RoundaboutEntry] = []
+        for (k, e) in edges.enumerated() {
+            // The road in to a roundabout: its lanes where it meets the circle.
+            if (e["roundabout"] as? Bool) != true, k + 1 < edges.count, (edges[k + 1]["roundabout"] as? Bool) == true,
+               let lanes = (e["lane_count"] as? NSNumber)?.intValue, (1...6).contains(lanes),
+               let b = (e["end_shape_index"] as? NSNumber)?.intValue, shape.indices.contains(b) {
+                entries.append(RoundaboutEntry(at: shape[b], lanes: lanes))
+            }
             // 0 is "not known"; Valhalla marks a variable or no limit with 255.
             let raw = (e["speed_limit"] as? NSNumber)?.doubleValue
             let mapped = Overpass.britishLimit(raw.flatMap { (1...200).contains($0) ? $0 : nil }, at: shape.first ?? LatLng(0, 0))
@@ -106,6 +115,12 @@ public enum Valhalla {
                 ways.append(Overpass.LimitWay(id: (e["way_id"] as? NSNumber)?.int64Value ?? 0, kmh: mapped, line: Array(shape[a...b])))
             }
         }
-        return (limits, ways, along)
+        return (limits, ways, along, entries)
     }
+}
+
+/** Where the route meets a roundabout, and how many lanes the road in has there (from the road matcher). */
+public struct RoundaboutEntry: Hashable, Sendable {
+    public var at: LatLng
+    public var lanes: Int
 }

@@ -187,7 +187,7 @@ fun KiteScreen(model: AppModel, activity: MainActivity) {
             title = { Text(if (cam.isALPR) "Plate reader" else "Surveillance camera") },
             text = { Text(details.ifEmpty { "Details not mapped in OpenStreetMap." }) })
     }
-    if (model.showLayers) LayersSheet { model.showLayers = false }
+    if (model.showLayers) LayersSheet(model.wazeLiveCount) { model.showLayers = false }
     if (model.addingStop) StopPicker(model)
     model.picking?.let { PlacePicker(model, it) }
     model.streetView?.let { sv -> StreetViewScreen(sv) { model.streetView = null } }

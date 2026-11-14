@@ -68,6 +68,24 @@ public enum Roundabouts {
     }
 
     /**
+     * The lanes of the road into each roundabout, from the road matcher, where OpenStreetMap's own
+     * answer hasn't given them: the public Overpass servers were down for much of 12 and 13 November
+     * 2026, and every roundabout fell back on a guess of 2 lanes. Nil when nothing changes.
+     */
+    public static func withEntryLanes(_ steps: [Maneuver], _ entries: [RoundaboutEntry]) -> [Maneuver]? {
+        var out = steps
+        var changed = false
+        for i in out.indices where out[i].type == .roundabout && !out[i].leavesRoundabout && out[i].roundabout != nil
+            && out[i].roundabout?.entryLanes == nil && out[i].roundabout?.mini != true {
+            guard let e = entries.min(by: { $0.at.distance(to: out[i].location) < $1.at.distance(to: out[i].location) }),
+                  e.at.distance(to: out[i].location) < 40 else { continue }
+            out[i].roundabout?.entryLanes = e.lanes
+            changed = true
+        }
+        return changed ? out : nil
+    }
+
+    /**
      * Makes every roundabout's picture point the way the route really leaves it. The router's sketch
      * needs at least one exit passed to place the circle, so a 1st exit had none and was drawn
      * spread evenly round, which put a straight-on 1st exit off to the left (Chestnut Avenue,

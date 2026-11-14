@@ -67,6 +67,24 @@ object Roundabouts {
     }
 
     /** Makes every roundabout's picture point the way the route really leaves it. */
+    /**
+     * The lanes of the road into each roundabout, from the road matcher, where OpenStreetMap's own
+     * answer hasn't given them (the Overpass servers were down for much of 12 and 13 November 2026,
+     * and every roundabout fell back on a guess of 2 lanes). Null when nothing changes.
+     */
+    fun withEntryLanes(steps: List<Maneuver>, entries: List<RoundaboutEntry>): MutableList<Maneuver>? {
+        var changed = false
+        val out = steps.map { m ->
+            val s = m.roundabout
+            if (m.type != ManeuverType.ROUNDABOUT || m.leavesRoundabout || s == null || s.entryLanes != null || s.mini) return@map m
+            val e = entries.minByOrNull { it.at.distanceTo(m.location) }
+            if (e == null || e.at.distanceTo(m.location) >= 40) return@map m
+            changed = true
+            m.copy(roundabout = s.copy(entryLanes = e.lanes))
+        }.toMutableList()
+        return if (changed) out else null
+    }
+
     fun settle(route: Route): Route {
         val r = route.deep()
         val cum = Geo.cumulative(route.polyline)

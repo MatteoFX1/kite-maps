@@ -65,7 +65,7 @@ fun DirectionsOverlay(model: AppModel) {
         val d = model.directions
         val full = maxHeight
         Box(Modifier.align(Alignment.BottomCenter)) {
-            BottomSheet(model.detent, { model.detent = it }, full, if (d?.transit == true) 200.dp else 300.dp,
+            BottomSheet(model.detent, { model.detent = it }, full, tripPeek(d),
                 topClearance = statusTop + 6.dp + cardHeight + 16.dp,
                 header = { TripHeader(model) }, content = { TripBody(model) })
         }
@@ -130,13 +130,111 @@ fun delayColor(r: Route, dark: Boolean): Color = when (r.delayLevel) {
     else -> Vela.accentText(dark)
 }
 
+/** Route cards show when there's a choice to make: up to three, the picked one lit. */
+fun routeCards(d: DirectionsState): List<Route> = if (!d.transit && d.route != null && d.current.size > 1) d.current.take(3) else emptyList()
+
+/** The place shuts before, or just as, this trip gets there. */
+fun closingWarning(d: DirectionsState): ClosingCheck.Warning? {
+    val r = d.route ?: return null
+    if (d.transit || d.reversed) return null
+    val c = Calendar.getInstance()
+    return ClosingCheck.warning(d.destination.statusText, c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE), r.durationSeconds)
+}
+
+/** How tall the sheet sits at rest, so everything above the fold (cards, Go, modes) is in view. */
+fun tripPeek(d: DirectionsState?): androidx.compose.ui.unit.Dp {
+    if (d == null) return 300.dp
+    if (d.transit) return 200.dp
+    val n = routeCards(d).size
+    val base = if (n == 0) 300 else 186 + n * 70
+    return (base + if (closingWarning(d) != null) 36 else 0).dp
+}
+
+@Composable
+private fun RouteOptionsButton(model: AppModel) {
+    val dark = LocalDark.current
+    val s = AppSettings
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        Box(Modifier.size(48.dp).clip(CircleShape).background(Vela.chip(dark)).tap { menu = true }, contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Tune, "Route options", tint = primaryText, modifier = Modifier.size(22.dp))
+        }
+        DropdownMenu(menu, { menu = false }) {
+            DropdownMenuItem(text = { Text("Avoid tolls") }, trailingIcon = { Checkbox(s.avoidTolls, null) },
+                onClick = { s.avoidTolls = !s.avoidTolls; model.reloadRoutes() })
+            DropdownMenuItem(text = { Text(if (Fmt.yards) "Avoid motorways" else "Avoid highways") }, trailingIcon = { Checkbox(s.avoidHighways, null) },
+                onClick = { s.avoidHighways = !s.avoidHighways; model.reloadRoutes() })
+        }
+    }
+}
+
+@Composable
+private fun GoButton(model: AppModel) {
+    val dark = LocalDark.current
+    Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).clip(CircleShape).background(Vela.accent(dark)).tap { model.startNavigation() },
+        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.Navigation, null, tint = Vela.onAccent(dark), modifier = Modifier.size(28.dp))
+        Text("Go", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Vela.onAccent(dark))
+    }
+}
+
+@Composable
+private fun ClosingLine(d: DirectionsState) {
+    val w = closingWarning(d) ?: return
+    val dark = LocalDark.current
+    val red = if (dark) Vela.closedDark else Vela.closed
+    Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(Icons.Filled.Schedule, null, tint = red, modifier = Modifier.size(20.dp))
+        Text(if (w.before) "Closes at ${w.closes}, before you arrive" else "Closes at ${w.closes}, just after you arrive",
+            fontSize = 17.sp, fontWeight = FontWeight.Bold, color = red, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** One route to choose: the road it uses, how its traffic is, and its time, big. */
+@Composable
+private fun RouteCard(r: Route, on: Boolean, pick: () -> Unit) {
+    val dark = LocalDark.current
+    val fg = if (on) Vela.onAccent(dark) else primaryText
+    Row(Modifier.fillMaxWidth().heightIn(min = 62.dp).clip(RoundedCornerShape(20.dp)).background(if (on) Vela.accent(dark) else Vela.chip(dark))
+        .tap(pick).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(r.summary?.let { "via $it" } ?: Fmt.distance(r.distanceMeters), fontSize = 19.sp, fontWeight = FontWeight.Bold, color = fg,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (r.mode == TravelMode.DRIVE && r.trafficSeconds != null) {
+                Text(if (r.delayLevel == 0) "Traffic is light" else "${Fmt.duration(r.durationSeconds - r.typicalSeconds)} slower than usual",
+                    fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (on) fg else delayColor(r, dark), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else {
+                Text(if (r.summary == null) "Arrive ${Fmt.arrival(r.durationSeconds)}" else Fmt.distance(r.distanceMeters), fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold, color = if (on) fg.copy(alpha = 0.85f) else Vela.muted(dark), maxLines = 1)
+            }
+        }
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(Fmt.duration(r.durationSeconds), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1, lineHeight = 26.sp)
+            Text("arrive ${Fmt.arrival(r.durationSeconds)}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = fg.copy(alpha = 0.8f), maxLines = 1)
+        }
+    }
+}
+
 /** The part of the trip sheet always in view: how long, how you go, and a giant Go. */
 @Composable
 fun TripHeader(model: AppModel) {
     val d = model.directions ?: return
     val dark = LocalDark.current
     val ctx = LocalContext.current
-    val s = AppSettings
+    val cards = routeCards(d)
+    if (cards.isNotEmpty()) {
+        // A choice of routes: the choices first, then Go, then the ways to travel.
+        Column(Modifier.padding(horizontal = 18.dp).padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            cards.forEachIndexed { i, r -> RouteCard(r, r.id == d.route?.id) { model.selectRoute(i) } }
+            Box(Modifier.padding(top = 2.dp)) { ClosingLine(d) }
+            if (!d.reversed) Box(Modifier.padding(top = 2.dp)) { GoButton(model) }
+            Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { ModeTabs(model, d) }
+                RouteOptionsButton(model)
+            }
+        }
+        return
+    }
     Column(Modifier.padding(horizontal = 18.dp).padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Box(Modifier.weight(1f)) {
@@ -165,29 +263,11 @@ fun TripHeader(model: AppModel) {
                 }
             }
             Spacer(Modifier.width(8.dp))
-            if (!d.transit) {
-                var menu by remember { mutableStateOf(false) }
-                Box {
-                    Box(Modifier.size(48.dp).clip(CircleShape).background(Vela.chip(dark)).tap { menu = true }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Tune, "Route options", tint = primaryText, modifier = Modifier.size(22.dp))
-                    }
-                    DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem(text = { Text("Avoid tolls") }, trailingIcon = { Checkbox(s.avoidTolls, null) },
-                            onClick = { s.avoidTolls = !s.avoidTolls; model.reloadRoutes() })
-                        DropdownMenuItem(text = { Text(if (Fmt.yards) "Avoid motorways" else "Avoid highways") }, trailingIcon = { Checkbox(s.avoidHighways, null) },
-                            onClick = { s.avoidHighways = !s.avoidHighways; model.reloadRoutes() })
-                    }
-                }
-            }
+            if (!d.transit) RouteOptionsButton(model)
         }
         ModeTabs(model, d)
-        if (!d.transit && !d.reversed && d.route != null) {
-            Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).clip(CircleShape).background(Vela.accent(dark)).tap { model.startNavigation() },
-                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Navigation, null, tint = Vela.onAccent(dark), modifier = Modifier.size(28.dp))
-                Text("Go", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Vela.onAccent(dark))
-            }
-        }
+        ClosingLine(d)
+        if (!d.transit && !d.reversed && d.route != null) GoButton(model)
     }
 }
 
@@ -234,6 +314,7 @@ fun TripBody(model: AppModel) {
         when {
             d.transit -> TransitBody(model, d)
             r != null -> {
+                if (r.mode == TravelMode.DRIVE) RouteCharges(r)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val best = d.current.minOfOrNull { it.durationSeconds } ?: r.durationSeconds
                     val lead = if (r.durationSeconds <= best + 30) (if (r.trafficSeconds != null) "Fastest route now" else "Best route") else "Slower route"
@@ -245,15 +326,11 @@ fun TripBody(model: AppModel) {
                     if (r.mode == TravelMode.DRIVE) Box(Modifier.padding(top = 4.dp)) { RouteWazeSummary(r) }
                     if (r.mode == TravelMode.DRIVE) Box(Modifier.padding(top = 6.dp)) { RouteLiveCams(model, r) }
                 }
-                Row(Modifier.height(52.dp).clip(CircleShape).background(Vela.tonal(dark)).tap { ctx.share(d.destination.shareUrl) }.padding(horizontal = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Filled.Share, null, tint = Vela.onTonal(dark), modifier = Modifier.size(20.dp))
-                    Text("Share place", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Vela.onTonal(dark))
-                }
-                if (d.current.size > 1) {
+                // More than three routes is rare; the ones past the cards stay reachable here.
+                if (d.current.size > 3) {
                     Column {
                         d.current.forEachIndexed { i, alt ->
-                            if (alt.id != r.id) {
+                            if (i >= 3 && alt.id != r.id) {
                                 Row(Modifier.fillMaxWidth().tap { model.selectRoute(i) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.AutoMirrored.Filled.CallSplit, null, tint = secondaryText, modifier = Modifier.width(22.dp))
                                     Spacer(Modifier.width(8.dp))
@@ -274,6 +351,11 @@ fun TripBody(model: AppModel) {
                 HorizontalDivider()
                 Text("Steps", fontSize = KType.headline, fontWeight = FontWeight.SemiBold, color = primaryText)
                 StepsList(r)
+                Row(Modifier.height(52.dp).clip(CircleShape).background(Vela.tonal(dark)).tap { ctx.share(d.destination.shareUrl) }.padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Filled.Share, null, tint = Vela.onTonal(dark), modifier = Modifier.size(20.dp))
+                    Text("Share place", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Vela.onTonal(dark))
+                }
             }
             d.mode in d.loading -> Row(Modifier.padding(vertical = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); Text("Finding routes…", color = secondaryText)
@@ -282,6 +364,29 @@ fun TripBody(model: AppModel) {
         }
     }
 }
+
+/** Pay-later charges on this route (Dartford, the Mersey bridges, London's zone): there's no barrier to remind you. */
+@Composable
+fun RouteCharges(route: Route) {
+    val dark = LocalDark.current
+    var charges by remember(route.id) { mutableStateOf(RouteChargesDemo.charges) }
+    LaunchedEffect(route.id) {
+        val found = withContext(Dispatchers.Default) { RoadCharges.on(route.polyline) }
+        if (found.isNotEmpty()) charges = found
+    }
+    charges.forEach { c ->
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Vela.chip(dark)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(Icons.Filled.CurrencyPound, null, tint = Color(0xFFE37400), modifier = Modifier.size(28.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Charge on this route: ${c.name}", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = primaryText)
+                Text(c.note, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Vela.muted(dark), lineHeight = 19.sp)
+            }
+        }
+    }
+}
+
+/** Made-up charges for the build's screenshots. */
+object RouteChargesDemo { var charges: List<RoadCharge> = emptyList() }
 
 /** The steps worth saying, each with the length of the quiet name changes after it added on. */
 @Composable

@@ -302,7 +302,10 @@ private fun SettingsMenu(open: (SettingsScreen) -> Unit) {
 private fun DrivingSettings() {
     val s = AppSettings
     SettingsGroup {
-        ToggleRow("Voice guidance", Icons.AutoMirrored.Filled.VolumeUp, 0x0F766E, s.voice) { s.voice = it }
+        ToggleRow("Voice guidance", Icons.AutoMirrored.Filled.VolumeUp, 0x0F766E, s.voice) {
+            // Switched here it means everything or nothing: "Alerts only" is the drive screen's button.
+            s.voice = it; s.voiceAlertsOnly = false
+        }
         RowDivider()
         PickRow("Default travel mode", Icons.Filled.DirectionsCar, 0x2563EB, s.defaultMode, TravelMode.entries.toList(), { it.label }) { s.defaultMode = it }
     }
@@ -367,6 +370,10 @@ private fun MapSettings() {
         PickRow("Distance units", Icons.Filled.Straighten, 0x0891B2, s.units, UnitsMode.entries.toList(), { it.label }) { s.units = it }
         RowDivider()
         ToggleRow("Parking button on the map", Icons.Filled.LocalParking, 0x2563EB, s.parkingButton) { s.parkingButton = it }
+        if (s.parkingButton) {
+            RowDivider()
+            ToggleRow("Save where I parked when a drive ends", Icons.Filled.DirectionsCar, 0x2563EB, s.autoParking) { s.autoParking = it }
+        }
     }
 }
 
@@ -536,7 +543,7 @@ private fun WazeSettings() {
 // Layers
 
 @Composable
-fun LayersSheet(close: () -> Unit) {
+fun LayersSheet(liveCount: Int? = null, close: () -> Unit) {
     val s = AppSettings
     val dark = LocalDark.current
     ModalBottomSheet(onDismissRequest = close, containerColor = Vela.sheet(dark), dragHandle = null) {
@@ -578,6 +585,14 @@ fun LayersSheet(close: () -> Unit) {
             }
             tiles.chunked(3).forEach { row ->
                 Row(Modifier.fillMaxWidth()) { row.forEach { t -> Box(Modifier.weight(1f)) { t() } }; repeat(3 - row.size) { Spacer(Modifier.weight(1f)) } }
+            }
+            // How many live Waze reports are on the map now (it used to be a label on the map itself).
+            if (liveCount != null && s.wazeOn && (s.wazeOnMap || s.wazeHeatmap)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF22C55E)))
+                    Text("Live from Waze · $liveCount report${if (liveCount == 1) "" else "s"} on the map", fontSize = KType.subheadline,
+                        fontWeight = FontWeight.SemiBold, color = secondaryText)
+                }
             }
             Spacer(Modifier.height(10.dp))
         }

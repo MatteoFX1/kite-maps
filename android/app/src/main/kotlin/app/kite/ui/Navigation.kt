@@ -82,9 +82,10 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
     // camera while you're over its limit, which always wins (that's the one that costs a fine).
     // An average check and a police aircraft aren't a spot on the road ahead, so they only get the
     // big card when nothing else is up.
+    // Traffic jams don't get a card up top: they show as a small line over the trip bar instead.
     val alertsUp = buildList {
         if (nav.arrived) return@buildList
-        val ahead = listOfNotNull(nav.cameraAhead?.let { NavAlert.CAMERA to it.meters }, nav.wazeAhead?.let { NavAlert.WAZE to it.meters })
+        val ahead = listOfNotNull(nav.cameraAhead?.let { NavAlert.CAMERA to it.meters }, nav.wazeAhead?.takeIf { it.alert.kind != WazeAlert.Kind.JAM }?.let { NavAlert.WAZE to it.meters })
         addAll(ahead.sortedBy { it.second }.map { it.first })
         val cam = nav.cameraAhead
         val limit = cam?.limitKmh ?: nav.speedLimitKmh
@@ -141,7 +142,7 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
             Column(Modifier.padding(horizontal = 12.dp).padding(top = 4.dp).animateContentSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (nav.arrived) {
                     ArrivedCard(nav.destination.name, if (nav.route.mode == TravelMode.DRIVE) ({ model.saveParking() }) else null,
-                        if (nav.wazeWarned > 0) "Waze drivers warned you about ${nav.wazeWarned} report${if (nav.wazeWarned == 1) "" else "s"} on the way" else null) {
+                        saved = model.autoParked, note = if (nav.wazeWarned > 0) "Waze drivers warned you about ${nav.wazeWarned} report${if (nav.wazeWarned == 1) "" else "s"} on the way" else null) {
                         model.endNavigation()
                     }
                 } else InstructionBanner(nav)
@@ -156,7 +157,26 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
                 if (others.isNotEmpty()) AlsoAheadPill(nav, others) { peek = others.first() }
                 // On a short phone with a warning card and lane arrows up there's no room for a third
                 // row: the card matters more, and the GPS and rerouting notes come back once it's gone.
+                if (Voice.missing && nav.voiceMode != VoiceMode.OFF && !nav.arrived && mainAlert == null) {
+                    // No voice on this phone (GrapheneOS can come without one): say so, with the way to fix it.
+                    Row(Modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp)).tap { Voice.openSettings(ctx) }.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.VolumeOff, null, tint = Vela.closed, modifier = Modifier.size(30.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("No voice on this phone", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = primaryText)
+                            Text("Kite can't speak until a text-to-speech app is installed (RHVoice from F-Droid is a free one). Tap to open the phone's voice settings.",
+                                fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Vela.muted(dark), lineHeight = 19.sp)
+                        }
+                    }
+                }
                 if (mainAlert != null && h < 700.dp) {
+                } else if (nav.estimating && !nav.arrived) {
+                    // In a tunnel Kite carries on along the route at the speed you went in: say it's a best guess.
+                    Row(Modifier.align(Alignment.CenterHorizontally).height(44.dp).glass(CircleShape).padding(horizontal = 18.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Filled.LocationOff, null, tint = primaryText)
+                        Text("No GPS · estimated", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = primaryText)
+                    }
                 } else if (nav.gpsLost && !nav.arrived) {
                     // In a tunnel the speed and the next turn stop moving: say why, so it doesn't look live.
                     Row(Modifier.align(Alignment.CenterHorizontally).height(44.dp).glass(CircleShape).padding(horizontal = 18.dp),
@@ -210,9 +230,15 @@ fun NavigationOverlay(model: AppModel, nav: Navigator) {
                     Text("Re-centre", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Vela.onAccent(dark))
                 }
             }
-            // Arriving answers the question: the trip bar's Done takes over.
-            AnimatedContent(confirmEnd && !nav.arrived, label = "tripbar") { asking ->
-                if (asking) EndTripCard(nav.destination.name, onKeep = { confirmEnd = false }, onEnd = { model.endNavigation() })
+            // A traffic jam ahead: small and calm over the trip bar, so the top stays for turns and cameras.
+            val jam = nav.wazeAhead?.takeIf { it.alert.kind == WazeAlert.Kind.JAM && !nav.arrived && !confirmEnd }
+            if (jam != null) TrafficLine(jam, Modifier.align(Alignment.CenterHorizontally).tap { nav.dismissWaze() })
+            // A faster way: two big buttons instead of the route just changing under you.
+            // Arriving answers the end-trip question: the trip bar's Done takes over.
+            val offer = nav.fasterOffer?.takeIf { !nav.arrived }
+            AnimatedContent(if (offer != null) 2 else if (confirmEnd && !nav.arrived) 1 else 0, label = "tripbar") { showing ->
+                if (showing == 2) (offer ?: nav.fasterOffer)?.let { FasterRouteCard(it, onKeep = { nav.keepRoute() }, onTake = { nav.takeFaster() }) }
+                else if (showing == 1) EndTripCard(nav.destination.name, onKeep = { confirmEnd = false }, onEnd = { model.endNavigation() })
                 else TripBar(nav, onEnd = { if (nav.arrived) model.endNavigation() else confirmEnd = true }, onSteps = { showSteps = true })
             }
         }
@@ -301,6 +327,23 @@ fun InstructionBanner(nav: Navigator) {
     val leftTraffic = Geo.drivesOnLeft(m?.location ?: LatLng(0.0, 0.0))
     val refs = RoadRefs.find(m?.instruction ?: "")
     val p = nav.progress
+    // A long way to the next turn (over 2 miles, on a motorway say): one slim line, and the map gets
+    // the room. It grows back to full size well before the first spoken heads-up.
+    if (nav.route.mode == TravelMode.DRIVE && p != null && p.distanceToNext > 3200 && m?.type != ManeuverType.ARRIVE) {
+        val head = Banner.headline(m)
+        Row(Modifier.fillMaxWidth()) {
+            Row(Modifier.shadow(10.dp, CircleShape).clip(CircleShape).background(Vela.navGreen).height(56.dp).padding(horizontal = 18.dp)
+                .clearAndSetSemantics { contentDescription = "In ${Fmt.distance(p.distanceToNext)}, $head" },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(maneuverIcon(m?.type ?: ManeuverType.STRAIGHT), null, tint = Color.White, modifier = Modifier.size(30.dp))
+                Text(Fmt.distance(p.distanceToNext), fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
+                if (refs.isNotEmpty()) refs.take(2).forEach { RoadShield(it) }
+                else Text(Banner.split(head)?.second ?: head, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            }
+        }
+        return
+    }
     val shape = RoundedCornerShape(28.dp)
     Column(Modifier.fillMaxWidth().shadow(12.dp, shape).clip(shape).background(Vela.navGreen)) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -399,6 +442,38 @@ fun SpeedLimitSign(kmh: Double, size: Dp = 56.dp) {
             Text("SPEED\nLIMIT", fontSize = (size.value * 0.14f).sp, fontWeight = FontWeight.Bold, color = Color.Black, textAlign = TextAlign.Center,
                 lineHeight = (size.value * 0.15f).sp)
             Text("$mph", fontSize = (size.value * 0.4f).sp, fontWeight = FontWeight.ExtraBold, color = Color.Black, lineHeight = (size.value * 0.42f).sp)
+        }
+    }
+}
+
+/** A faster route found on the way, in place of the trip bar: keep yours or take it. Left alone, it's taken. */
+@Composable
+fun FasterRouteCard(offer: FasterOffer, onKeep: () -> Unit, onTake: () -> Unit) {
+    val dark = LocalDark.current
+    // How much of the wait is left, as the bar under the words.
+    val left = remember(offer) { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(offer) {
+        left.animateTo(0f, tween(max(100L, offer.untilMillis - System.currentTimeMillis()).toInt().coerceAtMost(60_000),
+            easing = androidx.compose.animation.core.LinearEasing))
+    }
+    Column(Modifier.padding(horizontal = 12.dp).padding(bottom = 4.dp).fillMaxWidth().glass(RoundedCornerShape(28.dp)).padding(18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Faster route · saves ${offer.minutes} min", fontSize = 23.sp, fontWeight = FontWeight.ExtraBold, color = primaryText, maxLines = 1,
+                overflow = TextOverflow.Ellipsis)
+            Text((offer.via?.let { "via $it · " } ?: "") + "taking it in a few seconds", fontSize = 16.sp, fontWeight = FontWeight.Medium,
+                color = Vela.muted(dark), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Box(Modifier.fillMaxWidth().height(4.dp)) {
+            Box(Modifier.fillMaxWidth(left.value).fillMaxHeight().clip(CircleShape).background(Vela.accent(dark)))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.weight(1f).height(60.dp).clip(CircleShape).background(Vela.chip(dark)).tap(onKeep), contentAlignment = Alignment.Center) {
+                Text("Keep mine", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = primaryText)
+            }
+            Box(Modifier.weight(1f).height(60.dp).clip(CircleShape).background(Vela.accent(dark)).tap(onTake), contentAlignment = Alignment.Center) {
+                Text("Take it", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Vela.onAccent(dark))
+            }
         }
     }
 }
@@ -505,7 +580,7 @@ internal fun distanceParts(m: Double): Pair<String, String> {
 }
 
 @Composable
-fun ArrivedCard(name: String, onPark: (() -> Unit)?, note: String?, done: () -> Unit) {
+fun ArrivedCard(name: String, onPark: (() -> Unit)?, saved: Boolean = false, note: String?, done: () -> Unit) {
     var parked by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(28.dp)
     Column(Modifier.fillMaxWidth().shadow(12.dp, shape).clip(shape).background(Vela.navGreen).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -515,10 +590,15 @@ fun ArrivedCard(name: String, onPark: (() -> Unit)?, note: String?, done: () -> 
                 Text("You've arrived", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
                 Text(name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 3)
                 if (note != null) Text(note, fontSize = KType.subheadline, color = Color.White.copy(alpha = 0.85f), maxLines = 2)
+                // The parking spot was already saved by itself.
+                if (saved) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Filled.LocalParking, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Text("Parking spot saved", fontSize = KType.subheadline, fontWeight = FontWeight.SemiBold, color = Color.White)
+                }
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.End)) {
-            if (onPark != null && !parked) {
+            if (onPark != null && !parked && !saved) {
                 Box(Modifier.size(56.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f)).tap { onPark(); parked = true }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.LocalParking, "Save parking", tint = Color.White, modifier = Modifier.size(26.dp))
                 }
@@ -584,6 +664,20 @@ val WazeAlert.reportedText: String
         }
         return "Reported $w"
     }
+
+/** A traffic jam ahead, kept small and calm just over the trip bar: "Standstill traffic in 140 yd". */
+@Composable
+fun TrafficLine(ahead: WazeAhead, modifier: Modifier = Modifier) {
+    val dark = LocalDark.current
+    val ink = if (dark) hex(0xFF8A80) else Vela.closed
+    Row(modifier.height(40.dp).shadow(5.dp, CircleShape).clip(CircleShape)
+        .background(if (dark) hex(0x0F172A).copy(alpha = 0.92f) else Color.White.copy(alpha = 0.95f)).padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        WazeBadge(ahead.alert.kind, 22.dp)
+        Text("${ahead.alert.title} in ${Fmt.distance(ahead.meters)}", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = ink,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
 
 /** A Waze report on the road ahead, as loud as the camera card, in the report's own color. */
 @Composable

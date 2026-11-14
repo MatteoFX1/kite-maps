@@ -14,6 +14,9 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import app.kite.core.SpokenText
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import java.util.Locale
 
 /**
@@ -34,15 +37,25 @@ object Voice {
     private var speaking = 0
     /** Screenshot runs: never a sound. */
     var silent = false
+    /**
+     * The phone has nothing to speak with: no text-to-speech app, or none with an English voice.
+     * GrapheneOS can come like that. The drive screen says so, instead of a drive in silence.
+     */
+    var missing by mutableStateOf(false)
 
     fun warmUp() {
         if (tts != null) return
         tts = TextToSpeech(KiteApp.app) { status ->
-            if (status != TextToSpeech.SUCCESS) return@TextToSpeech
+            if (status != TextToSpeech.SUCCESS) { noVoice(); return@TextToSpeech }
             val t = tts ?: return@TextToSpeech
             t.setAudioAttributes(attrs)
             val lang = Locale.getDefault().takeIf { it.language == "en" } ?: if (Fmt.yards) Locale.UK else Locale.US
-            if (t.setLanguage(lang) < TextToSpeech.LANG_AVAILABLE) t.setLanguage(Locale.UK)
+            val ok = runCatching {
+                t.setLanguage(lang) >= TextToSpeech.LANG_AVAILABLE || t.setLanguage(Locale.UK) >= TextToSpeech.LANG_AVAILABLE ||
+                    t.setLanguage(Locale.US) >= TextToSpeech.LANG_AVAILABLE
+            }.getOrDefault(false)
+            if (!ok) { noVoice(); return@TextToSpeech }
+            main.post { missing = false }
             // The best-sounding voice installed for that language that works offline.
             runCatching {
                 t.voices?.filter { it.locale == t.voice?.locale && !it.isNetworkConnectionRequired && "notinstalled" !in it.features }
@@ -61,6 +74,24 @@ object Voice {
                 pending.clear()
             }
         }
+    }
+
+    /** Nothing to speak with: say so on screen, and try again from scratch next time (one may be installed by then). */
+    private fun noVoice() {
+        main.post {
+            Log.i("KiteVoice", "no text-to-speech voice")
+            runCatching { tts?.shutdown() }
+            tts = null
+            ready = false
+            pending.clear()
+            missing = true
+        }
+    }
+
+    /** The phone's own page for choosing a text-to-speech voice. */
+    fun openSettings(c: Context) {
+        val open = { action: String -> runCatching { c.startActivity(android.content.Intent(action).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess }
+        if (!open("com.android.settings.TTS_SETTINGS")) open(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
     }
 
     private fun finished() {

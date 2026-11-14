@@ -71,7 +71,7 @@ fun BrowseOverlay(model: AppModel) {
 
         // Map buttons: layers, parking and the compass on the right, under the top cards.
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp)) {
-            Row(Modifier.fillMaxWidth().padding(top = if (idle) 176.dp else 86.dp)) {
+            Row(Modifier.fillMaxWidth().padding(top = if (idle) (if (model.resumeOffer != null) 276.dp else 176.dp) else 86.dp)) {
                 Spacer(Modifier.weight(1f))
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     MapFab(Icons.Outlined.Layers) { model.showLayers = true }
@@ -122,6 +122,9 @@ fun BrowseOverlay(model: AppModel) {
             val n = model.notice
             if (n != null && !focused) NoticeBanner(n) { model.notice = null }
             if (!focused) StatusCards()
+            // Kite closed in the middle of a drive: one big button to carry on.
+            val trip = model.resumeOffer
+            if (idle && trip != null) ResumeCard(trip, onGo = { model.resumeTrip() }, onClose = { model.dismissResume() })
         }
     }
     // The back button closes things one at a time, like the iPhone's back arrows.

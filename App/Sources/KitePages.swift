@@ -42,21 +42,27 @@ struct KiteDock: View {
     }
 }
 
-/** Bottom left of the map, with Waze on: the heat map's key, the police risk here and how many live reports are in view. */
+/**
+ * Bottom left of the map, with Waze on. One label at most, so the map stays clear: the police risk
+ * here, and only when it isn't low. The heat map's key shows for a few seconds after the heat map
+ * is switched on, then goes; the count of live reports is on the Layers screen.
+ */
 struct WazeMapChips: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var settings = AppSettings.shared
     @Environment(\.colorScheme) private var scheme
+    /** The heat map was just switched on: its key is showing. */
+    @State private var legend = false
 
     var body: some View {
         if settings.wazeOn {
             VStack(alignment: .leading, spacing: 8) {
-                if settings.wazeHeatmap, settings.wazePolice { HeatLegend() }
-                if settings.policeRisk, let risk = model.areaRisk {
+                if legend, settings.wazeHeatmap, settings.wazePolice { HeatLegend().transition(.opacity) }
+                if settings.policeRisk, let risk = model.areaRisk, PoliceRisk.level(risk) != .low {
                     let level = PoliceRisk.level(risk)
                     HStack(spacing: 8) {
                         Image(systemName: "shield.lefthalf.filled").font(.system(size: 17, weight: .bold))
-                        Text("Local report activity: \(level.rawValue.capitalized)").font(.system(size: 16, weight: .bold))
+                        Text("Police risk: \(level.rawValue.capitalized)").font(.system(size: 16, weight: .bold))
                     }
                     .foregroundColor(level == .medium ? Color(hex: 0x1F1300) : .white)
                     .padding(.horizontal, 14).frame(height: 44)
@@ -64,15 +70,14 @@ struct WazeMapChips: View {
                     .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
                     .accessibilityElement(children: .combine)
                 }
-                if let n = model.wazeLiveCount, settings.wazeOnMap || settings.wazeHeatmap {
-                    HStack(spacing: 8) {
-                        Circle().fill(Color(hex: 0x22C55E)).frame(width: 10, height: 10)
-                        Text("Live from Waze · \(n) report\(n == 1 ? "" : "s")").font(.system(size: 14, weight: .semibold))
-                    }
-                    .padding(.horizontal, 12).frame(height: 34)
-                    .glass(Capsule())
-                    .accessibilityElement(children: .combine)
-                }
+            }
+            .onChange(of: settings.wazeHeatmap) { on in withAnimation { legend = on } }
+            // Six seconds once the Layers screen is out of the way, so the key is actually seen.
+            .task(id: "\(legend)\(model.showLayers)") {
+                guard legend, !model.showLayers else { return }
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.4)) { legend = false }
             }
         }
     }
