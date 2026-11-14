@@ -25,6 +25,15 @@ A new, lighter look for the map and the driving screen, picked by Matteo from th
 - **Home map:** a slimmer search bar, smaller map buttons, and Map, Saved and Settings as three
   icons in one small pill with a dot under the page you're on.
 
+Speed camera fixes, after Matteo saw cameras that had been taken away:
+
+- **Cameras marked "not working" are no longer warned about.** The free map (OpenStreetMap) keeps
+  some switched-off cameras with a note saying so; Kite ignored the note. Five on the M27 near
+  Southampton were like this.
+- **Kite forgets a camera once the map drops it.** Kite remembers the cameras on roads you've
+  driven so they show the moment a drive starts, but it never forgot one. Now a fresh answer for
+  a stretch of road clears any remembered camera that is no longer there.
+
 ## 0.7.12 (iPhone and Android)
 
 Fixes from Matteo's drive on 0.7.11 (Wide Lane, Southampton), checked on 80 junctions.

@@ -155,6 +155,33 @@ class CameraTests {
         assertEquals(listOf(48.3), Overpass.speedLimits(known.ways, line).mapNotNull { it.kmh })
     }
 
+    @Test fun aCameraTheMapDroppedIsForgotten() {
+        val cache = RoadCache(null)
+        val line = listOf(ll(50.899, -1.400), ll(50.906, -1.400))
+        cache.add(emptyList(), listOf(
+            RoadCamera(3, RoadCamera.Kind.SPEED, ll(50.902, -1.4001)),
+            RoadCamera(4, RoadCamera.Kind.SPEED, ll(50.904, -1.4001)),
+            RoadCamera(5, RoadCamera.Kind.PLATE, ll(50.903, -1.4001)),
+            // On a road a road beside it, outside what the answer covered: the answer for this stretch says nothing about it.
+            RoadCamera(6, RoadCamera.Kind.SPEED, ll(50.903, -1.4018)),
+        ), emptyList())
+        // A live answer for the stretch that only asked about speed cameras and found number 4.
+        cache.forgetCameras(line, setOf(4L), speed = true, plate = false)
+        assertEquals(listOf(4L, 5L, 6L), cache.along(line).cameras.map { it.id }.sorted())
+    }
+
+    @Test fun camerasMarkedNotWorkingAreLeftOut() {
+        val json = """
+        {"elements":[
+         {"type":"node","id":1,"lat":50.9,"lon":-1.3,"tags":{"highway":"speed_camera","active":"no","note":"Not currently operational"}},
+         {"type":"node","id":2,"lat":50.9,"lon":-1.3,"tags":{"highway":"speed_camera","active":"yes"}},
+         {"type":"node","id":3,"lat":50.9,"lon":-1.3,"tags":{"highway":"speed_camera","disused":"yes"}},
+         {"type":"node","id":4,"lat":50.9,"lon":-1.3,"tags":{"highway":"speed_camera","maxspeed":"70 mph"}},
+         {"type":"node","id":5,"lat":50.9,"lon":-1.3,"tags":{"highway":"speed_camera","operational_status":"decommissioned"}}]}
+        """
+        assertEquals(listOf(2L, 4L), Overpass.parse(b(json))?.map { it.id })
+    }
+
     @Test fun nothingKnownFarAway() {
         val cache = RoadCache(null)
         cache.add(listOf(Overpass.LimitWay(1, 50.0, listOf(ll(0.0, 0.0), ll(0.005, 0.0)))), emptyList(), emptyList())

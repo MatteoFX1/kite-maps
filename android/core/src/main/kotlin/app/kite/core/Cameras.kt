@@ -106,6 +106,8 @@ object Overpass {
             zones += averageZones(data, line)
             signals += lights.map { it.at }
             RoadCache.shared.add(w, found, lights)
+            // This stretch's answer is the whole truth about its cameras: one the map has dropped goes.
+            RoadCache.shared.forgetCameras(piece, found.map { it.id }.toSet(), speed, plate)
         }
         if (!answered) return null
         return AlongRoute(cams.values.toList(), ways, CameraAlerts.merge(zones, emptyList()), signalsOnRoute(signals, line))
@@ -323,6 +325,19 @@ object Overpass {
         return remark.contains("runtime error") || remark.contains("timed out") || remark.contains("out of memory")
     }
 
+    /**
+     * A speed camera the map itself says isn't working: `active=no`, `disused=yes` and the like
+     * (five on the M27 around Southampton were still warned about).
+     */
+    fun notWorking(tags: Map<String, String>): Boolean {
+        fun no(k: String) = tags[k]?.lowercase() in setOf("no", "false")
+        fun yes(k: String) = tags[k]?.lowercase() in setOf("yes", "true")
+        if (no("active") || no("operational") || no("working")) return true
+        if (yes("disused") || yes("abandoned") || yes("removed") || yes("demolished") || yes("dummy")) return true
+        return tags["operational_status"]?.lowercase() in
+            setOf("closed", "disused", "abandoned", "decommissioned", "removed", "inactive", "non-operational")
+    }
+
     fun parse(data: ByteArray): List<RoadCamera>? {
         val elements = Json.obj(data)?.get("elements").asMaps() ?: return null
         return elements.mapNotNull { e ->
@@ -332,6 +347,8 @@ object Overpass {
             if (tags["highway"] == "traffic_signals") return@mapNotNull null
             val id = e["id"].long() ?: 0
             val plate = tags["surveillance:type"] == "ALPR"
+            // The map marks a camera that's switched off or taken away without deleting it.
+            if (!plate && notWorking(tags)) return@mapNotNull null
             val at = LatLng(lat, lon)
             RoadCamera(
                 id = id, kind = if (plate) RoadCamera.Kind.PLATE else RoadCamera.Kind.SPEED, location = at,

@@ -141,6 +141,8 @@ public enum Overpass {
             zones += averageZones(data, on: line)
             signals += lights.map(\.at)
             RoadCache.shared.add(ways: w, cameras: found, signals: lights)
+            // This stretch's answer is the whole truth about its cameras: one the map has dropped goes.
+            RoadCache.shared.forgetCameras(along: piece, except: Set(found.map(\.id)), speed: speed, plate: plate)
         }
         guard answered else { return nil }
         return (Array(cams.values), ways, CameraAlerts.merge(zones, []), signalsOnRoute(signals, line: line))
@@ -375,6 +377,19 @@ public enum Overpass {
         return remark.contains("runtime error") || remark.contains("timed out") || remark.contains("out of memory")
     }
 
+    /**
+     * A speed camera the map itself says isn't working: `active=no`, `disused=yes` and the like
+     * (five on the M27 around Southampton were still warned about).
+     */
+    static func notWorking(_ tags: [String: String]) -> Bool {
+        func no(_ k: String) -> Bool { ["no", "false"].contains(tags[k]?.lowercased() ?? "") }
+        func yes(_ k: String) -> Bool { ["yes", "true"].contains(tags[k]?.lowercased() ?? "") }
+        if no("active") || no("operational") || no("working") { return true }
+        if yes("disused") || yes("abandoned") || yes("removed") || yes("demolished") || yes("dummy") { return true }
+        let status = tags["operational_status"]?.lowercased() ?? ""
+        return ["closed", "disused", "abandoned", "decommissioned", "removed", "inactive", "non-operational"].contains(status)
+    }
+
     static func parse(_ data: Data) -> [RoadCamera]? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let elements = root["elements"] as? [[String: Any]] else { return nil }
@@ -385,6 +400,8 @@ public enum Overpass {
             if tags["highway"] == "traffic_signals" { return nil }
             let id = (e["id"] as? NSNumber)?.int64Value ?? 0
             let plate = tags["surveillance:type"] == "ALPR"
+            // The map marks a camera that's switched off or taken away without deleting it.
+            if !plate, notWorking(tags) { return nil }
             return RoadCamera(id: id, kind: plate ? .plate : .speed, location: LatLng(lat, lon),
                               operatorName: plate ? (tags["operator"] ?? tags["manufacturer"]) : nil,
                               maxspeedKmh: plate ? nil : britishLimit(maxspeedKmh(tags["maxspeed"]), at: LatLng(lat, lon)),
