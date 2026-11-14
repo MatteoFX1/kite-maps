@@ -302,7 +302,10 @@ private fun SettingsMenu(open: (SettingsScreen) -> Unit) {
 private fun DrivingSettings() {
     val s = AppSettings
     SettingsGroup {
-        ToggleRow("Voice guidance", Icons.AutoMirrored.Filled.VolumeUp, 0x0F766E, s.voice) { s.voice = it }
+        ToggleRow("Voice guidance", Icons.AutoMirrored.Filled.VolumeUp, 0x0F766E, s.voice) {
+            // Switched here it means everything or nothing: "Alerts only" is the drive screen's button.
+            s.voice = it; s.voiceAlertsOnly = false
+        }
         RowDivider()
         PickRow("Default travel mode", Icons.Filled.DirectionsCar, 0x2563EB, s.defaultMode, TravelMode.entries.toList(), { it.label }) { s.defaultMode = it }
     }

@@ -163,7 +163,10 @@ struct SettingsView: View {
     private var drivingPage: some View {
         Form {
             Section {
-                Toggle(isOn: $settings.voice) { SettingLabel("Voice guidance", icon: "speaker.wave.2.fill", color: 0x0F766E) }
+                // Switched here it means everything or nothing: "Alerts only" is the drive screen's button.
+                Toggle(isOn: Binding(get: { settings.voice }, set: { settings.voice = $0; settings.voiceAlertsOnly = false })) {
+                    SettingLabel("Voice guidance", icon: "speaker.wave.2.fill", color: 0x0F766E)
+                }
                 Picker(selection: $settings.defaultMode) {
                     ForEach(TravelMode.allCases) { Text($0.label).tag($0) }
                 } label: { SettingLabel("Default travel mode", icon: "car.fill", color: 0x2563EB) }
