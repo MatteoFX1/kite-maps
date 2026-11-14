@@ -105,7 +105,7 @@ object MapIcons {
         cv.save(); cv.translate(0f, 2f)
         cv.drawPath(p, paint(c(0x000000, 0.18f), Paint.Style.STROKE, 11f))
         cv.restore()
-        cv.drawPath(p, paint(c(0x0F766E), Paint.Style.STROKE, 8f))
+        cv.drawPath(p, paint(Color.WHITE, Paint.Style.STROKE, 4f))
         cv.drawPath(p, paint(Color.WHITE))
         cv.drawPath(p, paint(Color.WHITE, Paint.Style.STROKE, 2.5f))
     }
@@ -187,11 +187,8 @@ object MapIcons {
         cv.drawOval(RectF(4f, 4f, 18f, 18f), paint(c(0x14B8A6), Paint.Style.STROKE, 4f))
     }
 
-    /** The car while navigating, Waze-style in Kite's teal. */
-    fun puck(dark: Boolean) = image(76f, 76f) { cv ->
-        val disc = RectF(6f, 6f, 70f, 70f)
-        cv.drawOval(disc, paint(if (dark) c(0x0F172A, 0.6f) else c(0xFFFFFF, 0.75f)))
-        cv.drawOval(disc, paint(c(0x2DD4BF, 0.75f), Paint.Style.STROKE, 2.5f))
+    /** The car while navigating, in Kite's teal: just the arrow, with no disc or ring around it (the light look). */
+    fun puck(@Suppress("UNUSED_PARAMETER") dark: Boolean) = image(76f, 76f) { cv ->
         val outline = Path().apply { moveTo(38f, 13f); lineTo(58f, 60f); lineTo(38f, 50f); lineTo(18f, 60f); close() }
         cv.save(); cv.translate(0f, 2f)
         cv.drawPath(outline, paint(c(0x000000, 0.2f), Paint.Style.STROKE, 8f))

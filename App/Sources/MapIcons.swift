@@ -56,7 +56,7 @@ enum MapIcons {
     }
 
     /** Vela's speed camera badge: amber rounded square, head-on camera with a big lens and flash slit. */
-    /** The head of the turn arrow drawn on the road: chunky white with a dark teal edge and a soft shadow, pointing up. */
+    /** The head of the turn arrow drawn on the road: plain white with a soft shadow, pointing up. */
     static func turnHead() -> UIImage {
         let size = CGSize(width: 44, height: 40)
         return UIGraphicsImageRenderer(size: size).image { ctx in
@@ -67,8 +67,8 @@ enum MapIcons {
             p.close()
             p.lineJoinStyle = .round
             ctx.cgContext.setShadow(offset: CGSize(width: 0, height: 2), blur: 3, color: UIColor.black.withAlphaComponent(0.4).cgColor)
-            UIColor(hex: 0x0F766E).setStroke()
-            p.lineWidth = 8
+            UIColor.white.setStroke()
+            p.lineWidth = 4
             p.stroke()
             ctx.cgContext.setShadow(offset: .zero, blur: 0, color: nil)
             UIColor.white.setFill()
@@ -227,20 +227,13 @@ enum MapIcons {
     }
 
     /**
-     * The car while navigating, Waze-style in Kite's teal: a chunky teal arrow with a white rim and a
-     * darker right half so it reads as raised, sitting on a disc with a teal ring (navy at night,
-     * white by day).
+     * The car while navigating, in Kite's teal: a chunky teal arrow with a white rim and a darker
+     * right half so it reads as raised. Nothing around it (the light look has no disc or ring).
      */
     static func puck(dark: Bool) -> UIImage {
         let size = CGSize(width: 76, height: 76)
         return UIGraphicsImageRenderer(size: size).image { ctx in
             let g = ctx.cgContext
-            let disc = UIBezierPath(ovalIn: CGRect(x: 6, y: 6, width: 64, height: 64))
-            (dark ? UIColor(hex: 0x0F172A, alpha: 0.6) : UIColor(white: 1, alpha: 0.75)).setFill()
-            disc.fill()
-            UIColor(hex: 0x2DD4BF, alpha: 0.75).setStroke()
-            disc.lineWidth = 2.5
-            disc.stroke()
             let tip = CGPoint(x: 38, y: 13), left = CGPoint(x: 18, y: 60), right = CGPoint(x: 58, y: 60), notch = CGPoint(x: 38, y: 50)
             let outline = UIBezierPath()
             outline.move(to: tip); outline.addLine(to: right); outline.addLine(to: notch); outline.addLine(to: left); outline.close()

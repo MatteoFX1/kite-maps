@@ -62,6 +62,36 @@ public final class RoadCache: @unchecked Sendable {
         }
     }
 
+    /**
+     * Drops remembered cameras within [meters] of [line] that a live answer for that stretch no
+     * longer holds ([except] is what it did hold): a camera taken off the map, or marked not
+     * working, used to be warned about at the start of every later drive. Only the kinds that
+     * were asked for, and a little inside the 150 m the question covers.
+     */
+    public func forgetCameras(along line: [LatLng], except kept: Set<Int64>, speed: Bool, plate: Bool, meters: Double = 100) {
+        guard line.count >= 2, speed || plate else { return }
+        let lats = line.map(\.lat), lngs = line.map(\.lng)
+        let pad = 0.003
+        let s0 = lats.min()! - pad, n0 = lats.max()! + pad, w0 = lngs.min()! - pad, e0 = lngs.max()! + pad
+        let cum = Geo.cumulative(line)
+        lock.lock()
+        var s = loaded()
+        let gone = s.cameras.values.filter { c in
+            !kept.contains(c.id) && (c.kind == .speed ? speed : plate)
+                && (s0...n0).contains(c.location.lat) && (w0...e0).contains(c.location.lng)
+                && Geo.project(c.location, on: line, cumulative: cum).offset <= meters
+        }
+        guard !gone.isEmpty else { lock.unlock(); return }
+        for c in gone { s.cameras[c.id] = nil }
+        store = s
+        let start = !saving && file != nil
+        if start { saving = true }
+        lock.unlock()
+        if start {
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 3) { self.save() }
+        }
+    }
+
     /** Writes now, rather than a few seconds after the last answer. */
     public func flush() { save() }
 

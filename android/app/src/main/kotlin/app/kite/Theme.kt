@@ -48,8 +48,6 @@ object Vela {
     val teal = Color(0xFF0F766E)
     val tealLight = Color(0xFF2DD4BF)
     val routeBlue = Color(0xFF2F7BFF)
-    val navGreen = Color(0xFF0F766E)
-    val navBand = Color(0xFF0B4F49)
     val open = Color(0xFF16A34A)
     val openDark = Color(0xFF4ADE80)
     val closed = Color(0xFFDC2626)
@@ -310,21 +308,22 @@ fun maneuverIcon(t: ManeuverType): ImageVector = when (t) {
     ManeuverType.ROUNDABOUT -> Icons.Filled.RoundaboutLeft
 }
 
-/** Frosted look for everything floating over the map: the surface color, a thin bright edge and a soft shadow. */
+/**
+ * See-through look for everything floating over the map (the light look): the surface color with the
+ * map showing faintly through it and a thin bright edge. No shadow: one would show through the glass.
+ */
 @Composable
 fun Modifier.glass(shape: Shape): Modifier {
     val dark = LocalDark.current
     return this
-        .shadow(if (dark) 10.dp else 8.dp, shape, ambientColor = Color.Black.copy(alpha = if (dark) 0.45f else 0.16f),
-            spotColor = Color.Black.copy(alpha = if (dark) 0.45f else 0.16f))
         .clip(shape)
-        .background(Vela.surface(dark).copy(alpha = if (dark) 0.94f else 0.96f))
-        .border(0.75.dp, Color.White.copy(alpha = if (dark) 0.08f else 0.5f), shape)
+        .background(Vela.surface(dark).copy(alpha = if (dark) 0.84f else 0.88f))
+        .border(0.75.dp, Color.White.copy(alpha = if (dark) 0.10f else 0.6f), shape)
 }
 
 /** Round buttons floating on the map (layers, location, compass). */
 @Composable
-fun MapFab(icon: ImageVector, tint: Color? = null, size: Dp = 56.dp, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun MapFab(icon: ImageVector, tint: Color? = null, size: Dp = 48.dp, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(modifier.size(size).glass(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, null, tint = tint ?: primaryText, modifier = Modifier.size(size * 0.46f))
     }

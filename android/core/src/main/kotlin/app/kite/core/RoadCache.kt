@@ -82,6 +82,39 @@ class RoadCache(private val file: File? = defaultFile) {
         }
     }
 
+    /**
+     * Drops remembered cameras within [meters] of [line] that a live answer for that stretch no
+     * longer holds ([kept] is what it did hold): a camera taken off the map, or marked not working,
+     * used to be warned about at the start of every later drive. Only the kinds that were asked
+     * for, and a little inside the 150 m the question covers.
+     */
+    fun forgetCameras(line: List<LatLng>, kept: Set<Long>, speed: Boolean, plate: Boolean, meters: Double = 100.0) {
+        if (line.size < 2 || !(speed || plate)) return
+        val pad = 0.003
+        val s0 = line.minOf { it.lat } - pad
+        val n0 = line.maxOf { it.lat } + pad
+        val w0 = line.minOf { it.lng } - pad
+        val e0 = line.maxOf { it.lng } + pad
+        val cum = Geo.cumulative(line)
+        var start: Boolean
+        synchronized(lock) {
+            val s = loaded()
+            val gone = s.cameras.values.filter { c ->
+                c.id !in kept && (if (c.kind == RoadCamera.Kind.SPEED) speed else plate) &&
+                    c.location.lat in s0..n0 && c.location.lng in w0..e0 &&
+                    Geo.project(c.location, line, cum).offset <= meters
+            }
+            if (gone.isEmpty()) return
+            for (c in gone) s.cameras.remove(c.id)
+            start = !saving && file != null
+            if (start) saving = true
+        }
+        if (start) thread(isDaemon = true) {
+            Thread.sleep(3000)
+            save()
+        }
+    }
+
     /** Writes now, rather than a few seconds after the last answer. */
     fun flush() = save()
 

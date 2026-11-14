@@ -154,33 +154,34 @@ fun BottomSheet(
     }
 }
 
-/** The bar along the bottom: Map, Saved and Settings, each a big target. */
+/**
+ * The bar along the bottom: Map, Saved and Settings as three icons in one slim see-through pill,
+ * with a dot under the page you're on. Each is still a big target (72 by 60).
+ */
 @Composable
 fun KiteDock(model: AppModel, modifier: Modifier = Modifier) {
     val dark = LocalDark.current
-    Row(
-        modifier.navigationBarsPadding().padding(horizontal = 12.dp).padding(bottom = 10.dp)
-            .fillMaxWidth().height(80.dp).glass(RoundedCornerShape(28.dp)),
-    ) {
-        @Composable
-        fun RowScope.item(tab: AppTab, icon: ImageVector, title: String) {
-            val on = model.tab == tab
-            Column(
-                Modifier.weight(1f).fillMaxHeight().clickable {
-                    if (tab != model.tab && model.tab == AppTab.SETTINGS) model.reloadRoutes()
-                    model.tab = tab
-                },
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-            ) {
+    Box(modifier.navigationBarsPadding().padding(bottom = 10.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Row(Modifier.height(60.dp).glass(CircleShape).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            @Composable
+            fun item(tab: AppTab, icon: ImageVector, title: String) {
+                val on = model.tab == tab
                 val c = if (on) Vela.accentText(dark) else Vela.muted(dark)
-                Icon(icon, null, tint = c, modifier = Modifier.size(28.dp))
-                Spacer(Modifier.height(4.dp))
-                Text(title, color = c, fontSize = 14.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.SemiBold)
+                Column(
+                    Modifier.size(72.dp, 60.dp).clip(CircleShape).clickable {
+                        if (tab != model.tab && model.tab == AppTab.SETTINGS) model.reloadRoutes()
+                        model.tab = tab
+                    },
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
+                ) {
+                    Icon(icon, title, tint = c, modifier = Modifier.size(26.dp))
+                    Box(Modifier.size(5.dp).clip(CircleShape).background(if (on) c else Color.Transparent))
+                }
             }
+            item(AppTab.MAP, Icons.Filled.Map, "Map")
+            item(AppTab.SAVED, Icons.Filled.Bookmark, "Saved")
+            item(AppTab.SETTINGS, Icons.Filled.Settings, "Settings")
         }
-        item(AppTab.MAP, Icons.Filled.Map, "Map")
-        item(AppTab.SAVED, Icons.Filled.Bookmark, "Saved")
-        item(AppTab.SETTINGS, Icons.Filled.Settings, "Settings")
     }
 }
 
@@ -209,10 +210,10 @@ fun PoliceRisk.Level.word() = name.lowercase().replaceFirstChar { it.uppercase()
 fun PoliceRiskChip(score: Int, label: String = "Police risk") {
     val level = PoliceRisk.level(score)
     val fg = if (level == PoliceRisk.Level.MEDIUM) Color(0xFF1F1300) else Color.White
-    Row(Modifier.height(42.dp).shadow(8.dp, CircleShape).clip(CircleShape).background(PoliceRiskColors.color(level)).padding(horizontal = 14.dp),
+    Row(Modifier.height(36.dp).clip(CircleShape).background(PoliceRiskColors.color(level)).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(Icons.Filled.Shield, null, tint = fg, modifier = Modifier.size(19.dp))
-        Text("$label: ${level.word()}", color = fg, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Icon(Icons.Filled.Shield, null, tint = fg, modifier = Modifier.size(17.dp))
+        Text("$label: ${level.word()}", color = fg, fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -320,8 +321,8 @@ private fun StatusCard(icon: ImageVector, color: Color, title: String, detail: S
 @Composable
 fun CompassNeedle(heading: Double, onClick: () -> Unit) {
     val gray = secondaryText
-    Box(Modifier.size(56.dp).glass(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(10.dp, 28.dp).rotate(-heading.toFloat())) {
+    Box(Modifier.size(48.dp).glass(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(9.dp, 25.dp).rotate(-heading.toFloat())) {
             val w = size.width; val h = size.height
             drawPath(Path().apply { moveTo(w / 2, 0f); lineTo(w, h / 2); lineTo(0f, h / 2); close() }, Color(0xFFEA4335))
             drawPath(Path().apply { moveTo(0f, h / 2); lineTo(w, h / 2); lineTo(w / 2, h); close() }, gray)

@@ -2,8 +2,8 @@ import MapLibre
 import UIKit
 
 /**
- * Paints OpenFreeMap Liberty in Kite's colors: a calm Waze-like night palette (slate land,
- * soft blue-grey roads with no dark edges, green parks) and the classic day look (white
+ * Paints OpenFreeMap Liberty in Kite's colors: a quiet night palette (near-black land,
+ * grey roads with no dark edges, deep green parks) and the classic day look (white
  * streets, yellow motorways). While driving, [drive] strips the map down to roads and names.
  * Layer ids are Liberty's; anything not named here keeps Liberty's own style.
  */
@@ -21,18 +21,19 @@ enum MapStyler {
         var border: UIColor
     }
 
+    // Night: near-black land with quiet grey roads, so the teal route and the warnings are what you see.
     static let dark = Palette(
-        land: UIColor(hex: 0x262E3B), water: UIColor(hex: 0x253F5C), park: UIColor(hex: 0x24563F),
-        pitch: UIColor(hex: 0x24563F), landuse: UIColor(hex: 0x2B3442), landuseOpacity: 0.5,
-        building: UIColor(hex: 0x2D3644), buildingOutline: UIColor(hex: 0x313B4A),
-        minor: UIColor(hex: 0x3B4C5B), major: UIColor(hex: 0x46606F), motorway: UIColor(hex: 0x587689),
-        service: UIColor(hex: 0x333F4D), path: UIColor(hex: 0x2F3947),
-        casing: UIColor(hex: 0x262E3B), motorwayCasing: UIColor(hex: 0x262E3B),
-        rail: UIColor(hex: 0x3A4655),
-        airport: UIColor(hex: 0x2B3442), runway: UIColor(hex: 0x3B4C5B),
-        label: UIColor(hex: 0xC9D1DC), halo: UIColor(hex: 0x262E3B),
-        roadLabel: UIColor(hex: 0xE2E8F0), roadHalo: UIColor(hex: 0x262E3B),
-        border: UIColor(hex: 0x8C95A3))
+        land: UIColor(hex: 0x12161D), water: UIColor(hex: 0x15273B), park: UIColor(hex: 0x15291F),
+        pitch: UIColor(hex: 0x15291F), landuse: UIColor(hex: 0x161B23), landuseOpacity: 0.5,
+        building: UIColor(hex: 0x1A2029), buildingOutline: UIColor(hex: 0x202733),
+        minor: UIColor(hex: 0x29313D), major: UIColor(hex: 0x353F4E), motorway: UIColor(hex: 0x465264),
+        service: UIColor(hex: 0x1F2630), path: UIColor(hex: 0x1C222B),
+        casing: UIColor(hex: 0x12161D), motorwayCasing: UIColor(hex: 0x12161D),
+        rail: UIColor(hex: 0x252C37),
+        airport: UIColor(hex: 0x161B23), runway: UIColor(hex: 0x29313D),
+        label: UIColor(hex: 0xAEB7C4), halo: UIColor(hex: 0x12161D),
+        roadLabel: UIColor(hex: 0xD5DBE5), roadHalo: UIColor(hex: 0x12161D),
+        border: UIColor(hex: 0x5F6977))
 
     static let light = Palette(
         land: UIColor(hex: 0xF2F1EE), water: UIColor(hex: 0x90DAEE), park: UIColor(hex: 0xCFECCD),

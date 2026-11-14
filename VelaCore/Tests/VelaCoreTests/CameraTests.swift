@@ -173,6 +173,33 @@ final class RoadCacheTests: XCTestCase {
         XCTAssertEqual(Overpass.speedLimits(known.ways, on: line).compactMap(\.kmh), [48.3])
     }
 
+    func testACameraTheMapDroppedIsForgotten() {
+        let cache = RoadCache(file: nil)
+        let line = [LatLng(50.899, -1.400), LatLng(50.906, -1.400)]
+        cache.add(ways: [], cameras: [
+            RoadCamera(id: 3, kind: .speed, location: LatLng(50.902, -1.4001)),
+            RoadCamera(id: 4, kind: .speed, location: LatLng(50.904, -1.4001)),
+            RoadCamera(id: 5, kind: .plate, location: LatLng(50.903, -1.4001)),
+            // On a road a road beside it, outside what the answer covered: the answer for this stretch says nothing about it.
+            RoadCamera(id: 6, kind: .speed, location: LatLng(50.903, -1.4018)),
+        ], signals: [])
+        // A live answer for the stretch that only asked about speed cameras and found number 4.
+        cache.forgetCameras(along: line, except: [4], speed: true, plate: false)
+        XCTAssertEqual(cache.along(line).cameras.map(\.id).sorted(), [4, 5, 6])
+    }
+
+    func testCamerasMarkedNotWorkingAreLeftOut() {
+        let json = """
+        {"elements":[
+         {"type":"node","id":1,"lat":50.9,"lon":-1.3,"tags":{"highway":"speed_camera","active":"no","note":"Not currently operational"}},
+         {"type":"node","id":2,"lat":50.9,"lon":-1.3,"tags":{"highway":"speed_camera","active":"yes"}},
+         {"type":"node","id":3,"lat":50.9,"lon":-1.3,"tags":{"highway":"speed_camera","disused":"yes"}},
+         {"type":"node","id":4,"lat":50.9,"lon":-1.3,"tags":{"highway":"speed_camera","maxspeed":"70 mph"}},
+         {"type":"node","id":5,"lat":50.9,"lon":-1.3,"tags":{"highway":"speed_camera","operational_status":"decommissioned"}}]}
+        """
+        XCTAssertEqual(Overpass.parse(Data(json.utf8))?.map(\.id), [2, 4])
+    }
+
     func testNothingKnownFarAway() {
         let cache = RoadCache(file: nil)
         cache.add(ways: [Overpass.LimitWay(id: 1, kmh: 50, line: [LatLng(0, 0), LatLng(0.005, 0)])], cameras: [], signals: [])

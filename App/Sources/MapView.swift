@@ -274,6 +274,9 @@ struct VelaMapView: UIViewRepresentable {
             chevrons.keepsIconUpright = NSExpression(forConstantValue: false)
             chevrons.iconOpacity = NSExpression(forConstantValue: 0.55)
             chevrons.minimumZoomLevel = 13
+            // The light look: one plain teal line, no darker edge and no chevrons along it.
+            edge.lineOpacity = NSExpression(forConstantValue: 0)
+            chevrons.isVisible = false
             [done, altEdge, altFill, edge, fill, chevrons].forEach(insert)
             // A transit trip: each ride in its line's color, walks dotted.
             let transitSrc = MLNShapeSource(identifier: "vela-transit", shape: nil, options: nil)
@@ -457,14 +460,14 @@ struct VelaMapView: UIViewRepresentable {
             let arrowSrc = MLNShapeSource(identifier: "vela-turn-arrow", shape: nil, options: nil)
             style.addSource(arrowSrc)
             // A chunky white arrow with rounded corners, a dark teal edge and a soft shadow, like Waze's.
-            let arrowShadow = line("vela-turn-arrow-shadow", arrowSrc, .black, width: 17)
+            let arrowShadow = line("vela-turn-arrow-shadow", arrowSrc, .black, width: 11)
             arrowShadow.predicate = NSPredicate(format: "part == 'shaft'")
             arrowShadow.lineOpacity = NSExpression(forConstantValue: 0.35)
             arrowShadow.lineBlur = NSExpression(forConstantValue: 4)
             arrowShadow.lineTranslation = NSExpression(forConstantValue: NSValue(cgVector: CGVector(dx: 0, dy: 2)))
             let arrowEdge = line("vela-turn-arrow-edge", arrowSrc, UIColor(hex: 0x0F766E), width: 15)
             arrowEdge.predicate = NSPredicate(format: "part == 'shaft'")
-            let arrowLine = line("vela-turn-arrow", arrowSrc, .white, width: 9)
+            let arrowLine = line("vela-turn-arrow", arrowSrc, .white, width: 7)
             arrowLine.predicate = NSPredicate(format: "part == 'shaft'")
             let head = MLNSymbolStyleLayer(identifier: "vela-turn-arrow-head", source: arrowSrc)
             head.predicate = NSPredicate(format: "part == 'head'")
@@ -473,6 +476,7 @@ struct VelaMapView: UIViewRepresentable {
             head.iconRotationAlignment = NSExpression(forConstantValue: "map")
             head.iconAllowsOverlap = NSExpression(forConstantValue: true)
             head.iconIgnoresPlacement = NSExpression(forConstantValue: true)
+            arrowEdge.lineOpacity = NSExpression(forConstantValue: 0)
             for l in [arrowShadow, arrowEdge, arrowLine] as [MLNStyleLayer] { style.addLayer(l) }
             style.addLayer(head)
 
@@ -515,7 +519,7 @@ struct VelaMapView: UIViewRepresentable {
                 MapStyler.drive(style, on: navigating)
                 styledDriving = navigating
                 // A bold route line while driving, like Waze; the usual blue when planning.
-                (style.layer(withIdentifier: "vela-route-line") as? MLNLineStyleLayer)?.lineWidth = NSExpression(forConstantValue: navigating ? 16 : 10)
+                (style.layer(withIdentifier: "vela-route-line") as? MLNLineStyleLayer)?.lineWidth = NSExpression(forConstantValue: navigating ? 12 : 10)
                 (style.layer(withIdentifier: "vela-route-edge") as? MLNLineStyleLayer)?.lineWidth = NSExpression(forConstantValue: navigating ? 22 : 15)
             }
             for id in ["building", "building-3d"] { style.layer(withIdentifier: id)?.isVisible = !s.satellite && !navigating }
