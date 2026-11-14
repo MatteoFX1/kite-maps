@@ -10,9 +10,6 @@ enum Vela {
     static let teal = Color(hex: 0x0F766E)
     static let tealLight = Color(hex: 0x2DD4BF)
     static let routeBlue = Color(hex: 0x2F7BFF)
-    /** The driving banner: deep teal, with a darker band for the lanes. */
-    static let navGreen = Color(hex: 0x0F766E)
-    static let navBand = Color(hex: 0x0B4F49)
     static let open = Color(hex: 0x16A34A)
     static let openDark = Color(hex: 0x4ADE80)
     static let closed = Color(hex: 0xDC2626)
@@ -271,7 +268,7 @@ func maneuverSymbol(_ t: ManeuverType) -> String {
 
 /**
  * Frosted glass for everything that floats over the map (buttons, the search bar, cards): the
- * map shows through, blurred, with a thin bright edge and a soft shadow, like iOS 26.
+ * map shows through, blurred, with a thin bright edge and barely any shadow (the light look).
  */
 struct Glass<S: Shape>: ViewModifier {
     let shape: S
@@ -281,9 +278,9 @@ struct Glass<S: Shape>: ViewModifier {
         content
             .background(
                 shape.fill(.ultraThinMaterial)
-                    .overlay(shape.fill(Vela.surface(scheme).opacity(scheme == .dark ? 0.86 : 0.88)))
-                    .overlay(shape.stroke(Color.white.opacity(scheme == .dark ? 0.08 : 0.5), lineWidth: 0.75))
-                    .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.16), radius: 12, y: 5)
+                    .overlay(shape.fill(Vela.surface(scheme).opacity(scheme == .dark ? 0.68 : 0.74)))
+                    .overlay(shape.stroke(Color.white.opacity(scheme == .dark ? 0.10 : 0.6), lineWidth: 0.75))
+                    .shadow(color: .black.opacity(scheme == .dark ? 0.22 : 0.10), radius: 6, y: 2)
             )
     }
 }

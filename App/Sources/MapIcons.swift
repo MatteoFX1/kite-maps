@@ -227,20 +227,13 @@ enum MapIcons {
     }
 
     /**
-     * The car while navigating, Waze-style in Kite's teal: a chunky teal arrow with a white rim and a
-     * darker right half so it reads as raised, sitting on a disc with a teal ring (navy at night,
-     * white by day).
+     * The car while navigating, in Kite's teal: a chunky teal arrow with a white rim and a darker
+     * right half so it reads as raised. Nothing around it (the light look has no disc or ring).
      */
     static func puck(dark: Bool) -> UIImage {
         let size = CGSize(width: 76, height: 76)
         return UIGraphicsImageRenderer(size: size).image { ctx in
             let g = ctx.cgContext
-            let disc = UIBezierPath(ovalIn: CGRect(x: 6, y: 6, width: 64, height: 64))
-            (dark ? UIColor(hex: 0x0F172A, alpha: 0.6) : UIColor(white: 1, alpha: 0.75)).setFill()
-            disc.fill()
-            UIColor(hex: 0x2DD4BF, alpha: 0.75).setStroke()
-            disc.lineWidth = 2.5
-            disc.stroke()
             let tip = CGPoint(x: 38, y: 13), left = CGPoint(x: 18, y: 60), right = CGPoint(x: 58, y: 60), notch = CGPoint(x: 38, y: 50)
             let outline = UIBezierPath()
             outline.move(to: tip); outline.addLine(to: right); outline.addLine(to: notch); outline.addLine(to: left); outline.close()

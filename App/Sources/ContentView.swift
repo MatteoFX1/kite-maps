@@ -158,11 +158,11 @@ struct BrowseOverlay: View {
                 VStack {
                     HStack(alignment: .top) {
                         Spacer()
-                        VStack(spacing: 12) {
-                            MapFab(icon: "square.3.layers.3d", size: 56) { model.showLayers = true }
+                        VStack(spacing: 10) {
+                            MapFab(icon: "square.3.layers.3d", size: 48) { model.showLayers = true }
                                 .accessibilityLabel("Map layers")
                             if settings.parkingButton || settings.parking != nil {
-                                MapFab(icon: "parkingsign", tint: settings.parking != nil ? Vela.routeBlue : .primary, size: 56) {
+                                MapFab(icon: "parkingsign", tint: settings.parking != nil ? Vela.routeBlue : .primary, size: 48) {
                                     if let p = settings.parking { model.select(p) } else { model.saveParking() }
                                 }
                             }
@@ -170,7 +170,7 @@ struct BrowseOverlay: View {
                                 Button { model.map?.setDirection(0, animated: true) } label: {
                                     CompassNeedle()
                                         .rotationEffect(.degrees(-model.mapHeading))
-                                        .frame(width: 56, height: 56)
+                                        .frame(width: 48, height: 48)
                                         .glass(Circle())
                                 }
                                 .buttonStyle(.plain)
@@ -180,13 +180,13 @@ struct BrowseOverlay: View {
                         }
                     }
                     // With a side panel the search box isn't above them: they go to the top right.
-                    .padding(.top, panel > 0 ? 10 : idle ? (model.resumeOffer != nil ? 276 : 176) : 86)
+                    .padding(.top, panel > 0 ? 10 : idle ? (model.resumeOffer != nil ? 266 : 166) : 76)
                     Spacer()
                     if sheetH < full * 0.6 || panel > 0 {
                         HStack(alignment: .bottom) {
                             if idle { WazeMapChips(model: model) }
                             Spacer()
-                            MapFab(icon: "location.fill", tint: Vela.accentText(scheme), size: 64) { model.centerOnUser() }
+                            MapFab(icon: "location.fill", tint: Vela.accentText(scheme), size: 52) { model.centerOnUser() }
                                 .accessibilityLabel("Centre on me")
                                 .contextMenu {
                                     if let u = model.userLatLng {
@@ -297,12 +297,12 @@ struct SearchBar: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Back")
             } else {
-                Image(systemName: "magnifyingglass").font(.system(size: 22, weight: .semibold))
+                Image(systemName: "magnifyingglass").font(.system(size: 20, weight: .semibold))
                     .foregroundColor(Vela.muted(scheme))
                     .padding(.leading, 8)
             }
             TextField("Where to?", text: $model.query)
-                .font(.system(size: 21, weight: .medium))
+                .font(.system(size: 19, weight: .medium))
                 .focused(focused)
                 .submitLabel(.search)
                 .autocorrectionDisabled()
@@ -318,9 +318,9 @@ struct SearchBar: View {
                     model.clearSearch()
                     focused.wrappedValue = false
                 } label: {
-                    Image(systemName: "xmark").font(.system(size: 19, weight: .bold))
+                    Image(systemName: "xmark").font(.system(size: 18, weight: .bold))
                         .frame(width: 48, height: 48)
-                        .background(Circle().fill(Vela.chip(scheme)))
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -332,9 +332,9 @@ struct SearchBar: View {
                         model.search(text)
                     }, onError: { model.notice = $0 })
                 } label: {
-                    Image(systemName: "mic.fill").font(.system(size: 21, weight: .semibold))
+                    Image(systemName: "mic.fill").font(.system(size: 19, weight: .semibold))
                         .frame(width: 48, height: 48)
-                        .background(Circle().fill(Vela.chip(scheme)))
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Search by voice")
@@ -342,8 +342,8 @@ struct SearchBar: View {
         }
         .foregroundColor(.primary)
         .padding(.leading, 12)
-        .padding(.trailing, 8)
-        .frame(height: 64)
+        .padding(.trailing, 4)
+        .frame(height: 54)
         .glass(Capsule())
         .padding(.horizontal, 16)
     }

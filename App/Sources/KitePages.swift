@@ -1,25 +1,29 @@
 import SwiftUI
 import VelaCore
 
-/** The bar along the bottom: Map, Saved and Settings, each a big target. */
+/**
+ * The bar along the bottom: Map, Saved and Settings as three icons in one slim see-through pill,
+ * with a dot under the page you're on. Each is still a big target (72 by 60).
+ */
 struct KiteDock: View {
     @ObservedObject var model: AppModel
     let bottomInset: CGFloat
     @Environment(\.colorScheme) private var scheme
 
-    static let height: CGFloat = 80
+    static let height: CGFloat = 60
     /** How far the dock sits above the screen's bottom edge. */
     static func bottomGap(_ inset: CGFloat) -> CGFloat { max(inset - 14, 10) }
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 4) {
             item(.map, "map.fill", "Map")
             item(.saved, "bookmark.fill", "Saved")
             item(.settings, "gearshape.fill", "Settings")
         }
+        .padding(.horizontal, 8)
         .frame(height: Self.height)
-        .glass(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .padding(.horizontal, 12)
+        .glass(Capsule())
+        .frame(maxWidth: .infinity)
         .padding(.bottom, Self.bottomGap(bottomInset))
     }
 
@@ -29,15 +33,16 @@ struct KiteDock: View {
             if tab != model.tab, model.tab == .settings { model.reloadRoutes() }
             model.tab = tab
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 25, weight: .semibold))
-                Text(title).font(.system(size: 14, weight: on ? .bold : .semibold))
+            VStack(spacing: 5) {
+                Image(systemName: icon).font(.system(size: 23, weight: .semibold))
+                Circle().fill(on ? Vela.accentText(scheme) : Color.clear).frame(width: 5, height: 5)
             }
             .foregroundColor(on ? Vela.accentText(scheme) : Vela.muted(scheme))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: 72, height: Self.height)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
