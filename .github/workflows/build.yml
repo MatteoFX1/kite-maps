@@ -117,7 +117,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     continue-on-error: true
-    timeout-minutes: 45
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:
@@ -132,11 +132,11 @@ jobs:
         working-directory: VelaCore
         env:
           TURNSET: ${{ matrix.set }}
-        run: swift run vela-probe ${{ matrix.cmd }} 2>&1 | grep -v "^\[" | tee ../junction-check.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: junction-check-${{ matrix.cmd }}-${{ matrix.set }}
-          path: junction-check.txt
+        # Straight to the log, line by line: through a pipe the output only arrived at the end,
+        # so a check that ran out of time left nothing to read.
+        run: |
+          swift build --product vela-probe 2>&1 | tail -1
+          script -q /dev/null swift run --skip-build vela-probe ${{ matrix.cmd }}
 
   ipa:
     name: Build Kite.ipa
