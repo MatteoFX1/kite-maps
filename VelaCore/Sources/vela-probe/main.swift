@@ -22,7 +22,10 @@ if args.count > 1, args[1] == "wazert" {
     // Live Waze reports through the app's own protocol (WazeLive), around Southampton, the M27 and London.
     let places: [(String, LatLng)] = [("Southampton (Bursledon Rd)", LatLng(50.905, -1.34)), ("Eastleigh", LatLng(50.97, -1.35)),
                                        ("M27 J5-J7", LatLng(50.92, -1.30)), ("Central London", LatLng(51.515, -0.13)),
-                                       ("West London", LatLng(51.50, -0.25))]
+                                       ("West London", LatLng(51.50, -0.25)),
+                                       ("Southampton (Thomas Lewis Way)", LatLng(50.928, -1.388)), ("M3 J11-J12", LatLng(51.03, -1.33))]
+    // Count everything Waze sends, to see whether it also carries fixed speed cameras.
+    WazeLive.census = WazeCensus()
     var police = 0
     for (name, p) in places {
         let b = WazeLive.box(around: p, meters: 6_000)
@@ -39,6 +42,7 @@ if args.count > 1, args[1] == "wazert" {
     let streets = await WazeLive.shared.alerts(boxes: [WazeLive.box(around: places[0].1, meters: 6_000)], near: places[0].1) ?? []
     print("with a street name: \(streets.filter { $0.street != nil }.count) of \(streets.count), e.g. \(streets.compactMap(\.street).prefix(5))")
     print("data used: \(WazeLive.bytes / 1024) KB")
+    wazeCensusReport()
     // What happens when Waze can't be reached: a quick failure, then a pause before asking again.
     WazeLive.hostOverride = "127.0.0.1:9"
     let t = Date()
@@ -356,3 +360,45 @@ for base in Aircraft.endpoints {
 exit(exitCode)
 
 
+
+
+/**
+ * What Waze's answers held besides the reports Kite reads: is there a list of fixed speed
+ * cameras in there? Each set of places is measured against cameras known to be real (from
+ * OpenStreetMap, checked 2026-11-14), so a set that sits on them is the camera list.
+ */
+func wazeCensusReport() {
+    guard let c = WazeLive.census else { return }
+    WazeLive.census = nil
+    print("--- everything Waze sent ---")
+    print("elements: " + c.elements.sorted { $0.key < $1.key }.map { "\($0.key)x\($0.value)" }.joined(separator: " "))
+    for (name, n) in c.commands.sorted(by: { $0.value > $1.value }) {
+        print("command \(name) x\(n): \(c.commandSample[name] ?? "")")
+    }
+    let known: [(String, LatLng)] = [("Northam Bridge", LatLng(50.9156326, -1.3851174)), ("M27 J5 a", LatLng(50.9494996, -1.3803431)),
+                                      ("M27 J5 b", LatLng(50.949223, -1.3801986)), ("M27 J7 a", LatLng(50.9352479, -1.3411425)),
+                                      ("M27 J7 b", LatLng(50.935568, -1.3387029)), ("M27 J8 a", LatLng(50.9101758, -1.3184896)),
+                                      ("M27 J8 b", LatLng(50.9078083, -1.3180459)), ("M3 J9", LatLng(51.0727903, -1.2919975)),
+                                      ("Bitterne Rd", LatLng(50.9156984, -1.3614169))]
+    // Thomas Lewis Way (A335), from the city end to the Swaythling end.
+    let lewis = [LatLng(50.91894, -1.39534), LatLng(50.9245, -1.3905), LatLng(50.9300, -1.3855), LatLng(50.9350, -1.3815), LatLng(50.94056, -1.37789)]
+    func measure(_ name: String, _ pts: [LatLng]) {
+        let near: [(String, Double)] = known.map { k in
+            let d: Double = pts.map { $0.distance(to: k.1) }.min() ?? Double.infinity
+            return (k.0, d)
+        }
+        let hits = near.filter { $0.1 < 120 }.count
+        let onLewis = pts.filter { Geo.project($0, on: lewis).offset < 60 }
+        print("\(name): \(pts.count) places · on \(hits) of \(known.count) known cameras · \(onLewis.count) on Thomas Lewis Way")
+        print("   nearest to each known camera: " + near.map { String(format: "%@ %.0f m", $0.0, $0.1) }.joined(separator: ", "))
+        for p in onLewis.prefix(6) { print(String(format: "   Thomas Lewis Way: %.5f,%.5f", p.lat, p.lng)) }
+        print("   first places: " + pts.prefix(8).map { String(format: "%.5f,%.5f", $0.lat, $0.lng) }.joined(separator: " "))
+    }
+    for (key, n) in c.alertTypes.sorted(by: { $0.value > $1.value }) {
+        measure("report type \(key) x\(n)", c.alertPlaces[key] ?? [])
+    }
+    for (path, pts) in c.places.sorted(by: { $0.value.count > $1.value.count }).prefix(40) {
+        measure("other \(path)", pts)
+    }
+    for (root, w) in c.words.sorted(by: { $0.key < $1.key }) { print("words in \(root): \(w)") }
+}

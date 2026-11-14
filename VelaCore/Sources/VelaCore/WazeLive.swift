@@ -24,6 +24,9 @@ public actor WazeLive {
     /** Another server instead of Waze's, for testing what Kite does when Waze is unreachable. */
     nonisolated(unsafe) public static var hostOverride: String?
 
+    /** Set by the probe to count everything Waze sends, including what Kite doesn't read. Nil in the app. */
+    nonisolated(unsafe) public static var census: WazeCensus?
+
     static let protocolVersion = 234
     static let appVersion = "5.17.1.0"
 
@@ -231,6 +234,7 @@ public actor WazeLive {
                                                            "uid": uid.data.base64EncodedString()])
         if (400..<500).contains(code) { throw Failure.expired("command HTTP \(code)") }
         guard code < 400, !data.isEmpty else { throw Failure.other("command HTTP \(code)") }
+        if Self.census != nil { Self.census?.add(data) }
         let batch = try Self.check(Self.parseBatch(data))
         lastAsk = Date()
         return batch
@@ -565,5 +569,77 @@ enum ProtoReader {
             }
         }
         return out
+    }
+}
+
+/**
+ * A count of everything in Waze's answers, for the probe: which elements come back, which report
+ * types, and any place (a longitude and latitude pair) found inside elements Kite doesn't read.
+ * It answers "does this link also carry fixed speed cameras?" without guessing at Waze's format.
+ */
+public struct WazeCensus: Sendable {
+    /** How many of each element (by its field number) came back. */
+    public var elements: [Int: Int] = [:]
+    /** Old-style text commands by name ("RmAlert"), with one example each. */
+    public var commands: [String: Int] = [:]
+    public var commandSample: [String: String] = [:]
+    /** Reports by Waze's raw type and subtype numbers ("2/201"), with a few places for each. */
+    public var alertTypes: [String: Int] = [:]
+    public var alertPlaces: [String: [LatLng]] = [:]
+    /** Places found in other elements, by the path of field numbers that led to them. */
+    public var places: [String: [LatLng]] = [:]
+    /** A few readable words found beside those places, to tell what they are. */
+    public var words: [String: [String]] = [:]
+
+    public init() {}
+
+    public mutating func add(_ data: Data) {
+        guard let batch = ProtoReader.fields(data) else { return }
+        for wrapper in batch where wrapper.number == 1001 {
+            guard let bytes = wrapper.bytes, let fields = ProtoReader.fields(bytes) else { continue }
+            for f in fields {
+                elements[f.number, default: 0] += 1
+                if f.number == 2001, let text = f.string {
+                    let name = String(text.split(separator: ",", maxSplits: 1).first ?? "").trimmingCharacters(in: .whitespaces)
+                    commands[name, default: 0] += 1
+                    if commandSample[name] == nil { commandSample[name] = String(text.prefix(240)) }
+                } else if f.number == 2708, let rt = f.bytes.flatMap(ProtoReader.fields)?.first(where: { $0.number == 1 })?.bytes,
+                          let top = ProtoReader.fields(rt),
+                          let info = top.first(where: { $0.number == 2 })?.bytes.flatMap(ProtoReader.fields) {
+                    let key = "\(info.first { $0.number == 1 }?.value ?? 0)/\(info.first { $0.number == 2 }?.value ?? 0)"
+                    alertTypes[key, default: 0] += 1
+                    if let pos = info.first(where: { $0.number == 3 })?.bytes.flatMap(ProtoReader.fields), let p = Self.place(pos),
+                       (alertPlaces[key]?.count ?? 0) < 400 {
+                        alertPlaces[key, default: []].append(p)
+                    }
+                } else if let inner = f.bytes {
+                    scan(inner, path: "\(f.number)", depth: 0)
+                }
+            }
+        }
+    }
+
+    /** Waze writes a place as fields 101 (longitude) and 102 (latitude), in millionths of a degree. */
+    static func place(_ fields: [ProtoReader.Field]) -> LatLng? {
+        guard let lngRaw = fields.first(where: { $0.number == 101 && $0.bytes == nil })?.value,
+              let latRaw = fields.first(where: { $0.number == 102 && $0.bytes == nil })?.value else { return nil }
+        let lng = Double(Int32(truncatingIfNeeded: lngRaw)) / 1_000_000, lat = Double(Int32(truncatingIfNeeded: latRaw)) / 1_000_000
+        return (-90...90).contains(lat) && (-180...180).contains(lng) && !(lat == 0 && lng == 0) ? LatLng(lat, lng) : nil
+    }
+
+    private mutating func scan(_ data: Data, path: String, depth: Int) {
+        guard depth < 7, data.count >= 2, let fields = ProtoReader.fields(data) else { return }
+        if let p = Self.place(fields) {
+            if (places[path]?.count ?? 0) < 3000 { places[path, default: []].append(p) }
+        }
+        for f in fields {
+            guard let inner = f.bytes, !inner.isEmpty else { continue }
+            if let text = f.string, text.count >= 3, text.count <= 60,
+               text.unicodeScalars.allSatisfy({ $0.value >= 32 && $0.value < 127 }) {
+                let root = String(path.split(separator: ".").first ?? "")
+                if (words[root]?.count ?? 0) < 12, !(words[root] ?? []).contains(text) { words[root, default: []].append(text) }
+            }
+            scan(inner, path: "\(path).\(f.number)", depth: depth + 1)
+        }
     }
 }
