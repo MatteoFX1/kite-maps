@@ -56,7 +56,7 @@ enum MapIcons {
     }
 
     /** Vela's speed camera badge: amber rounded square, head-on camera with a big lens and flash slit. */
-    /** The head of the turn arrow drawn on the road: chunky white with a dark teal edge and a soft shadow, pointing up. */
+    /** The head of the turn arrow drawn on the road: plain white with a soft shadow, pointing up. */
     static func turnHead() -> UIImage {
         let size = CGSize(width: 44, height: 40)
         return UIGraphicsImageRenderer(size: size).image { ctx in
@@ -67,8 +67,8 @@ enum MapIcons {
             p.close()
             p.lineJoinStyle = .round
             ctx.cgContext.setShadow(offset: CGSize(width: 0, height: 2), blur: 3, color: UIColor.black.withAlphaComponent(0.4).cgColor)
-            UIColor(hex: 0x0F766E).setStroke()
-            p.lineWidth = 8
+            UIColor.white.setStroke()
+            p.lineWidth = 4
             p.stroke()
             ctx.cgContext.setShadow(offset: .zero, blur: 0, color: nil)
             UIColor.white.setFill()

@@ -266,13 +266,14 @@ class KiteMap(private val model: AppModel, private val context: Context) {
         val done = line("vela-route-done", "vela-route-done", c(0x64748B), 10f).withProperties(lineOpacity(0.5f))
         val altEdge = line("vela-route-alt-edge", "vela-route-alt", c(0x115E59), 11f).withProperties(lineOpacity(0.6f))
         val altFill = line("vela-route-alt", "vela-route-alt", c(0x5EEAD4), 7f).withProperties(lineOpacity(0.6f))
-        val edge = line("vela-route-edge", "vela-route", c(0x0F766E), 15f)
+        // The light look: one plain teal line, no darker edge and no chevrons along it.
+        val edge = line("vela-route-edge", "vela-route", c(0x0F766E), 15f).withProperties(lineOpacity(0f))
         val fill = line("vela-route-line", "vela-route", c(0x2DD4BF), 10f).withProperties(
             lineGradient(interpolate(linear(), lineProgress(), stop(0, color(c(0x2DD4BF))), stop(1, color(c(0x22D3EE))))))
         val chevrons = SymbolLayer("vela-route-chevrons", "vela-route").withProperties(
             symbolPlacement(Property.SYMBOL_PLACEMENT_LINE), symbolSpacing(70f), iconImage("route-chevron"),
             iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP), iconAllowOverlap(true), iconIgnorePlacement(true),
-            iconKeepUpright(false), iconOpacity(0.55f)).apply { minZoom = 13f }
+            iconKeepUpright(false), iconOpacity(0.55f), visibility(Property.NONE)).apply { minZoom = 13f }
         listOf(done, altEdge, altFill, edge, fill, chevrons).forEach { insert(it) }
 
         src("vela-transit")
@@ -367,11 +368,11 @@ class KiteMap(private val model: AppModel, private val context: Context) {
 
         src("vela-turn-arrow")
         val shaft = eq(get("part"), literal("shaft"))
-        val arrowShadow = line("vela-turn-arrow-shadow", "vela-turn-arrow", Color.BLACK, 17f).withProperties(
+        val arrowShadow = line("vela-turn-arrow-shadow", "vela-turn-arrow", Color.BLACK, 11f).withProperties(
             lineOpacity(0.35f), lineBlur(4f), lineTranslate(arrayOf(0f, 2f)))
         arrowShadow.setFilter(shaft)
-        val arrowEdge = line("vela-turn-arrow-edge", "vela-turn-arrow", c(0x0F766E), 15f); arrowEdge.setFilter(shaft)
-        val arrowLine = line("vela-turn-arrow", "vela-turn-arrow", Color.WHITE, 9f); arrowLine.setFilter(shaft)
+        val arrowEdge = line("vela-turn-arrow-edge", "vela-turn-arrow", c(0x0F766E), 15f).withProperties(lineOpacity(0f)); arrowEdge.setFilter(shaft)
+        val arrowLine = line("vela-turn-arrow", "vela-turn-arrow", Color.WHITE, 7f); arrowLine.setFilter(shaft)
         // The head has a source of its own, updated only when the turn changes: the map fades a symbol
         // in afresh each time its source changes, which would keep the head see-through.
         src("vela-turn-head")
@@ -430,7 +431,7 @@ class KiteMap(private val model: AppModel, private val context: Context) {
         if (styledDriving != navigating) {
             MapStyler.drive(style, navigating)
             styledDriving = navigating
-            (style.getLayer("vela-route-line") as? LineLayer)?.setProperties(lineWidth(if (navigating) 16f else 10f))
+            (style.getLayer("vela-route-line") as? LineLayer)?.setProperties(lineWidth(if (navigating) 12f else 10f))
             (style.getLayer("vela-route-edge") as? LineLayer)?.setProperties(lineWidth(if (navigating) 22f else 15f))
         }
         for (id in listOf("building", "building-3d")) visible(style, id, !s.satellite && !navigating)

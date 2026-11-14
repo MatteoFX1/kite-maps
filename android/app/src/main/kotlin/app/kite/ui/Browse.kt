@@ -71,9 +71,9 @@ fun BrowseOverlay(model: AppModel) {
 
         // Map buttons: layers, parking and the compass on the right, under the top cards.
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp)) {
-            Row(Modifier.fillMaxWidth().padding(top = if (idle) (if (model.resumeOffer != null) 276.dp else 176.dp) else 86.dp)) {
+            Row(Modifier.fillMaxWidth().padding(top = if (idle) (if (model.resumeOffer != null) 266.dp else 166.dp) else 76.dp)) {
                 Spacer(Modifier.weight(1f))
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     MapFab(Icons.Outlined.Layers) { model.showLayers = true }
                     if (s.parkingButton || s.parking != null) {
                         MapFab(Icons.Filled.LocalParking, tint = if (s.parking != null) Vela.routeBlue else null) {
@@ -90,7 +90,7 @@ fun BrowseOverlay(model: AppModel) {
             }
             Spacer(Modifier.weight(1f))
             if (sheetH < full * 0.6f) {
-                Row(Modifier.fillMaxWidth().padding(bottom = if (hasSheet) (sheetH - navBottom).coerceAtLeast(0.dp) + 14.dp else 106.dp),
+                Row(Modifier.fillMaxWidth().padding(bottom = if (hasSheet) (sheetH - navBottom).coerceAtLeast(0.dp) + 14.dp else 86.dp),
                     verticalAlignment = Alignment.Bottom) {
                     if (idle) WazeMapChips(model)
                     Spacer(Modifier.weight(1f))
@@ -143,9 +143,9 @@ private fun LocateButton(model: AppModel) {
     val ctx = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     Box {
-        Box(Modifier.size(64.dp).glass(CircleShape).combinedClickable(onClick = { model.centerOnUser(ctx) }, onLongClick = { menu = true }),
+        Box(Modifier.size(52.dp).glass(CircleShape).combinedClickable(onClick = { model.centerOnUser(ctx) }, onLongClick = { menu = true }),
             contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.MyLocation, "Centre on me", tint = Vela.accentText(dark), modifier = Modifier.size(28.dp))
+            Icon(Icons.Filled.MyLocation, "Centre on me", tint = Vela.accentText(dark), modifier = Modifier.size(24.dp))
         }
         DropdownMenu(menu, { menu = false }) {
             model.userLatLng?.let { u ->
@@ -171,21 +171,21 @@ fun SearchBar(model: AppModel, focused: Boolean, onFocus: (Boolean) -> Unit, unf
         val text = r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
         if (!text.isNullOrBlank()) { model.query = text; model.search(text) }
     }
-    Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(64.dp).glass(CircleShape).padding(start = 12.dp, end = 8.dp),
+    Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(54.dp).glass(CircleShape).padding(start = 12.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         if (focused || model.results.isNotEmpty() || model.selected != null) {
             Box(Modifier.size(44.dp).clip(CircleShape).tap { if (focused) unfocus() else model.clearSearch() }, contentAlignment = Alignment.Center) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = primaryText, modifier = Modifier.size(26.dp))
             }
         } else {
-            Icon(Icons.Filled.Search, null, tint = Vela.muted(dark), modifier = Modifier.padding(start = 8.dp).size(26.dp))
+            Icon(Icons.Filled.Search, null, tint = Vela.muted(dark), modifier = Modifier.padding(start = 8.dp).size(24.dp))
         }
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            if (model.query.isEmpty()) Text("Where to?", fontSize = 21.sp, fontWeight = FontWeight.Medium, color = Vela.muted(dark))
+            if (model.query.isEmpty()) Text("Where to?", fontSize = 19.sp, fontWeight = FontWeight.Medium, color = Vela.muted(dark))
             BasicTextField(model.query, { q -> model.query = q; if (focused) model.typed(q) },
                 Modifier.fillMaxWidth().focusRequester(requester).onFocusChanged { if (it.isFocused != focused) onFocus(it.isFocused) },
                 singleLine = true,
-                textStyle = TextStyle(fontSize = 21.sp, fontWeight = FontWeight.Medium, color = primaryText, fontFamily = Rounded),
+                textStyle = TextStyle(fontSize = 19.sp, fontWeight = FontWeight.Medium, color = primaryText, fontFamily = Rounded),
                 cursorBrush = SolidColor(Vela.accent(dark)),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { unfocus(); model.search() }))
@@ -193,10 +193,10 @@ fun SearchBar(model: AppModel, focused: Boolean, onFocus: (Boolean) -> Unit, unf
         when {
             model.searching -> CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), strokeWidth = 3.dp, color = Vela.accent(dark))
             model.query.isNotEmpty() || model.results.isNotEmpty() || model.selected != null ->
-                Box(Modifier.size(48.dp).clip(CircleShape).background(Vela.chip(dark)).tap { model.clearSearch(); unfocus() }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(48.dp).clip(CircleShape).tap { model.clearSearch(); unfocus() }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Close, "Clear search", tint = primaryText, modifier = Modifier.size(22.dp))
                 }
-            else -> Box(Modifier.size(48.dp).clip(CircleShape).background(Vela.chip(dark)).tap {
+            else -> Box(Modifier.size(48.dp).clip(CircleShape).tap {
                 unfocus()
                 // Phones without Google (like GrapheneOS) may have no speech service at all: say so plainly.
                 if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {

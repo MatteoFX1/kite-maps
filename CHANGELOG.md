@@ -3,6 +3,28 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.7.13 (iPhone and Android)
+
+A new, lighter look for the map and the driving screen, picked by Matteo from three mockups
+("C · Light"). Only the looks change: everything works the way it did.
+
+- **See-through turn strip:** the big green banner is gone. The next turn sits on one slim
+  see-through strip, with the arrow (or the roundabout) and your lane in teal, and the distance
+  still the biggest thing on it. The lanes get a second row only when there are lanes to show.
+- **Slim trip bar:** one thin pill at the bottom with the arrival time in teal, then the minutes
+  and miles left. End trip and the steps list are still at either end.
+- **Camera warning as one bright pill:** still orange, still pulses, still red when you're over,
+  with dark words on the orange like a road sign. It's the one loud thing on the screen.
+- **Speed:** the limit sign with your speed in a small tile under it. Only the tile turns red
+  when you're over, instead of the whole panel.
+- **Fewer shadows and glows:** the street name, "also ahead", traffic line, police risk and GPS
+  notes are all smaller and see-through, and the glows around the cards are gone.
+- **Quieter map at night:** near-black with soft grey roads, so the route and the warnings stand
+  out. The route is one plain teal line, with no dark edge and no little arrows on it, and the
+  car is just the arrow with no ring round it.
+- **Home map:** a slimmer search bar, smaller map buttons, and Map, Saved and Settings as three
+  icons in one small pill with a dot under the page you're on.
+
 ## 0.7.12 (iPhone and Android)
 
 Fixes from Matteo's drive on 0.7.11 (Wide Lane, Southampton), checked on 80 junctions.

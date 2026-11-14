@@ -19,12 +19,13 @@ object MapStyler {
 
     private fun c(hex: Long) = (0xFF000000 or hex).toInt()
 
+    // Night: near-black land with quiet grey roads, so the teal route and the warnings are what you see.
     val dark = Palette(
-        land = c(0x262E3B), water = c(0x253F5C), park = c(0x24563F), pitch = c(0x24563F), landuse = c(0x2B3442), landuseOpacity = 0.5f,
-        building = c(0x2D3644), buildingOutline = c(0x313B4A),
-        minor = c(0x3B4C5B), major = c(0x46606F), motorway = c(0x587689), service = c(0x333F4D), path = c(0x2F3947),
-        casing = c(0x262E3B), motorwayCasing = c(0x262E3B), rail = c(0x3A4655), airport = c(0x2B3442), runway = c(0x3B4C5B),
-        label = c(0xC9D1DC), halo = c(0x262E3B), roadLabel = c(0xE2E8F0), roadHalo = c(0x262E3B), border = c(0x8C95A3),
+        land = c(0x12161D), water = c(0x15273B), park = c(0x15291F), pitch = c(0x15291F), landuse = c(0x161B23), landuseOpacity = 0.5f,
+        building = c(0x1A2029), buildingOutline = c(0x202733),
+        minor = c(0x29313D), major = c(0x353F4E), motorway = c(0x465264), service = c(0x1F2630), path = c(0x1C222B),
+        casing = c(0x12161D), motorwayCasing = c(0x12161D), rail = c(0x252C37), airport = c(0x161B23), runway = c(0x29313D),
+        label = c(0xAEB7C4), halo = c(0x12161D), roadLabel = c(0xD5DBE5), roadHalo = c(0x12161D), border = c(0x5F6977),
     )
 
     val light = Palette(
