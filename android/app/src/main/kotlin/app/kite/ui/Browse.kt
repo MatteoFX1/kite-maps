@@ -71,7 +71,7 @@ fun BrowseOverlay(model: AppModel) {
 
         // Map buttons: layers, parking and the compass on the right, under the top cards.
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp)) {
-            Row(Modifier.fillMaxWidth().padding(top = if (idle) 176.dp else 86.dp)) {
+            Row(Modifier.fillMaxWidth().padding(top = if (idle) (if (model.resumeOffer != null) 276.dp else 176.dp) else 86.dp)) {
                 Spacer(Modifier.weight(1f))
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     MapFab(Icons.Outlined.Layers) { model.showLayers = true }

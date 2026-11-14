@@ -180,7 +180,7 @@ struct BrowseOverlay: View {
                         }
                     }
                     // With a side panel the search box isn't above them: they go to the top right.
-                    .padding(.top, panel > 0 ? 10 : idle ? 176 : 86)
+                    .padding(.top, panel > 0 ? 10 : idle ? (model.resumeOffer != nil ? 276 : 176) : 86)
                     Spacer()
                     if sheetH < full * 0.6 || panel > 0 {
                         HStack(alignment: .bottom) {
