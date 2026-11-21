@@ -1,0 +1,5 @@
+2026-11-21 14:22:22.755 Kite[51170:132546] [Info] maplibre-compose: Created the MapLibre runtime on maplibre-compose-runtime
+2026-11-21 14:22:22.762 Kite[51170:132546] [Debug] maplibre-compose: Ambient cache size set to 52428800 bytes
+2026-11-21 14:22:23.329 Kite[51170:132547] [Info] maplibre-compose: Rendered the first map frame with Metal on maplibre-compose-render, extent MapExtent(logical=402x874, physical=1206x2622, scale=3.0)
+2026-11-21 14:22:24.486 Kite[51170:132605] [Warning] maplibre-compose: [General] Invalid geometry in line layer
+2026-11-21 14:22:30.517 Kite[51170:132494] KiteTrace: transit lines: failed at zoom 12 (HTTP 422, 27 bytes in 1408 ms: {"error":"too many routes"})

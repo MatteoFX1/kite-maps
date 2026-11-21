@@ -1,0 +1,4 @@
+2026-11-21 14:26:16.160 Kite[60984:156503] [Info] maplibre-compose: Created the MapLibre runtime on maplibre-compose-runtime
+2026-11-21 14:26:16.164 Kite[60984:156503] [Debug] maplibre-compose: Ambient cache size set to 52428800 bytes
+2026-11-21 14:26:16.643 Kite[60984:156504] [Info] maplibre-compose: Rendered the first map frame with Metal on maplibre-compose-render, extent MapExtent(logical=402x874, physical=1206x2622, scale=3.0)
+2026-11-21 14:26:18.540 Kite[60984:156572] [Warning] maplibre-compose: [General] Invalid geometry in line layer

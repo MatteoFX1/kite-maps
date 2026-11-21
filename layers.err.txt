@@ -1,0 +1,5 @@
+2026-11-21 14:19:16.726 Kite[44051:115038] [Info] maplibre-compose: Created the MapLibre runtime on maplibre-compose-runtime
+2026-11-21 14:19:16.730 Kite[44051:115038] [Debug] maplibre-compose: Ambient cache size set to 52428800 bytes
+2026-11-21 14:19:17.236 Kite[44051:115039] [Info] maplibre-compose: Rendered the first map frame with Metal on maplibre-compose-render, extent MapExtent(logical=402x874, physical=1206x2622, scale=3.0)
+2026-11-21 14:19:19.062 Kite[44051:115074] [Warning] maplibre-compose: [General] Invalid geometry in line layer
+2026-11-21 14:19:23.044 Kite[44051:114975] Unbalanced calls to begin/end appearance transitions for <KiteSharedandroidx.compose.ui.scene.ComposeLayersViewController23: 0x101a3f000>.

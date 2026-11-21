@@ -1,0 +1,63 @@
+2026-11-21 14:36:19.119 Kite[84961:215397] [Info] maplibre-compose: Created the MapLibre runtime on maplibre-compose-runtime
+2026-11-21 14:36:19.137 Kite[84961:215397] [Debug] maplibre-compose: Ambient cache size set to 52428800 bytes
+2026-11-21 14:36:19.661 Kite[84961:215398] [Info] maplibre-compose: Rendered the first map frame with Metal on maplibre-compose-render, extent MapExtent(logical=402x874, physical=1206x2622, scale=3.0)
+2026-11-21 14:36:23.545 Kite[84961:215471] [Warning] maplibre-compose: [General] Invalid geometry in line layer
+2026-11-21 14:36:29.656 Kite[84961:215343] KiteTrace: waze browse: live map failed, drivers' reports 64 (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+2026-11-21 14:36:42.016 Kite[84961:215343] KiteTrace: waze browse: live map failed, drivers' reports 0 (Waze: nothing; page: fetch HTTP 403 · pass no, page asked 1× (403) key 6Lf4Wd api)
+2026-11-21 14:36:46.536 Kite[84961:215343] KiteVoice: say: Starting route to The Mustard Seed. Turn right onto 3rd Street.
+kotlin.IllegalStateException: fmt: %b
+    at 0   KiteShared                          0x1087aae47        kfun:kotlin.Throwable#<init>(kotlin.String?){} + 99 
+    at 1   KiteShared                          0x1087ad49f        kfun:kotlin.Exception#<init>(kotlin.String?){} + 95 
+    at 2   KiteShared                          0x1087ad65f        kfun:kotlin.RuntimeException#<init>(kotlin.String?){} + 95 
+    at 3   KiteShared                          0x1087adaf7        kfun:kotlin.IllegalStateException#<init>(kotlin.String?){} + 95 
+    at 4   KiteShared                          0x1076e7ea7        kfun:app.kite.core#fmt(kotlin.String;kotlin.Array<out|kotlin.Any?>...){}kotlin.String + 3399 
+    at 5   KiteShared                          0x10783e0db        kfun:app.kite.Navigator#handle(app.kite.Fix;kotlin.Boolean){} + 4179 
+    at 6   KiteShared                          0x10783e3f7        kfun:app.kite.Navigator#handle$default(app.kite.Fix;kotlin.Boolean;kotlin.Int){} + 175 
+    at 7   KiteShared                          0x107785333        kfun:app.kite.AppModel#startNavigation(){} + 1303 
+    at 8   KiteShared                          0x1077b6837        kfun:app.kite.DemoScript.$runCOROUTINE$1.invokeSuspend#internal + 26119 
+    at 9   KiteShared                          0x10878f49f        kfun:kotlin.coroutines.native.internal.BaseContinuationImpl#invokeSuspend(kotlin.Result<kotlin.Any?>){}kotlin.Any? + 67 
+    at 10  KiteShared                          0x10878e13f        kfun:kotlin.coroutines.native.internal.BaseContinuationImpl#resumeWith(kotlin.Result<kotlin.Any?>){} + 675 
+    at 11  KiteShared                          0x10878fb33        kfun:kotlin.coroutines.Continuation#resumeWith(kotlin.Result<1:0>){} + 91 
+    at 12  KiteShared                          0x1089846b3        kfun:kotlinx.coroutines#resume__at__kotlinx.coroutines.DispatchedTask<0:0>(kotlin.coroutines.Continuation<0:0>;kotlin.Boolean){0§<kotlin.Any?>} + 1051 
+    at 13  KiteShared                          0x108984273        kfun:kotlinx.coroutines#dispatch__at__kotlinx.coroutines.DispatchedTask<0:0>(kotlin.Int){0§<kotlin.Any?>} + 567 
+    at 14  KiteShared                          0x108914a67        kfun:kotlinx.coroutines.CancellableContinuationImpl.dispatchResume#internal + 107 
+    at 15  KiteShared                          0x10891504b        kfun:kotlinx.coroutines.CancellableContinuationImpl#resumeImpl(0:0;kotlin.Int;kotlin.Function3<kotlin.Throwable,0:0,kotlin.coroutines.CoroutineContext,kotlin.Unit>?){0§<kotlin.Any?>} + 635 
+    at 16  KiteShared                          0x1089152af        kfun:kotlinx.coroutines.CancellableContinuationImpl#resumeImpl$default(0:0;kotlin.Int;kotlin.Function3<kotlin.Throwable,0:0,kotlin.coroutines.CoroutineContext,kotlin.Unit>?;kotlin.Int){0§<kotlin.Any?>} + 251 
+    at 17  KiteShared                          0x108915e2f        kfun:kotlinx.coroutines.CancellableContinuationImpl#resumeUndispatched__at__kotlinx.coroutines.CoroutineDispatcher(1:0){}-impl + 503 
+    at 18  KiteShared                          0x1089b0e2f        kfun:kotlinx.coroutines.CancellableContinuation#resumeUndispatched__at__kotlinx.coroutines.CoroutineDispatcher(1:0){} + 99 
+    at 19  KiteShared                          0x1089af623        kfun:kotlinx.coroutines.DarwinMainDispatcher.DarwinMainDispatcher$scheduleResumeAfterDelay$timerBlock$1.invoke#internal + 291 
+    at 20  KiteShared                          0x1089af707        kfun:kotlinx.coroutines.DarwinMainDispatcher.DarwinMainDispatcher$scheduleResumeAfterDelay$timerBlock$1.$<bridge-DNU>invoke(kotlinx.cinterop.CPointer<cnames.structs.__CFRunLoopTimer>?){}#internal + 187 
+    at 21  KiteShared                          0x108791543        kfun:kotlin.Function1#invoke(1:0){}1:1 + 99 
+    at 22  KiteShared                          0x1089b03cf        _6f72672e6a6574627261696e732e6b6f746c696e783a6b6f746c696e782d636f726f7574696e65732d636f72652f6f70742f6275696c644167656e742f776f726b2f343465633665383530643563363366302f6b6f746c696e782d636f726f7574696e65732d636f72652f6e617469766544617277696e2f7372632f44697370617463686572732e6b74_8_knbridge3 + 227 
+    at 23  CoreFoundation                      0x1c01e62cb        __CFRUNLOOP_IS_CALLING_OUT_TO_A_TIMER_CALLBACK_FUNCTION__ + 27 
+    at 24  CoreFoundation                      0x1c01e5fdb        __CFRunLoopDoTimer + 915 
+    at 25  CoreFoundation                      0x1c01e56b7        __CFRunLoopDoTimers + 275 
+    at 26  CoreFoundation                      0x1c01e490f        __CFRunLoopRun + 1767 
+    at 27  CoreFoundation                      0x1c01df4d3        _CFRunLoopRunSpecificWithOptions + 495 
+    at 28  GraphicsServices                    0x21d3c19ab        GSEventRunModal + 115 
+    at 29  UIKitCore                           0x1c543f4d3        UIApplicationMain + 123 
+    at 30  SwiftUI                             0x1c9d73b4b        $s7SwiftUI17KitRendererCommon33_ACC2C5639A7D76F611E170E831FCA491LLys5NeverOyXlXpFAESpySpys4Int8VGSgGXEfU_ + 163 
+    at 31  SwiftUI                             0x1c9d739c7        $s7SwiftUI6runAppys5NeverOxAA0D0RzlF + 203 
+    at 32  SwiftUI                             0x1c9b17393        $s7SwiftUI3AppPAAE4mainyyFZ + 147 
+    at 33  Kite.debug.dylib                    0x1003ca0cf        $s4Kite0A3AppV5$mainyyFZ + 39 
+    at 34  Kite.debug.dylib                    0x1003ca2af        __debug_main_executable_dylib_entry_point + 11 
+    at 35  dyld                                0x1004403d3        dyld-internal + 19 
+    at 36  ???                                 0x10075de7f        0x0 + 4302691967 
+    Suppressed: kotlinx.coroutines.internal.DiagnosticCoroutineContextException: [StandaloneCoroutine{Cancelling}@64ee18, Dispatchers.Main]
+        at 0   KiteShared                          0x1087aae47        kfun:kotlin.Throwable#<init>(kotlin.String?){} + 99 
+        at 1   KiteShared                          0x1087ad49f        kfun:kotlin.Exception#<init>(kotlin.String?){} + 95 
+        at 2   KiteShared                          0x1087ad65f        kfun:kotlin.RuntimeException#<init>(kotlin.String?){} + 95 
+        at 3   KiteShared                          0x1089ac85f        kfun:kotlinx.coroutines.internal.DiagnosticCoroutineContextException#<init>(kotlin.coroutines.CoroutineContext){} + 167 
+        at 4   KiteShared                          0x10897fc53        kfun:kotlinx.coroutines.internal#handleUncaughtCoroutineException(kotlin.coroutines.CoroutineContext;kotlin.Throwable){} + 635 
+        at 5   KiteShared                          0x10891b01b        kfun:kotlinx.coroutines#handleCoroutineException(kotlin.coroutines.CoroutineContext;kotlin.Throwable){} + 747 
+        at 6   KiteShared                          0x10890f167        kfun:kotlinx.coroutines.StandaloneCoroutine.handleJobException#internal-impl + 155 
+        at 7   KiteShared                          0x1089b472f        kfun:kotlinx.coroutines.JobSupport#handleJobException(kotlin.Throwable){}kotlin.Boolean + 59 
+        at 8   KiteShared                          0x10892668f        kfun:kotlinx.coroutines.JobSupport.finalizeFinishingState#internal + 1275 
+        at 9   KiteShared                          0x10892ecc7        kfun:kotlinx.coroutines.JobSupport.tryMakeCompletingSlowPath#internal + 2327 
+        at 10  KiteShared                          0x10892e387        kfun:kotlinx.coroutines.JobSupport.tryMakeCompleting#internal + 675 
+        at 11  KiteShared                          0x10892df0b        kfun:kotlinx.coroutines.JobSupport#makeCompletingOnce(kotlin.Any?){}kotlin.Any? + 459 
+        at 12  KiteShared                          0x10890b38f        kfun:kotlinx.coroutines.AbstractCoroutine#resumeWith(kotlin.Result<1:0>){} + 195 
+        at 13  KiteShared                          0x10878fb33        kfun:kotlin.coroutines.Continuation#resumeWith(kotlin.Result<1:0>){} + 91 
+        at 14  KiteShared                          0x10878e37b        kfun:kotlin.coroutines.native.internal.BaseContinuationImpl#resumeWith(kotlin.Result<kotlin.Any?>){} + 1247 
+        at 15  KiteShared                          0x10878fb33        kfun:kotlin.coroutines.Continuation#resumeWith(kotlin.Result<1:0>){} + 91 
+        ... and 25 more common stack frames skipped
