@@ -1,24 +1,13 @@
 package app.kite
 
 import android.app.Application
-import app.kite.core.KeyValue
-import app.kite.core.RoadCache
-import app.kite.core.WazeCameraStore
-import java.io.File
 
-/** Starts once per launch: hands the engine its storage before any screen asks for it. */
+/** Starts once per launch: tells the shared app where it lives, then starts it. */
 class KiteApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        app = this
-        KeyValue.store = PrefsStore(getSharedPreferences("kite", MODE_PRIVATE))
-        RoadCache.defaultFile = File(cacheDir, "roads.json")
-        WazeCameraStore.defaultFile = File(cacheDir, "waze-cameras.json")
-        org.maplibre.android.MapLibre.getInstance(this)
-    }
-
-    companion object {
-        lateinit var app: KiteApp
-            private set
+        AndroidHost.app = this
+        DriveService.notificationIcon = R.drawable.ic_shortcut_car
+        Kite.start()
     }
 }

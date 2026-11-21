@@ -17,12 +17,20 @@ concurrency:
 jobs:
   core:
     name: Check search code
-    runs-on: macos-15
+    # Kite's engine is shared Kotlin now (android/core), so its checks run on Linux.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: Unit tests
-        working-directory: VelaCore
-        run: swift test
+        working-directory: android
+        run: ./gradlew --no-daemon -PcoreOnly :core:jvmTest
       - name: Live camera photos check (OpenHighways, TfL, Windy)
         continue-on-error: true
         timeout-minutes: 3
@@ -49,7 +57,7 @@ jobs:
                   print("  photo", src, "FAILED", e, url)
           code, _, body = get("https://api.tfl.gov.uk/Place/Type/JamCam")
           print("TfL", code, len(json.loads(body)))
-          key = re.search(r'static let value = "([^"]*)"', open("App/Sources/LiveCamStore.swift").read()).group(1)
+          key = re.search(r'const val VALUE = "([^"]*)"', open("android/shared/src/commonMain/kotlin/app/kite/LiveCamStore.kt").read()).group(1)
           code, _, body = get("https://api.windy.com/webcams/api/v3/webcams?nearby=54.6,-3.13,60&limit=50&include=images,location,urls", {"x-windy-api-key": key})
           w = json.loads(body)
           print("Windy", code, w.get("total"), len(w.get("webcams", [])))
@@ -79,35 +87,20 @@ jobs:
           pip3 install --quiet --break-system-packages pillow || pip3 install --quiet pillow || true
           python3 .github/probe/heattiles.py
       - name: Live UK turn-by-turn check
-        working-directory: VelaCore
+        working-directory: android
         continue-on-error: true
-        timeout-minutes: 4
-        run: swift run vela-probe uk
+        timeout-minutes: 6
+        run: ./gradlew --no-daemon -q -PcoreOnly :core:probe --args="uk"
       - name: Live turn-by-turn audit (Southampton)
-        working-directory: VelaCore
+        working-directory: android
+        continue-on-error: true
+        timeout-minutes: 6
+        run: ./gradlew --no-daemon -q -PcoreOnly :core:probe --args="audit"
+      - name: Live Google and Waze check
+        working-directory: android
         continue-on-error: true
         timeout-minutes: 4
-        run: swift run vela-probe audit
-      - name: Live Google check (UK)
-        working-directory: VelaCore
-        continue-on-error: true
-        timeout-minutes: 4
-        run: swift run vela-probe google
-      - name: Live Waze reports check (app protocol, UK)
-        working-directory: VelaCore
-        continue-on-error: true
-        timeout-minutes: 4
-        run: swift run vela-probe wazert
-      - name: Live Google police check
-        working-directory: VelaCore
-        continue-on-error: true
-        timeout-minutes: 3
-        run: swift run vela-probe incidents
-      - name: Live Google search check
-        working-directory: VelaCore
-        continue-on-error: true
-        timeout-minutes: 2
-        run: swift run vela-probe "pizza" 40.7484 -73.9857
+        run: ./gradlew --no-daemon -q -PcoreOnly :core:probe --args="live"
 
   # The long checks: 80 tricky British junctions, every merge and every slip road, driven through
   # Kite's own turn-by-turn. Too slow for every change, so they run only when started by hand
@@ -115,7 +108,7 @@ jobs:
   junctions:
     name: Junction check (${{ matrix.name }})
     if: github.event_name == 'workflow_dispatch'
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 100
     strategy:
@@ -128,15 +121,18 @@ jobs:
           - { name: "slip roads", cmd: "ramps", set: "1" }
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: Run the check
-        working-directory: VelaCore
+        working-directory: android
         env:
           TURNSET: ${{ matrix.set }}
-        # Straight to the log, line by line: through a pipe the output only arrived at the end,
-        # so a check that ran out of time left nothing to read.
-        run: |
-          swift build --product vela-probe 2>&1 | tail -1
-          script -q /dev/null swift run --skip-build vela-probe ${{ matrix.cmd }}
+        run: ./gradlew --no-daemon -q -PcoreOnly :core:probe --args="${{ matrix.cmd }}"
 
   ipa:
     name: Build Kite.ipa
@@ -149,6 +145,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Set up Java (for the shared app's build)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build the shared app (the same code as Android)
+        run: .github/ios/shared-app.sh release
       - name: Make the Xcode project
         run: xcodegen generate
       - name: Build (unsigned)
@@ -250,6 +255,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Set up Java (for the shared app's build)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build the shared app (the same code as Android)
+        run: .github/ios/shared-app.sh sim
       - name: Make the Xcode project
         run: xcodegen generate
       - name: Build for the simulator
@@ -257,7 +271,7 @@ jobs:
           set -o pipefail
           xcodebuild -project Kite.xcodeproj -scheme Kite -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
+            -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO EXCLUDED_ARCHS=x86_64 build > build.log 2>&1 \
             || { grep -E "error:" build.log | sort -u | head -40; tail -n 20 build.log; exit 1; }
           tail -n 3 build.log
       - name: Take screenshots, closed and open
@@ -274,7 +288,7 @@ jobs:
           shoot() { # name, display, steps...
             n=$1; disp=$2; shift 2
             for step in "$@"; do
-              xcrun simctl launch --terminate-running-process $DEV app.vela.ios -demo $step > /dev/null
+              xcrun simctl launch --terminate-running-process --stderr="$PWD/shots/$n-$step.err.txt" $DEV app.vela.ios -demo $step > /dev/null
               case $step in browse) t=16;; place) t=28;; directions) t=38;; nav) t=44;; *) t=12;; esac
               sleep $t
               xcrun simctl io $DEV screenshot --display=$disp "shots/$n-$step.png" > /dev/null 2>&1 || echo "no shot $n-$step"
@@ -285,6 +299,9 @@ jobs:
           shoot open primary-1 browse place directions nav settings saved
           bash .github/duo/pose.sh rotate
           shoot upright primary-1 browse place nav
+          # Why Kite stopped, when it did: the crash reports and what it printed.
+          cp ~/Library/Logs/DiagnosticReports/Kite* shots/ 2>/dev/null || true
+          find shots -name '*.err.txt' -empty -delete
           ls shots
       - name: Save screenshots to the duo-screenshots branch
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -301,11 +318,23 @@ jobs:
 
   screens:
     name: Screenshots (simulator)
-    runs-on: macos-15
+    # The shared app's map needs the iOS 26+ SDK (Xcode 16 can't link it).
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Set up Java (for the shared app's build)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build the shared app (the same code as Android)
+        run: .github/ios/shared-app.sh sim
       - name: Make the Xcode project
         run: xcodegen generate
       - name: Build for the simulator
@@ -313,13 +342,13 @@ jobs:
           set -o pipefail
           xcodebuild -project Kite.xcodeproj -scheme Kite -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
+            -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO EXCLUDED_ARCHS=x86_64 build > build.log 2>&1 \
             || { grep -E "error:" build.log | sort -u | head -40; tail -n 20 build.log; exit 1; }
           tail -n 5 build.log
       - name: Take screenshots
         run: |
           set -x
-          DEV=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k in sorted(d, reverse=True) if 'iOS' in k for x in d[k] if x['name'].startswith('iPhone 16') or x['name'].startswith('iPhone 15')))")
+          DEV=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; ph=[x for k in sorted(d, reverse=True) if 'iOS' in k for x in d[k] if x['name'].startswith('iPhone')]; print(next((x['udid'] for x in ph if x['name'].endswith('Pro')), ph[0]['udid']))")
           xcrun simctl boot "$DEV"
           xcrun simctl bootstatus "$DEV" -b
           xcrun simctl ui "$DEV" appearance dark
@@ -328,7 +357,7 @@ jobs:
           xcrun simctl privacy "$DEV" grant location app.vela.ios || true
           mkdir -p shots
           for step in browse search place directions nav cameras layers transit board mine stops rail welcome camalert streetview svtest svtest90 lookaround copy wazelink googlelink listscroll wazealert trafficalert wazedemo wazetap wazeroute wazesettings wazemap wazeintro searchfocus settings saved pickhome locationoff longname longdir addstop allalerts endtrip resume charges zones avoid faster browse3d browse2d mapsettings; do
-            xcrun simctl launch --terminate-running-process "$DEV" app.vela.ios -demo "$step"
+            xcrun simctl launch --terminate-running-process --stderr="$PWD/shots/$step.err.txt" "$DEV" app.vela.ios -demo "$step"
             case $step in browse) t=16;; search) t=24;; place) t=28;; directions) t=38;; nav) t=44;; cameras) t=110;; layers) t=12;; transit) t=40;; board) t=24;; mine) t=14;; stops) t=40;; rail) t=30;; welcome) t=10;; camalert) t=52;; streetview) t=40;; svtest) t=12;; svtest90) t=12;; lookaround) t=40;; copy) t=34;; wazelink) t=16;; googlelink) t=24;; listscroll) t=30;; wazealert) t=44;; trafficalert) t=44;; wazedemo) t=16;; wazemap) t=55;; wazeintro) t=10;; wazetap) t=18;; wazeroute) t=40;; wazesettings) t=12;; searchfocus) t=14;; settings) t=10;; saved) t=10;; pickhome) t=12;; locationoff) t=14;; longname) t=20;; longdir) t=32;; addstop) t=34;; allalerts) t=48;; endtrip) t=44;; resume) t=12;; charges|zones) t=40;; avoid) t=40;; faster) t=48;; browse3d|browse2d) t=18;; mapsettings) t=10;; esac
             sleep $t
             xcrun simctl io "$DEV" screenshot "shots/$step.png"
@@ -424,7 +453,14 @@ jobs:
             sleep 50
             xcrun simctl io "$SE" screenshot shots/se-roundabout.png
           fi
+      - name: Crash reports
+        if: always()
+        run: |
+          cp ~/Library/Logs/DiagnosticReports/Kite* shots/ 2>/dev/null || true
+          find shots -name '*.err.txt' -empty -delete || true
+          ls shots | grep -v png || true
       - name: Upload screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: screenshots

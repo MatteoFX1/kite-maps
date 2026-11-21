@@ -6,7 +6,7 @@ plugins {
 }
 
 // The same version numbers as the iPhone app. CI can pass -PappVersionName=0.7.6.
-val kiteVersion = (project.findProperty("appVersionName") as String?) ?: "0.7.17"
+val kiteVersion = (project.findProperty("appVersionName") as String?) ?: "0.8.0"
 // 0.7.6 -> 706: always goes up with the version, so F-Droid sees every release as an update.
 val kiteCode = kiteVersion.split(".").map { it.toIntOrNull() ?: 0 }.let { (it.getOrElse(0) { 0 } * 10000) + (it.getOrElse(1) { 0 } * 100) + it.getOrElse(2) { 0 } }
 
@@ -66,19 +66,8 @@ android {
 }
 
 dependencies {
-    implementation(project(":core"))
+    // The whole app (screens, map, driving) is the shared code, the same as the iPhone's.
+    implementation(project(":shared"))
     implementation("androidx.core:core-ktx:1.17.0")
-    implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation(platform("androidx.compose:compose-bom:2025.01.00"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.foundation:foundation")
-    implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.compose.material3:material3:1.4.0-alpha06")
-    implementation("androidx.webkit:webkit:1.17.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
-    implementation("io.coil-kt:coil-compose:2.7.0")
-    implementation("org.maplibre.gl:android-sdk-opengl:13.6.1")
+    implementation("androidx.activity:activity-compose:1.12.0")
 }

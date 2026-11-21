@@ -167,16 +167,24 @@ Kite is not affiliated with or endorsed by Google, Waze or Apple.
 
 ## How it's built
 
-- `App/` is the iPhone app (SwiftUI) with the [MapLibre](https://maplibre.org) map.
-- `VelaCore/` is the iPhone's search and routing code (Google extractor, OpenStreetMap and
-  FOSSGIS fallbacks, route tracking), first ported from Vela's Kotlin `:core` module.
-  `swift run vela-probe pizza` runs a live search from a Mac.
-- `project.yml` describes the Xcode project; [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-  turns it into `Kite.xcodeproj`. The GitHub Actions workflow builds the `.ipa` on a Mac runner,
-  so you don't need a Mac to make a release.
-- `android/` is the Android app (Kotlin, Jetpack Compose and MapLibre): `android/core` is the
-  search and routing code, `android/app` is the app. It's built on GitHub Actions too, and
-  published to Kite's own F-Droid repo.
+Since 0.8.0 Kite is one app for both phones, written once in Kotlin
+([Kotlin Multiplatform](https://kotlinlang.org/docs/multiplatform.html) with
+[Compose Multiplatform](https://www.jetbrains.com/compose-multiplatform/)), with the
+[MapLibre](https://maplibre.org) map through [maplibre-compose](https://github.com/maplibre/maplibre-compose).
+
+- `android/core` is the engine: search, routing, turn-by-turn, cameras, Waze. Its tests run
+  anywhere (`./gradlew -PcoreOnly :core:jvmTest`), and `./gradlew -PcoreOnly :core:probe --args="turns"`
+  drives Kite's turn-by-turn through tricky British junctions against the live servers.
+- `android/shared` is the whole app: every screen, the map and driving, the same code on both
+  phones. Only what each phone does its own way (GPS, voice, the lock-screen turn...) is in
+  `androidMain` and `iosMain`.
+- `android/app` is the thin Android shell. It's built on GitHub Actions and published to Kite's
+  own F-Droid repo.
+- `App/` is the thin iPhone shell (a few lines of Swift that show the shared app, plus Siri
+  shortcuts and the lock-screen turn), and `Widget/` draws the lock-screen turn. `project.yml`
+  describes the Xcode project; [XcodeGen](https://github.com/yonaskolb/XcodeGen) turns it into
+  `Kite.xcodeproj`, and `.github/ios/shared-app.sh` builds the shared app for it. The GitHub
+  Actions workflow builds the `.ipa` on a Mac runner, so you don't need a Mac to make a release.
 
 ## License
 

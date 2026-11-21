@@ -1,14 +1,7 @@
 import AppIntents
-import SwiftUI
+import KiteShared
 
-/** What a Siri or Shortcuts request asked the app to do once it's open. */
-@MainActor
-final class LaunchAction: ObservableObject {
-    enum Kind: String { case home, work, car }
-    static let shared = LaunchAction()
-    @Published var pending: Kind?
-}
-
+/** "Hey Siri, take me home with Kite", also in Spotlight and the Shortcuts app. Kite does the rest. */
 struct DirectionsHomeIntent: AppIntent {
     static var title: LocalizedStringResource = "Directions home"
     static var description = IntentDescription("Opens Kite with directions to your home.")
@@ -16,7 +9,7 @@ struct DirectionsHomeIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        LaunchAction.shared.pending = .home
+        MainViewControllerKt.kitePerform(kind: "home")
         return .result()
     }
 }
@@ -28,7 +21,7 @@ struct DirectionsWorkIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        LaunchAction.shared.pending = .work
+        MainViewControllerKt.kitePerform(kind: "work")
         return .result()
     }
 }
@@ -40,13 +33,12 @@ struct FindMyCarIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        LaunchAction.shared.pending = .car
+        MainViewControllerKt.kitePerform(kind: "car")
         return .result()
     }
 }
 
-/** "Hey Siri, take me home with Kite", also in Spotlight and the Shortcuts app. */
-struct VelaShortcuts: AppShortcutsProvider {
+struct KiteShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: DirectionsHomeIntent(), phrases: [
             "Take me home with \(.applicationName)",

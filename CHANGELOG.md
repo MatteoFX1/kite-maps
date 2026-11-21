@@ -3,6 +3,21 @@
 Every version of Kite Maps, newest first. The small number goes up for fixes and polish, and
 the middle number for big milestones.
 
+## 0.8.0 (iPhone and Android): one app for both phones
+
+A milestone: Kite is now **one app**. The iPhone and Android versions run the very same code
+(Kotlin Multiplatform with Compose Multiplatform), so every screen, the map and the driving view
+look and work the same on both, and every change lands on both phones at once.
+
+- **Nothing new to learn:** the screens are the Android ones, which already matched the iPhone's.
+- **Settings carry over (iPhone):** Home, Work, saved places, recent searches and all your choices
+  are brought over the first time 0.8.0 opens.
+- **Still iPhone's own:** the next turn on the lock screen and in the Dynamic Island, Siri
+  shortcuts ("Take me home with Kite"), voice and voice search.
+- **The map** is drawn by MapLibre on both phones through one shared map, so the heat map, cameras,
+  lanes and route look identical.
+- No new features this time: the same Kite as 0.7.17, on one shared base.
+
 ## 0.7.17 (iPhone and Android)
 
 Ideas from a Kite user on GitHub, picked by Matteo:
@@ -295,7 +310,7 @@ A check of the basics on both phones, with the bugs it found fixed. Nothing look
 
 ## 0.7.8 (iPhone and Android)
 
-Everything ChatGPT found when it went through both apps as a second reviewer, fixed and checked,
+Everything a full second review of both apps found, fixed and checked,
 plus live cameras.
 
 - **Live cameras (GitHub #15):** see the latest photo from traffic cameras and webcams, like the

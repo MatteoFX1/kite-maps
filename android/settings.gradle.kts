@@ -1,6 +1,7 @@
-// Kite Maps for Android. Two modules, like the iPhone app's VelaCore + App:
-// `:core` is plain Kotlin (search, routing, cameras, Waze...), no Android in it, so its tests run anywhere;
-// `:app` is the Android app on top (Compose screens and the MapLibre map).
+// Kite Maps: ONE app for Android and iPhone (Kotlin Multiplatform + Compose Multiplatform).
+// `:core` is the engine (search, routing, cameras, Waze...), no screens, tests run anywhere;
+// `:shared` is the whole app (every screen, the map, driving), the same code on both phones;
+// `:app` is the thin Android shell around it. The iPhone shell is in ../ios.
 pluginManagement {
     repositories {
         google {
@@ -14,8 +15,9 @@ pluginManagement {
         gradlePluginPortal()
     }
     plugins {
-        id("com.android.application") version "9.4.1"
+        id("org.jetbrains.compose") version "1.12.2"
         id("org.jetbrains.kotlin.jvm") version "2.4.20"
+        id("org.jetbrains.kotlin.multiplatform") version "2.4.20"
         id("org.jetbrains.kotlin.plugin.compose") version "2.4.20"
     }
 }
@@ -32,4 +34,8 @@ rootProject.name = "Kite"
 
 include(":core")
 // `-PcoreOnly` skips the app (a machine with no Android SDK can still run the core tests).
-if (!providers.gradleProperty("coreOnly").isPresent) include(":app")
+// `-PnoAndroid` keeps the shared app but leaves Android out (checks the shared code without an Android SDK).
+if (!providers.gradleProperty("coreOnly").isPresent) {
+    include(":shared")
+    if (!providers.gradleProperty("noAndroid").isPresent) include(":app")
+}
