@@ -1,0 +1,6 @@
+2026-11-21 17:49:24.736 Kite[66377:169701] [Info] maplibre-compose: Created the MapLibre runtime on maplibre-compose-runtime
+2026-11-21 17:49:24.753 Kite[66377:169701] [Debug] maplibre-compose: Ambient cache size set to 52428800 bytes
+2026-11-21 17:49:25.516 Kite[66377:169702] [Info] maplibre-compose: Rendered the first map frame with Metal on maplibre-compose-render, extent MapExtent(logical=951x669, physical=2853x2007, scale=3.0)
+2026-11-21 17:49:28.267 Kite[66377:169742] [Warning] maplibre-compose: [General] Invalid geometry in line layer
+2026-11-21 17:49:52.190 Kite[66377:169657] KiteVoice: say: Starting route to Tattva Indian Kitchen Southampton. In 300 feet, turn right onto Park Walk.
+2026-11-21 17:49:52.263 Kite[66377:169657] KiteTrace: at 50.90970,-1.40440 along 0 off 52 next 1 in 87 offRoute false speed 0
