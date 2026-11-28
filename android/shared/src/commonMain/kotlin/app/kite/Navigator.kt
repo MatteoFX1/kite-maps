@@ -51,6 +51,7 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     var route by mutableStateOf(route0); private set
     var progress by mutableStateOf<RouteTracker.Progress?>(null); private set
     var rerouting by mutableStateOf(false); private set
+    private var tracedNext: Int? = -2
     var arrived by mutableStateOf(false); private set
     private var voiceState = mutableStateOf(
         if (!AppSettings.voice) VoiceMode.OFF else if (AppSettings.voiceAlertsOnly) VoiceMode.ALERTS else VoiceMode.ALL)
@@ -354,6 +355,11 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
         if (p.offRoute && !estimated && !rerouting && (toPin > 150 || !nearPin) && (joinedRoute || p.offsetMeters > 400) && since(lastReroute) > 8) {
             reroute(loc)
             return
+        }
+        if (DemoScript.active && p.nextIndex != tracedNext) {
+            tracedNext = p.nextIndex
+            val m = p.nextIndex?.let { route.maneuvers.getOrNull(it) }
+            klog("KiteTrace", "banner: ${app.kite.ui.Banner.headline(m)} | type ${m?.type} road ${m?.road} exit ${m?.exit} lanes ${m?.lanes?.size ?: 0} hint ${m?.laneHint} in ${p.distanceToNext.toInt()} m")
         }
         if (since(tracedAt) >= 3) {
             tracedAt = now()
@@ -1020,6 +1026,8 @@ class Navigator(route0: Route, val destination: Place, stops0: List<Place>, priv
     fun say(text: String) = speak(text)
 
     private fun speak(text: String, urgent: Boolean = false, alert: Boolean = false) {
+        // Test drives: everything Kite would say goes in the log, even with the voice off.
+        if (DemoScript.active) klog("KiteTrace", "say: $text")
         if (stopped || !(voiceMode == VoiceMode.ALL || (voiceMode == VoiceMode.ALERTS && alert))) return
         speakingAlert = alert
         Voice.say(text, urgent)

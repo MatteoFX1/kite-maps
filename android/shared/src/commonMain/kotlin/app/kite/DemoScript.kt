@@ -47,13 +47,12 @@ object DemoScript {
         address = "123 Long Address Road, Somewhere Quite Far Away, Reading")
 
     /** Moves the car along the drive's current route (a new one after a reroute) at town speed. */
-    private suspend fun drive(model: AppModel, leaveAt: Double?) {
+    private suspend fun drive(model: AppModel, leaveAt: Double?, speed: Double = 14.0, maxSeconds: Int = 900) {
         var pos = LocationService.last?.coord ?: return
         LocationService.simulating = true
-        val speed = 14.0
         var off = 0
         var offBearing = 0.0
-        for (t in 0 until 900) {
+        for (t in 0 until maxSeconds) {
             val nav = model.nav ?: break
             if (nav.arrived) break
             val line = nav.route.polyline
@@ -79,6 +78,48 @@ object DemoScript {
         klog("KiteTrace", "test drive over: ${if (model.nav == null) "arrived" else "still driving"}")
     }
 
+    /**
+     * Long test drives for a bug hunt ("-demo long:m3"): the car starts at a real spot and drives the
+     * whole route at about the speed the route expects, in real time, with everything Kite shows and
+     * would say written to the log ("KiteTrace"). "…:off" leaves the route halfway to test rerouting.
+     */
+    private val longDrives = mapOf(
+        // Southampton (St Denys) to Heathrow: town, M27/M3/M25 junctions, motorway merges.
+        "m3" to (LatLng(50.9228, -1.3851) to Place("demo-lhr", "Heathrow Terminal 5", LatLng(51.4723, -0.4900), "demo")),
+        // Southampton city centre to the General Hospital: roundabouts, traffic lights, close turns.
+        "town" to (LatLng(50.9049, -1.4043) to Place("demo-sgh", "Southampton General Hospital", LatLng(50.9330, -1.4339), "demo")),
+        // Southampton to Portsmouth on the M27, ending in Portsmouth's one-way streets.
+        "m27" to (LatLng(50.9097, -1.4044) to Place("demo-pompey", "Portsmouth Harbour", LatLng(50.7967, -1.1078), "demo")),
+        // Cardiff to Swansea on the M4 (Wales).
+        "wales" to (LatLng(51.4816, -3.1791) to Place("demo-swansea", "Swansea", LatLng(51.6214, -3.9436), "demo")),
+        // Edinburgh to Glasgow on the M8 (Scotland).
+        "scotland" to (LatLng(55.9533, -3.1883) to Place("demo-glasgow", "Glasgow Central", LatLng(55.8591, -4.2581), "demo")),
+        // Reading to Oxford on A roads: country roundabouts, villages, speed limit changes.
+        "aroads" to (LatLng(51.4543, -0.9731) to Place("demo-oxford", "Oxford", LatLng(51.7520, -1.2577), "demo")),
+    )
+
+    private suspend fun longDrive(model: AppModel, what: String) {
+        val name = what.substringBefore(":")
+        val off = what.endsWith(":off")
+        val (start, to) = longDrives[name] ?: run { klog("KiteTrace", "no test drive called $name"); return }
+        AppSettings.units = UnitsMode.YARDS
+        LocationService.simulating = true
+        LocationService.inject(Fix(start.lat, start.lng, 5.0, 0.0, 0.0, 0.0, nowMillis()))
+        center(model, start.lat, start.lng, 15.0)
+        delay(3000)
+        model.select(to); delay(2000)
+        model.openDirections(to)
+        for (i in 0 until 60) { if (model.directions?.route != null) break; delay(1000) }
+        val r = model.directions?.route
+        klog("KiteTrace", "test drive $what: ${r?.let { "${(it.distanceMeters / 1000).toInt()} km, ${(it.durationSeconds / 60).toInt()} min, ${it.maneuvers.size} steps" } ?: "no route: ${model.directions?.errors}"}")
+        if (r == null) return
+        delay(2000)
+        model.startNavigation(); delay(3000)
+        val t0 = nowMillis()
+        drive(model, if (off) 0.5 else null, speed = (r.distanceMeters / r.durationSeconds * 1.05).coerceIn(8.0, 31.0), maxSeconds = 4 * 3600)
+        klog("KiteTrace", "test drive $what took ${(nowMillis() - t0) / 60_000} min")
+    }
+
     /** Made-up Waze reports around Reading, so the badges and the heat map show even if Waze turns the build away. */
     private fun demoWaze(): List<WazeAlert> {
         val c = LatLng(51.4543, -0.9731)
@@ -101,6 +142,7 @@ object DemoScript {
     private suspend fun run(model: AppModel, step: String) {
         val st = AppSettings
         delay(6000)
+        if (step.startsWith("long:")) { longDrive(model, step.removePrefix("long:")); return }
         when (step) {
             "browse", "icons" -> return
             "browse3d", "browse2d" -> {
